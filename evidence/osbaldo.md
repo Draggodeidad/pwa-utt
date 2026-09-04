@@ -55,7 +55,7 @@
 ## 4. Registro de Commit y SHA Evaluado
 
 * **Rama de trabajo:** `feature/osbaldo-bug-diagnosis`
-* **Autor Git:** Osbaldo Álvarez Martínez (`osbaldoXxC <baldo2005_@outlook.com>`)
+* **Autor Git:** Osbaldo Álvarez Martínez (`osbaldoXxC`)
 * **SHA Evaluado:** `072295e0a1b2552ac45b1e7ec067808dd7f35654`
 
 ---

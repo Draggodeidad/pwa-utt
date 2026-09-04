@@ -1,4 +1,4 @@
-import { inspections } from "../lib/data/inspections";
+import { inspections, getInspectionStatusLabel } from "../lib/data/inspections";
 
 export default function HomePage() {
   return (
@@ -26,7 +26,7 @@ export default function HomePage() {
           {inspections.map((inspection) => (
             <article className="inspection-card" key={inspection.id}>
               <div className="card-topline">
-                <span className={`badge badge-${inspection.status}`}>{inspection.statusLabel}</span>
+                <span className={`badge badge-${inspection.status}`}>{getInspectionStatusLabel(inspection)}</span>
                 <span className="muted">{inspection.date}</span>
               </div>
               <h3>{inspection.location}</h3>

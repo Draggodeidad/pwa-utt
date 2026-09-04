@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types tests/starter.spec.mjs && node --experimental-strip-types tests/inspections.spec.mjs",
+    "test": "node tests/starter.spec.mjs && node tests/inspections.spec.mjs",
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
