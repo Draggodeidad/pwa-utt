@@ -1,7 +1,7 @@
 # Evidencia individual
 
 - Nombre: Imanol Antonio De la Cruz
-- Repositorio y commit evaluado: https://github.com/Draggodeidad/pwa-utt — SHA evaluado: 1aff160eaca74d9fff76662c73548f898202adbc (commit con todos los artefactos y la evidencia completa)
+- Repositorio y commit evaluado: https://github.com/Draggodeidad/pwa-utt — SHA evaluado: 64b477ae7e16cedfb632fb2bcfec526c0c362031 (commit con todos los artefactos y la evidencia completa)
 - Mi contribución concreta: instalación y verificación del starter (`npm ci`, `npm run dev`, comprobación de las 3 inspecciones sintéticas en `http://localhost:3000`), redacción completa de `docs/requirements.md` (problema, usuarios, dos escenarios —uno con conectividad intermitente—, requisitos funcionales y no funcionales, datos sintéticos y criterios de aceptación) y de `docs/decision-record.md` (comparación PWA / web tradicional / nativa / multiplataforma, decisión, riesgos y validación), creación del repositorio privado y ejecución de la verificación local y en GitHub Actions.
 - Decisión técnica que puedo explicar: por qué se eligió PWA sobre Next.js en lugar de app nativa o multiplataforma — la restricción de conectividad intermitente exige offline e instalación, y la restricción de tiempo/presupuesto del curso descarta tiendas de aplicaciones y un segundo ecosistema de código; la base web única mantiene la verificación reproducible en CI.
 - Comando o prueba que ejecuté y resultado: `make verify && bash public-tests/check.sh` — `npm run verify` generó `reports/verification.json` con `status: "pass"` y el check público imprimió `PUBLIC_OK`; además `npm test` ejecutó `tests/starter.spec.mjs` sin errores.
