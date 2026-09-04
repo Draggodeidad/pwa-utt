@@ -44,3 +44,20 @@ export const inspections: Inspection[] = [
   }
 ];
 
+export function getInspectionStatusLabel(inspection: Inspection): string {
+  // CORRECCIÓN APLICADA: Uso de comparación estricta (===) para evitar mutación del objeto
+  if (inspection.status === "attention") {
+    return "Requiere atención";
+  }
+  return "Sin incidencias";
+}
+
+export function validateInspection(inspection: Inspection): { valid: boolean; error?: string } {
+  if (inspection.status === "attention" && inspection.findings === 0) {
+    return { valid: false, error: "Inspección marcada con atención no tiene hallazgos registrados" };
+  }
+  if (inspection.status === "ok" && inspection.findings > 0) {
+    return { valid: false, error: "Inspección marcada como OK contiene hallazgos pendientes" };
+  }
+  return { valid: true };
+}

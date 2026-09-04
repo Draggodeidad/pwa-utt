@@ -11,7 +11,9 @@ const required = [
   "src/lib/data/inspections.ts",
   "docs/requirements.md",
   "docs/decision-record.md",
+  "docs/bug-diagnosis.md",
   "tests/starter.spec.mjs",
+  "tests/inspections.spec.mjs",
   "evidence/individual.md"
 ];
 
@@ -34,4 +36,3 @@ if (missing.length > 0) {
 
 console.log("Starter verificable: PASS");
 console.log(`Reporte: ${report}`);
-
