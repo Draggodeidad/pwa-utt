@@ -1,50 +1,53 @@
-# PWA de inspecciones de laboratorio — proyecto base
+# PWA de inspecciones de laboratorio — proyecto del equipo
 
-Starter oficial para la materia **Aplicaciones Web Progresivas**.
+Comiencen por `START_HERE.md` y lean `ACTIVIDAD-01.md`. Este es un proyecto acumulativo: un repositorio privado por equipo durante el curso. La Semana 1 consiste en arrancar, documentar y explicar la verificación; no en implementar toda la PWA.
 
-Este repositorio es el punto de partida común para las actividades de las semanas 1–13. En la Semana 1 no debes construir todavía toda la PWA: debes poner en marcha este proyecto, documentar el problema y dejar una primera versión reproducible. Cada semana conservarás el mismo repositorio y agregarás la capacidad indicada por la actividad.
+## Entorno
 
-## Requisitos locales
+Node.js 20.19 o posterior compatible, npm 10 o posterior, Git y cuenta de GitHub. No se requiere Make.
 
-- Node.js 20 LTS o superior compatible con Next.js.
-- npm 10 o superior.
-- Git y una cuenta de GitHub.
+Versiones usadas por el equipo (registrado 2026-09-04):
 
-## Arranque verificable
+- Node.js v26.2.0 (`node --version`)
+- npm 11.13.0 (`npm --version`)
+- Git 2.x · Fedora Linux 44 (Workstation)
+
+Dificultades de entorno encontradas: ninguna bloqueante. La verificación local se ejecutó sin Make y sin servicios adicionales; GitHub Actions usa Node 20.19.6.
+
+## Ejecución
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Abre <http://localhost:3000>. Debes ver la pantalla inicial de inspecciones con datos sintéticos.
+Abran `http://localhost:3000` y comprueben las tres inspecciones sintéticas. Detengan el servidor con Ctrl+C.
 
-Antes de entregar ejecuta:
+## Verificación
 
 ```bash
-make verify
-bash public-tests/check.sh
+npm run verify
 ```
 
-`make verify` genera `reports/verification.json`; ese archivo y la corrida verde de GitHub Actions son la evidencia técnica del arranque.
+Ejecuta comprobación de archivos, prueba proporcionada y build; genera `reports/verification.json`. El reporte contiene resultados técnicos y documentos para revisión, no una calificación automática. `make verify` es equivalente. `bash public-tests/check.sh` es un check opcional de estructura.
 
-## Flujo de trabajo del curso
+GitHub Actions ejecuta la misma verificación y permite descargar el artefacto `starter-week-01-evidence`. El reporte local se excluye de Git: adjúntenlo en Classroom o descarguen el del SHA entregado desde Actions.
 
-1. Conserva este repositorio como tu proyecto personal y crea un repositorio privado en GitHub.
-2. Completa únicamente los entregables de la actividad de la semana.
-3. Haz cambios pequeños y descriptivos; no borres lo que ya funciona.
-4. Ejecuta la verificación local y espera que GitHub Actions termine en verde.
-5. Entrega en Classroom la URL del repositorio, el SHA exacto evaluado, el enlace a Actions y `evidence/individual.md`.
+## Trabajo y entrega en equipo
 
-No uses datos reales de personas, laboratorios o estudiantes. Todo dato del starter es sintético.
+Equipo: **9B-E02**. Repositorio privado: `https://github.com/Draggodeidad/pwa-utt`. Inviten a los integrantes y al docente al mismo repositorio privado. Cada persona registra su evidencia en una sección de `evidence/individual.md`. Todos entregan en Classroom el mismo SHA final y enlaces, identificando su sección. El formato exacto está en `ACTIVIDAD-01.md`; no se requiere un pull request adicional ni una copia por alumno.
 
-## Estructura inicial
+## Supuestos y limitaciones de ejecución
 
-- `src/app/`: aplicación Next.js con App Router.
-- `src/lib/data/`: datos sintéticos de inspecciones.
-- `docs/`: plantillas de documentación de la Semana 1.
-- `scripts/verify.mjs`: verificación reproducible local.
-- `tests/`: prueba mínima del starter.
+- Los datos del producto son 100 % sintéticos; no se incluyen datos reales de personas, laboratorios o estudiantes.
+- El starter todavía no implementa instalación PWA, offline, manifest, service worker ni sincronización: son requisitos futuros documentados en `docs/requirements.md`.
+- `reports/verification.json` se genera en cada verificación y se excluye de Git deliberadamente; se entrega en Classroom o se descarga del artefacto de Actions.
+- La verificación técnica (`npm run verify`) no califica la calidad de los documentos; la revisión académica se hace con la rúbrica de `ACTIVIDAD-01.md`.
 
-Las decisiones de arquitectura y las nuevas carpetas se incorporan en las actividades correspondientes; no es necesario adelantarlas.
+## Estructura y límites
 
+- `src/app/`: pantalla Next.js.
+- `src/lib/data/`: inspecciones sintéticas.
+- `docs/`: requisitos y decisión del equipo.
+- `evidence/`: evidencia propia de cada integrante.
+- `tests/`: prueba inicial proporcionada; no es una suite completa de comportamiento.

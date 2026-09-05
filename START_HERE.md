@@ -1,30 +1,13 @@
-# Empieza aquí
+# Empiecen aquí — Semana 1 en equipo
 
-## Objetivo de la Semana 1
+Lean `ACTIVIDAD-01.md` para las instrucciones completas, ejemplos, rúbrica y formato de entrega.
 
-Dejar un repositorio personal que otra persona pueda clonar, instalar y verificar sin conocer tu computadora. La entrega de esta semana tiene cuatro resultados:
+1. Usen un único repositorio privado para el equipo asignado. Inviten a sus integrantes y al docente con la cuenta indicada en Classroom. Los equipos ordinarios son de tres; se mantienen las excepciones autorizadas de cuatro.
+2. Desde la carpeta con `package.json`, ejecuten `npm ci` y `npm run dev`. Revisen las tres inspecciones en `http://localhost:3000`. Detengan el servidor con Ctrl+C.
+3. Completen `docs/requirements.md` y `docs/decision-record.md` como equipo. Los requisitos futuros se documentan, no se implementan esta semana.
+4. Completen una sección por integrante en `evidence/individual.md`.
+5. Ejecuten `npm run verify` (equivale a `make verify`). No se exigen pruebas nuevas. Un resultado técnico verde no califica el contenido de los documentos.
+6. Integren los cambios, hagan push y obtengan el SHA final con `git rev-parse HEAD`.
+7. Cada integrante entrega en Classroom el mismo repositorio, SHA y enlace a Actions, el reporte `verification.json` y `evidence/individual.md`, identificando su sección y contribución. Usen el formato de `ACTIVIDAD-01.md`.
 
-1. `docs/requirements.md` explica el problema de inspecciones de laboratorio, sus usuarios, requisitos funcionales/no funcionales y criterios de aceptación.
-2. `docs/decision-record.md` compara PWA, web tradicional, app nativa y multiplataforma, y justifica la decisión.
-3. El starter compila y `make verify` termina con código 0.
-4. `evidence/individual.md` registra tu contribución, el commit evaluado, una prueba y una limitación.
-
-## Pasos exactos
-
-1. Descarga `PWA-starter.zip` desde Classroom y descomprímelo.
-2. Cambia el nombre de la carpeta a `pwa-inspecciones-apellido-nombre`.
-3. Abre una terminal en esa carpeta y ejecuta `npm ci`.
-4. Ejecuta `npm run dev` y comprueba <http://localhost:3000>.
-5. Crea un repositorio privado en GitHub y sube el contenido del starter.
-6. Completa las dos plantillas de `docs/` sin eliminar sus secciones.
-7. Completa `evidence/individual.md`.
-8. Ejecuta `make verify` y `bash public-tests/check.sh`.
-9. Sube los cambios, espera GitHub Actions en verde y entrega URL, SHA, enlace de Actions y evidencia en Classroom.
-
-## No entregues esto
-
-- No entregues el ZIP sin descomprimir.
-- No entregues solo capturas de pantalla.
-- No abras un repositorio nuevo cada semana: es el mismo proyecto acumulativo.
-- No agregues datos personales, tokens, contraseñas ni archivos `.env`.
-
+Si ya trabajaron con la versión anterior, conserven su documentación y código. Consulten `ACLARACION.md` para actualizar las herramientas sin perder avances.

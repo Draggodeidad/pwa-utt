@@ -1,9 +1,34 @@
-# Evidencia individual
+# Evidencia individual del equipo
 
-- Nombre: Imanol Antonio De la Cruz
-- Repositorio y commit evaluado: https://github.com/Draggodeidad/pwa-utt — SHA evaluado: c850922b9e362dd6d7c9e53f95acbc1b69c825fc (commit con todos los artefactos y la evidencia completa)
-- Mi contribución concreta: instalación y verificación del starter (`npm ci`, `npm run dev`, comprobación de las 3 inspecciones sintéticas en `http://localhost:3000`), redacción completa de `docs/requirements.md` (problema, usuarios, dos escenarios —uno con conectividad intermitente—, requisitos funcionales y no funcionales, datos sintéticos y criterios de aceptación) y de `docs/decision-record.md` (comparación PWA / web tradicional / nativa / multiplataforma, decisión, riesgos y validación), creación del repositorio privado y ejecución de la verificación local y en GitHub Actions.
-- Decisión técnica que puedo explicar: por qué se eligió PWA sobre Next.js en lugar de app nativa o multiplataforma — la restricción de conectividad intermitente exige offline e instalación, y la restricción de tiempo/presupuesto del curso descarta tiendas de aplicaciones y un segundo ecosistema de código; la base web única mantiene la verificación reproducible en CI.
-- Comando o prueba que ejecuté y resultado: `make verify && bash public-tests/check.sh` — `npm run verify` generó `reports/verification.json` con `status: "pass"` y el check público imprimió `PUBLIC_OK`; además `npm test` ejecutó `tests/starter.spec.mjs` sin errores.
-- Limitación o riesgo que encontré: la comprobación de contenido del starter no detecta credenciales por análisis profundo, solo coincidencias literales de palabras comunes, así que la garantía real contra datos sensibles depende de no escribirlos nunca en el repositorio; además, el funcionamiento offline todavía no existe, por lo que el escenario de conectividad intermitente es por ahora solo un requisito documentado.
-- Uso de IA (herramienta, propósito, fragmentos influenciados y validación humana): usé un asistente de IA (opencode) para la redacción inicial de los tres documentos de esta carpeta y de `docs/`, y para ejecutar los comandos de instalación y verificación. Todo el contenido fue revisado y corregido por mí contra el comportamiento real del proyecto (verificación de las 3 inspecciones en el navegador, resultados de `make verify` y del check público) antes de cada commit; la responsabilidad técnica de lo entregado es mía.
+- Grupo y equipo: 9B-E02
+- Repositorio del equipo: https://github.com/Draggodeidad/pwa-utt
+
+## Integrante: Imanol Antonio De la Cruz
+
+- Mi contribución concreta y enlace a archivo, commit anterior o revisión: puesta en marcha y verificación del starter (arranque con `npm ci` y `npm run dev`, comprobación de las tres inspecciones sintéticas en `http://localhost:3000`); redacción de `docs/requirements.md` (problema, usuarios, escenarios E-01/E-02 con conectividad intermitente, requisitos funcionales y no funcionales, datos sintéticos, límites y criterios de aceptación) y de `docs/decision-record.md` (comparación PWA / web tradicional / nativa / multiplataforma, decisión, riesgos y validación); creación del repositorio privado del equipo y actualización de las herramientas de verificación a la versión aclarada del 4 de septiembre. Enlaces: commit de contenido inicial https://github.com/Draggodeidad/pwa-utt/commit/bb812f23e808e6050b60cd5feb49dfe5ce1a5e43 y documentos en `docs/requirements.md`, `docs/decision-record.md`, `evidence/individual.md`.
+- Decisión que puedo explicar y por qué: se mantiene PWA sobre Next.js en lugar de app nativa o multiplataforma porque el escenario de conectividad intermitente (E-02) exige conservar registros sin red y sincronizarlos después; la PWA lo permite sin cuentas de tienda ni un segundo ecosistema de código, y la base web única se verifica de forma reproducible en local y en GitHub Actions. Una app nativa se justificaría solo ante hardware especializado; una web tradicional no cubre el trabajo sin conexión.
+- Comando o prueba proporcionada que ejecuté: `npm run verify` (estructura + `npm test` + `npm run build`) sobre el árbol limpio, y `bash public-tests/check.sh` para el check de estructura.
+- Resultado real que observé: `npm run verify` terminó con código 0 y generó `reports/verification.json` con `status: "pass"`; la prueba `tests/starter.spec.mjs` imprimió `PASS` y el build de Next.js completó sin errores; GitHub Actions ejecutó la misma verificación en verde.
+- Qué verifica esa prueba y qué no verifica: verifica que los archivos requeridos existen, que el starter mantiene su pantalla de inspecciones sintéticas y que el proyecto compila; NO verifica la calidad del análisis de los documentos, no detecta secretos y no cubre el comportamiento completo de la aplicación (la suite no es exhaustiva).
+- Limitación, dificultad o riesgo que identifiqué: la verificación técnica da `pass` aunque los documentos tengan análisis débil, porque la revisión académica es manual; además el funcionamiento offline todavía no existe, por lo que el escenario E-02 es por ahora solo un requisito documentado, y la sincronización futura requerirá resolver conflictos de registros duplicados.
+- Uso de IA: herramienta, propósito, partes influenciadas y validación propia: usé un asistente de IA (opencode) para redactar el borrador inicial de `docs/requirements.md`, `docs/decision-record.md` y esta evidencia, y para ejecutar los comandos de instalación y verificación. Validé personalmente el resultado contra el comportamiento real del proyecto (las tres inspecciones en el navegador, la salida de `npm run verify` y de Actions) y ajusté el contenido antes de cada commit; la responsabilidad técnica de lo entregado es mía.
+
+## Integrante: pendiente de completar (integrante 2)
+
+- Mi contribución concreta y enlace a archivo, commit anterior o revisión:
+- Decisión que puedo explicar y por qué:
+- Comando o prueba proporcionada que ejecuté:
+- Resultado real que observé:
+- Qué verifica esa prueba y qué no verifica:
+- Limitación, dificultad o riesgo que identifiqué:
+- Uso de IA: herramienta, propósito, partes influenciadas y validación propia (o «no utilicé IA»):
+
+## Integrante: pendiente de completar (integrante 3)
+
+- Mi contribución concreta y enlace a archivo, commit anterior o revisión:
+- Decisión que puedo explicar y por qué:
+- Comando o prueba proporcionada que ejecuté:
+- Resultado real que observé:
+- Qué verifica esa prueba y qué no verifica:
+- Limitación, dificultad o riesgo que identifiqué:
+- Uso de IA: herramienta, propósito, partes influenciadas y validación propia (o «no utilicé IA»):
