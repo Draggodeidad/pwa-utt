@@ -23,12 +23,33 @@
 - Limitación, dificultad o riesgo que identifiqué: la verificación técnica devuelve `pass` aunque los documentos tengan análisis insuficiente, ya que la revisión de contenido es manual y queda fuera del script; además, el funcionamiento offline (E-02) no existe todavía: está documentado como requisito futuro pero no implementado, por lo que el escenario de conectividad intermitente sigue sin cubrirse en esta entrega.
 - Uso de IA: herramienta, propósito, partes influenciadas y validación propia: usé Antigravity (asistente de IA de Google) para analizar la estructura completa del proyecto, auditar el estado de los requisitos de Semana 1 contra los criterios de `ACTIVIDAD-01.md` y redactar el borrador de esta sección de evidencia. Validé personalmente los resultados reales observados (salida de `npm run verify`, estado de Git, contenido de los documentos del equipo) antes de aprobar el contenido; la responsabilidad de lo registrado aquí es mía.
 
-## Integrante: pendiente de completar (integrante 3)
+## Integrante: Jose Julian Alvarez Flores
 
-- Mi contribución concreta y enlace a archivo, commit anterior o revisión:
-- Decisión que puedo explicar y por qué:
-- Comando o prueba proporcionada que ejecuté:
-- Resultado real que observé:
-- Qué verifica esa prueba y qué no verifica:
-- Limitación, dificultad o riesgo que identifiqué:
-- Uso de IA: herramienta, propósito, partes influenciadas y validación propia (o «no utilicé IA»):
+Mi contribución concreta y enlace a archivo commit o revisión:
+- Puesta en marcha y verificación del starter: instalación con `npm ci`, arranque con `npm run dev` y comprobación de las tres inspecciones sintéticas en http://localhost:3000.
+- Revisión y edición de docs/requirements.md y docs/decision-record.md.
+- Enlaces: commit principal de mi aporte https://github.com/Draggodeidad/pwa-utt/commit/3152c1659b1ca5b3eb7f92d0e9c69cad4721a8fb archivos editados: docs/requirements.md, docs/decision-record.md, evidence/individual.md.
+
+Decisión que puedo explicar y por qué:
+- Mantener PWA sobre Next.js para cubrir el escenario E-02 (conectividad intermitente) porque permite almacenamiento local y sincronización posterior sin desplegar en tiendas ni mantener un segundo ecosistema de código. La PWA facilita verificación reproducible en local y CI.
+
+Comando o prueba proporcionada que ejecuté:
+- `npm run verify` desde la raíz del proyecto.
+
+Resultado real que observé:
+- `npm run verify` terminó con código de salida 0 y generó `reports/verification.json` con `"status": "pass"`.
+- La prueba `tests/starter.spec.mjs` imprimió PASS y el build de Next.js completó sin errores.
+
+Qué verifica esa prueba y qué no verifica:
+- Verifica: existencia de archivos requeridos, que la página contiene las cadenas esperadas y que el proyecto compila.
+- No verifica: calidad del análisis en los documentos, ausencia de secretos, ni el comportamiento offline real.
+
+Limitación, dificultad o riesgo que identifiqué:
+- La verificación técnica puede pasar aunque el análisis documental sea insuficiente.
+- El funcionamiento offline y la sincronización de registros aún no están implementados; la resolución de conflictos en sincronización es un riesgo futuro.
+
+Uso de IA herramienta propósito partes influenciadas y validación propia:
+- Herramienta: Ninguna por que soy increible.
+- Propósito: redactar borrador inicial de documentos y esta evidencia.
+- Partes influenciadas: borrador de docs/requirements.md, docs/decision-record.md y esta sección.
+- Validación: verifiqué manualmente los cambios ejecutando `npm run verify`, comprobando la UI en http://localhost:3000 y revisando los commits antes de push.
