@@ -13,15 +13,15 @@
 - Limitación, dificultad o riesgo que identifiqué: la verificación técnica da `pass` aunque los documentos tengan análisis débil, porque la revisión académica es manual; además el funcionamiento offline todavía no existe, por lo que el escenario E-02 es por ahora solo un requisito documentado, y la sincronización futura requerirá resolver conflictos de registros duplicados.
 - Uso de IA: herramienta, propósito, partes influenciadas y validación propia: usé un asistente de IA (opencode) para redactar el borrador inicial de `docs/requirements.md`, `docs/decision-record.md` y esta evidencia, y para ejecutar los comandos de instalación y verificación. Validé personalmente el resultado contra el comportamiento real del proyecto (las tres inspecciones en el navegador, la salida de `npm run verify` y de Actions) y ajusté el contenido antes de cada commit; la responsabilidad técnica de lo entregado es mía.
 
-## Integrante: pendiente de completar (integrante 2)
+## Integrante: Osbaldo Alvarez Marinez
 
-- Mi contribución concreta y enlace a archivo, commit anterior o revisión:
-- Decisión que puedo explicar y por qué:
-- Comando o prueba proporcionada que ejecuté:
-- Resultado real que observé:
-- Qué verifica esa prueba y qué no verifica:
-- Limitación, dificultad o riesgo que identifiqué:
-- Uso de IA: herramienta, propósito, partes influenciadas y validación propia (o «no utilicé IA»):
+- Mi contribución concreta y enlace a archivo, commit anterior o revisión: revisión técnica y auditoría del repositorio del equipo; comprobación de que la estructura de archivos, la documentación y la verificación cumplen los requisitos de Semana 1; ejecución de `npm run verify` para confirmar que el proyecto instala, pasa la prueba y compila de forma reproducible; revisión de `docs/requirements.md`, `docs/decision-record.md`, `README.md` y `evidence/individual.md` para identificar el estado de completitud de la entrega; registro de la propia evidencia en esta sección. Archivo principal revisado: `evidence/individual.md` (esta sección).
+- Decisión que puedo explicar y por qué: se eligió PWA sobre Next.js porque es la única estrategia web que puede cubrir el escenario E-02 (conectividad intermitente) sin requerir cuentas de tienda de aplicaciones ni un segundo ecosistema de código. La comparación con web tradicional, app nativa y multiplataforma está documentada en `docs/decision-record.md`; la PWA permite instalación desde el navegador, una base de código única verificable en GitHub Actions y crecimiento incremental durante las 14 semanas del curso, lo cual se ajusta a las restricciones del equipo.
+- Comando o prueba proporcionada que ejecuté: `npm run verify` desde la raíz del proyecto (equivale a estructura + `npm test` + `npm run build`).
+- Resultado real que observé: `npm run verify` terminó con código de salida 0; la prueba `tests/starter.spec.mjs` imprimió `starter.spec.mjs: PASS`; el build de Next.js 14 completó sin errores generando páginas estáticas; se generó `reports/verification.json` con `"status": "pass"`. SHA del commit evaluado: `c2f218d88add8d9628a98112ccde0d5a13b38ccf`.
+- Qué verifica esa prueba y qué no verifica: verifica que los archivos requeridos existen (`package.json`, `README.md`, `src/app/page.tsx`, `docs/requirements.md`, etc.), que `page.tsx` contiene las cadenas "Inspecciones de laboratorio" y "sintéticos", que el script de build es `next build` y que el proyecto compila. NO verifica la calidad del análisis de los documentos, no detecta credenciales ni secretos, no prueba el comportamiento real de la interfaz en el navegador y no cubre el funcionamiento offline (no implementado en Semana 1).
+- Limitación, dificultad o riesgo que identifiqué: la verificación técnica devuelve `pass` aunque los documentos tengan análisis insuficiente, ya que la revisión de contenido es manual y queda fuera del script; además, el funcionamiento offline (E-02) no existe todavía: está documentado como requisito futuro pero no implementado, por lo que el escenario de conectividad intermitente sigue sin cubrirse en esta entrega.
+- Uso de IA: herramienta, propósito, partes influenciadas y validación propia: usé Antigravity (asistente de IA de Google) para analizar la estructura completa del proyecto, auditar el estado de los requisitos de Semana 1 contra los criterios de `ACTIVIDAD-01.md` y redactar el borrador de esta sección de evidencia. Validé personalmente los resultados reales observados (salida de `npm run verify`, estado de Git, contenido de los documentos del equipo) antes de aprobar el contenido; la responsabilidad de lo registrado aquí es mía.
 
 ## Integrante: pendiente de completar (integrante 3)
 
