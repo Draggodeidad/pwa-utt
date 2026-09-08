@@ -11,7 +11,7 @@ assert.equal(packageJson.scripts.build, "next build");
 assert.match(page, /LoginScreen/);
 assert.match(login, /Acceso no concedido/);
 assert.match(login, /"idle" \| "loading" \| "error"/);
-assert.match(login, /Modo sin conexión disponible una vez autenticado/);
+assert.match(login, /Correo Institucional/);
 assert.match(login, /lucide-react/);
 assert.doesNotMatch(login, /\/figma\/login/);
 console.log("starter.spec.mjs: PASS");
