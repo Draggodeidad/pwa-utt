@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Inspecciones de laboratorio",
-  description: "Proyecto base de Aplicaciones Web Progresivas"
+  title: "Inspecciones | Acceso institucional",
+  description: "Acceso institucional para inspecciones de laboratorios universitarios"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -13,4 +13,3 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     </html>
   );
 }
-
