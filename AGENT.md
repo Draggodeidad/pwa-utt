@@ -6,14 +6,16 @@
 
 Build **Laboratorio Inspect**, a Progressive Web App (PWA) for maintenance inspections in university laboratories. It replaces notebooks and spreadsheets, supports technicians working with intermittent connectivity, and gives laboratory coordination a view to prioritize and follow up findings.
 
-The repository is currently a **Next.js starter with synthetic inspection data**. Authentication, backend API, database, IndexedDB persistence, service worker, manifest, installation, real offline operation, synchronization, notifications, and deployment are **not implemented yet**. Treat their documented behavior as target architecture, not existing functionality.
+The repository is currently a **Next.js starter with synthetic inspection data**. The authentication screen is a client-side visual mock only; real authentication, backend API, database, IndexedDB persistence, service worker, manifest, installation, offline operation, synchronization, notifications, and deployment are **not implemented yet**. Treat their documented behavior as target architecture, not existing functionality.
 
 ### Technology stack
 
 | Area | Current choice |
 | --- | --- |
 | Framework | Next.js `14.2.35`, App Router |
-| UI | React `18.3.1` / React DOM `18.3.1` |
+| UI | React `18.3.1` / React DOM `18.3.1`, shadcn/ui local primitives |
+| Styling | Tailwind CSS `3.4.17`, PostCSS and CSS-variable theme tokens |
+| Icons | Lucide React |
 | Language | TypeScript `5.4.5`, strict mode |
 | Runtime | Node.js `20.19+` compatible; CI uses Node `20.19.6` |
 | Package manager | npm `10+`; use the committed `package-lock.json` |
@@ -61,6 +63,15 @@ feature service/hook → lib adapter/contract → browser API, local storage, or
 - `lib` must not import routes or presentation components.
 - Use aliases: `@/features/...`, `@/components/...`, `@/lib/...`, `@/config/...`, `@/types/...`.
 - Use Server Components by default. Add `"use client"` only at the smallest interactive boundary requiring browser APIs, local state, DOM events, camera, geolocation, dialogs, connectivity hooks, or IndexedDB.
+
+### UI implementation conventions
+
+- Use Tailwind utility classes for component layout, spacing, responsive behavior, typography, colors and visual states. Keep `src/app/globals.css` limited to Tailwind directives, global theme tokens and base styles.
+- Reuse the local shadcn/ui primitives in `src/components/ui/` before creating a bespoke primitive. Current primitives include `Alert`, `Badge`, `Button`, `Card`, `Input` and `Separator`.
+- Add a new shadcn/ui primitive only when it has a clear reuse case. Follow the existing lowercase filenames and use `cn` from `@/lib/utils` to merge variant and caller classes.
+- Domain components belong in their feature and compose shadcn/ui primitives; do not promote a domain component to `components/ui` just to share its styling.
+- Prefer `lucide-react` icons over exported design-image assets for standard interface glyphs. Keep image assets only when they represent product content or a specific branded graphic that cannot be expressed by an existing icon.
+- Preserve desktop-first layouts. Use Tailwind responsive variants to progressively adapt the same interaction for tablet and mobile.
 
 ### Domain model and ownership
 
@@ -153,6 +164,7 @@ There is currently **no configured lint script, formatter, database migration co
 - Use full tables, horizontal filters, sidebars, context panels, dashboards and multi-column forms where they improve desktop work.
 - On tablet, collapse navigation and stack secondary panels when necessary. On mobile, use drawers, list/cards for tables, filter sheets, overflow actions, list-to-detail navigation and one-column forms.
 - Reuse the global component system before creating a domain component. Keep business-specific components in their feature.
+- Prefer the established Tailwind + shadcn/ui system over new page-specific CSS classes or bespoke buttons, inputs, cards, alerts, badges and separators.
 - Maintain visible labels, keyboard focus, semantic heading hierarchy, appropriate ARIA labels, color contrast, and accessible error/status messages.
 - Avoid landing-page layouts, oversized cards, arbitrary gradients, glassmorphism, excessive shadows, artificial empty space, and one-off visual patterns.
 
