@@ -1,4 +1,4 @@
-import { inspections } from "../lib/data/inspections";
+import { InspectionList, inspections } from "@/features/inspections";
 
 export default function HomePage() {
   return (
@@ -22,28 +22,7 @@ export default function HomePage() {
           <span className="count">{inspections.length} registros</span>
         </div>
 
-        <div className="inspection-grid">
-          {inspections.map((inspection) => (
-            <article className="inspection-card" key={inspection.id}>
-              <div className="card-topline">
-                <span className={`badge badge-${inspection.status}`}>{inspection.statusLabel}</span>
-                <span className="muted">{inspection.date}</span>
-              </div>
-              <h3>{inspection.location}</h3>
-              <p>{inspection.summary}</p>
-              <dl>
-                <div>
-                  <dt>Responsable</dt>
-                  <dd>{inspection.inspector}</dd>
-                </div>
-                <div>
-                  <dt>Hallazgos</dt>
-                  <dd>{inspection.findings}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </div>
+        <InspectionList inspections={inspections} />
       </section>
 
       <footer className="footer">
