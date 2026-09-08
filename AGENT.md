@@ -219,11 +219,11 @@ There is currently **no configured lint script, formatter, database migration co
 | --- | --- | --- |
 | Project constraints, current scope, reproducibility | `README.md`, `docs/requirements.md` | `package.json`, `scripts/verify.mjs`, `ACTIVIDAD-01.md` |
 | Architecture, module placement, dependency direction | `docs/architecture.md` | `src/features/`, `src/lib/`, `tsconfig.json` |
-| ADR and offline-first model decisions | `docs/decision-record.md`, `plan-mitigacion-gap-hallazgos.md` | `src/features/inspections/types.ts`, `src/features/findings/types.ts`, `src/lib/pwa/` |
-| Functional requirements and acceptance criteria | `docs/requirements.md`, `RF-09-a-RF-90.md` | `docs/rf-domain-map.md`, `docs/rf-screen-map.md` |
+| ADR and offline-first model decisions | `docs/decision-record.md`, `docs/architecture.md` | `src/features/inspections/types.ts`, `src/features/findings/types.ts`, `src/lib/pwa/` |
+| Functional requirements and acceptance criteria | `docs/requirements.md`, `docs/rf-domain-map.md` | `docs/rf-screen-map.md`, `docs/use-cases.md` |
 | Roles and authorization | `docs/actors-and-permissions.md` | `src/features/auth/`, `src/config/navigation.ts` |
 | Inspection lifecycle, forms, filters and list/detail UI | `docs/use-cases.md`, `docs/user-flows.md` | `src/features/inspections/`, `docs/screen-inventory.md` |
-| Findings, priority and follow-up | `docs/rf-domain-map.md`, `docs/actors-and-permissions.md` | `src/features/findings/`, `plan-mitigacion-gap-hallazgos.md` |
+| Findings, priority and follow-up | `docs/rf-domain-map.md`, `docs/actors-and-permissions.md` | `src/features/findings/`, `docs/decision-record.md` |
 | Coordination dashboard | `docs/use-cases.md`, `docs/screen-inventory.md` | `src/features/dashboard/`, `docs/stitch-prompts/dashboard.md` |
 | PWA/offline/sync UX and future implementation | `docs/offline-ux.md`, `docs/ui-states.md`, `docs/decision-record.md` | `src/lib/pwa/`, `src/features/sync/` |
 | Responsive layouts and visual system | `docs/layout-system.md`, `docs/design-system.md` | `docs/component-catalog.md`, `docs/ui-reuse-matrix.md`, `src/components/` |
