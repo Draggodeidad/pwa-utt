@@ -23,3 +23,10 @@ export type InspectionListItem = Pick<Inspection, "id" | "location" | "date" | "
   findingCount: number;
   result: InspectionResult;
 };
+
+export type TechnicianHomeData = {
+  technicianId: string;
+  activeNotebook: string;
+  route: { completedRooms: number; totalRooms: number; description: string };
+  upcomingStop: { laboratoryCode: string; location: string; description: string; schedule: string; building: string };
+};
