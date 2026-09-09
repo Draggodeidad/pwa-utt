@@ -24,6 +24,41 @@ export type InspectionListItem = Pick<Inspection, "id" | "location" | "date" | "
   result: InspectionResult;
 };
 
+export type InspectionFinding = {
+  id: string;
+  priority: "high" | "medium" | "low";
+  status: "pending" | "in_review" | "resolved";
+  title: string;
+  description: string;
+  evidenceLabel?: string;
+  evidenceImage?: string;
+};
+
+export type InspectionDetail = {
+  id: string;
+  folio: string;
+  logbookReference: string;
+  location: string;
+  laboratoryCode: string;
+  building: string;
+  floor: string;
+  date: string;
+  technician: string;
+  technicianId: string;
+  workflowStatus: InspectionWorkflowStatus;
+  result: InspectionResult;
+  syncStatus: SyncStatus;
+  scope: string;
+  createdAt: string;
+  updatedAt: string;
+  createdDevice: string;
+  updatedBy: string;
+  nextInspection: string;
+  protocol: string;
+  evidenceImage: string;
+  findings: readonly InspectionFinding[];
+};
+
 export type TechnicianHomeData = {
   technicianId: string;
   activeNotebook: string;
