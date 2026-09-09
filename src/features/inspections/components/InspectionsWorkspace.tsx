@@ -1,0 +1,51 @@
+"use client";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/feedback/EmptyState";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, ChevronDown, CloudOff, Filter, Info, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import type { InspectionListItem, InspectionResult, InspectionWorkflowStatus, SyncStatus } from "../types";
+import { InspectionLedger } from "./InspectionLedger";
+import { useInspectionListState } from "../hooks/use-inspection-list-state";
+
+type ResultFilter = "all" | InspectionResult;
+type WorkflowFilter = "all" | InspectionWorkflowStatus;
+type SyncFilter = "all" | SyncStatus;
+type TimeRange = "week" | "month" | "custom";
+
+const resultOptions = [{ value: "all", label: "Todos" }, { value: "without_findings", label: "Sin incidencias" }, { value: "requires_attention", label: "Requiere atención" }] as const;
+const workflowOptions = [{ value: "all", label: "Todos" }, { value: "draft", label: "Borrador" }] as const;
+const syncOptions = [{ value: "all", label: "Todas" }, { value: "pending", label: "Pendientes" }, { value: "error", label: "Con error" }, { value: "synced", label: "Sincronizadas" }] as const;
+const timeOptions = [{ value: "week", label: "Últimos 7 días" }, { value: "month", label: "Este mes" }, { value: "custom", label: "Personalizado" }] as const;
+
+type FilterGroupProps<T extends string> = { label: string; options: readonly { value: T; label: string }[]; value: T; onChange: (value: T) => void; columns?: 1 | 2 };
+function FilterGroup<T extends string>({ label, options, value, onChange, columns = 2 }: FilterGroupProps<T>) {
+  return <fieldset><legend className="font-mono text-[10px] font-medium uppercase tracking-[.08em] text-muted-foreground">{label}</legend><div className={`mt-2 grid gap-0.5 ${columns === 1 ? "grid-cols-1" : "grid-cols-2"}`}>{options.map((option) => <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)} className={`rounded-sm px-2 py-1.5 text-left font-mono text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${value === option.value ? "bg-[#e5e9e4] font-semibold text-foreground shadow-sm" : "bg-secondary/70 text-secondary-foreground hover:bg-secondary"}`}>{option.label}</button>)}</div></fieldset>;
+}
+
+export function InspectionsWorkspace({ inspections }: { inspections: readonly InspectionListItem[] }) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<ResultFilter>("all");
+  const [workflow, setWorkflow] = useState<WorkflowFilter>("all");
+  const [syncStatus, setSyncStatus] = useState<SyncFilter>("all");
+  const [timeRange, setTimeRange] = useState<TimeRange>("week");
+  const [showFilters, setShowFilters] = useState(false);
+  const filteredInspections = useMemo(() => { const normalizedQuery = query.trim().toLocaleLowerCase("es-MX"); return inspections.filter((inspection) => (!normalizedQuery || [inspection.location, inspection.inspector, inspection.laboratoryCode].some((value) => value.toLocaleLowerCase("es-MX").includes(normalizedQuery))) && (result === "all" || inspection.result === result) && (workflow === "all" || inspection.workflowStatus === workflow) && (syncStatus === "all" || inspection.syncStatus === syncStatus)); }, [inspections, query, result, workflow, syncStatus]);
+  const findingCount = inspections.reduce((total, inspection) => total + inspection.findingCount, 0);
+  const pendingCount = inspections.filter((inspection) => inspection.syncStatus !== "synced").length;
+  const conformance = inspections.length ? ((inspections.filter((item) => item.result === "without_findings").length / inspections.length) * 100).toFixed(1) : "0.0";
+  const activeFilterCount = Number(result !== "all") + Number(workflow !== "all") + Number(syncStatus !== "all");
+  const clearFilters = () => { setQuery(""); setResult("all"); setWorkflow("all"); setSyncStatus("all"); setTimeRange("week"); };
+  const hasActiveFilters = Boolean(query.trim() || activeFilterCount || timeRange !== "week");
+  const { state: listState } = useInspectionListState({ records: filteredInspections, hasActiveFilters });
+  return <section className="mx-auto max-w-[1200px] space-y-5">
+    <header className="flex flex-col gap-4 pb-1 xl:flex-row xl:items-end xl:justify-between"><div><p className="font-mono text-[11px] font-semibold uppercase tracking-wide text-primary">REG-AUDIT <span className="font-medium text-muted-foreground">· Auditoría de instalaciones y seguridad</span></p><div className="mt-1 flex flex-wrap items-center gap-2"><h1 className="text-[32px] font-semibold leading-10 tracking-tight">Inspecciones</h1><Badge variant="secondary" className="rounded-sm px-1 py-0.5 font-mono text-[11px] font-normal">{inspections.length} registros activos</Badge></div></div><dl className="flex w-full gap-1 rounded-lg bg-secondary p-1 shadow-sm xl:w-auto"><div className="min-w-28 rounded-sm bg-card px-3 py-1.5"><dt className="font-mono text-[10px] text-muted-foreground">Conformidad</dt><dd className="text-sm font-semibold">{conformance}%</dd></div><div className="min-w-28 rounded-sm bg-card px-3 py-1.5"><dt className="font-mono text-[10px] text-muted-foreground">Hallazgos Abiertos</dt><dd className="text-sm font-semibold">{findingCount} items</dd></div><div className="min-w-28 rounded-sm bg-card px-3 py-1.5"><dt className="font-mono text-[10px] text-muted-foreground">Por Sincronizar</dt><dd className="text-sm font-semibold">{pendingCount} offline</dd></div></dl></header>
+    <Card className="flex flex-col gap-2 rounded-lg p-2 shadow-sm sm:flex-row sm:items-center"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por laboratorio o técnico..." className="h-9 border-0 bg-secondary pl-9 text-sm shadow-none" /></div><Button type="button" onClick={() => setShowFilters((visible) => !visible)} size="sm" className="h-9 self-start rounded-sm px-3 font-mono text-[11px] sm:self-auto" aria-expanded={showFilters}><Filter className="mr-1 size-3.5" aria-hidden="true" />Filtros ({activeFilterCount})</Button></Card>
+    <div className="grid gap-5 lg:grid-cols-[15.25rem_minmax(0,1fr)]"><aside className={`${showFilters ? "block" : "hidden"} lg:block`}><Card className="rounded-lg p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h2 className="flex items-center gap-1 text-sm font-semibold"><Filter className="size-4" aria-hidden="true" />Criterios Activos</h2><button type="button" onClick={clearFilters} className="font-mono text-[10px] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Limpiar filtros</button></div><div className="mt-5 space-y-5"><div className="space-y-2"><FilterGroup label="Resultado de inspección" options={resultOptions} value={result} onChange={setResult} /><FilterGroup label="Flujo de inspección" options={workflowOptions} value={workflow} onChange={setWorkflow} /></div><FilterGroup label="Rango temporal" options={timeOptions} value={timeRange} onChange={setTimeRange} columns={1} /><FilterGroup label="Sincronización (técnico) · DB-CACHE" options={syncOptions} value={syncStatus} onChange={setSyncStatus} /><label className="block"><span className="font-mono text-[10px] font-medium uppercase tracking-[.08em] text-muted-foreground">Criterio de orden</span><span className="relative mt-2 block"><select className="h-8 w-full appearance-none rounded-sm border-0 bg-secondary px-2 font-mono text-[10px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" defaultValue="recent"><option value="recent">Más recientes primero</option></select><ChevronDown className="pointer-events-none absolute right-2 top-2 size-3.5 text-muted-foreground" aria-hidden="true" /></span></label><div className="rounded-sm bg-secondary/80 p-2 text-[11px] leading-relaxed text-muted-foreground"><p className="flex items-center gap-1 font-mono text-[10px] font-semibold text-foreground"><Info className="size-3.5" aria-hidden="true" />Protocolo de sincronismo</p><p className="mt-1">Las inspecciones de salas de cómputo marcadas en estado local se transmitirán al servidor central en cuanto el dispositivo confirme enlace WiFi de campus.</p></div></div></Card></aside>
+      <div className="min-w-0">{listState === "loading" ? <Card className="space-y-3 rounded-lg p-4" aria-label="Cargando inspecciones">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-24 animate-pulse rounded-lg bg-secondary" />)}</Card> : null}{listState === "empty" ? <Card className="rounded-lg p-8 text-center"><EmptyState title="Todavía no hay inspecciones" description="Cuando se registren inspecciones de salas de cómputo, aparecerán aquí." /></Card> : null}{listState === "filtered-empty" ? <Card className="rounded-lg p-8 text-center"><EmptyState title="No hay inspecciones que coincidan" description="Ajusta la búsqueda o limpia los criterios activos para consultar los registros." /><Button variant="outline" className="mt-4" onClick={clearFilters}>Limpiar filtros</Button></Card> : null}{listState === "error" ? <Card className="rounded-lg p-8 text-center"><AlertCircle className="mx-auto size-7 text-destructive" aria-hidden="true" /><h2 className="mt-3 font-semibold">No se pudieron cargar las inspecciones</h2><p className="mt-1 text-sm text-muted-foreground">Intenta de nuevo cuando la conexión esté disponible.</p><Button className="mt-4" onClick={() => window.location.reload()}>Reintentar</Button></Card> : null}{listState === "offline-with-data" ? <div className="mb-3 flex items-center gap-2 rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950"><CloudOff className="size-4" aria-hidden="true" />Sin conexión. Se muestran los registros locales disponibles.</div> : null}{listState === "success" || listState === "offline-with-data" ? <InspectionLedger inspections={filteredInspections} /> : null}</div>
+    </div>
+  </section>;
+}
