@@ -18,6 +18,8 @@ export type Inspection = EntityTimestamps & {
 /** Read model for list cards; findingCount comes from the finding relation/query. */
 export type InspectionListItem = Pick<Inspection, "id" | "location" | "date" | "summary" | "syncStatus"> & {
   inspector: string;
+  laboratoryCode: string;
+  workflowStatus: InspectionWorkflowStatus;
   findingCount: number;
   result: InspectionResult;
 };
