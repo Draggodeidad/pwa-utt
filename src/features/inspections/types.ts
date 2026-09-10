@@ -32,6 +32,33 @@ export type InspectionFinding = {
   description: string;
   evidenceLabel?: string;
   evidenceImage?: string;
+  evidenceCount?: number;
+  recordedAt?: string;
+};
+
+export type InspectionEditorValues = {
+  id: string;
+  folio: string;
+  laboratoryCode: string;
+  date: string;
+  technician: string;
+  technicianId: string;
+  summary: string;
+  findings: InspectionFinding[];
+  syncStatus: SyncStatus;
+};
+
+export type LaboratoryProfile = {
+  code: string;
+  label: string;
+  building: string;
+  floor: string;
+  image: string;
+  activeStations: string;
+  network: string;
+  audiovisual: string;
+  climate: string;
+  protocol: string;
 };
 
 export type InspectionDetail = {
