@@ -10,6 +10,7 @@
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",

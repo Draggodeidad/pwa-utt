@@ -32,36 +32,36 @@ export type InspectionFinding = {
   description: string;
   evidenceLabel?: string;
   evidenceImage?: string;
+  evidenceCount?: number;
+};
+
+export type InspectionEditorValues = {
+  id: string;
+  folio: string;
+  laboratoryCode: string;
+  date: string;
+  technician: string;
+  summary: string;
+  findings: InspectionFinding[];
+  syncStatus: SyncStatus;
+};
+
+export type LaboratoryProfile = {
+  code: string;
+  label: string;
+  building: string;
+  floor: string;
 };
 
 export type InspectionDetail = {
   id: string;
   folio: string;
-  logbookReference: string;
   location: string;
-  laboratoryCode: string;
-  building: string;
-  floor: string;
   date: string;
   technician: string;
-  technicianId: string;
   workflowStatus: InspectionWorkflowStatus;
   result: InspectionResult;
   syncStatus: SyncStatus;
   scope: string;
-  createdAt: string;
-  updatedAt: string;
-  createdDevice: string;
-  updatedBy: string;
-  nextInspection: string;
-  protocol: string;
-  evidenceImage: string;
   findings: readonly InspectionFinding[];
-};
-
-export type TechnicianHomeData = {
-  technicianId: string;
-  activeNotebook: string;
-  route: { completedRooms: number; totalRooms: number; description: string };
-  upcomingStop: { laboratoryCode: string; location: string; description: string; schedule: string; building: string };
 };
