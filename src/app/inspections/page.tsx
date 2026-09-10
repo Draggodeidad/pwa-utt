@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { isRouteAllowedForRole, navigationSectionsByRole } from "@/config/navigation";
 import { temporarySession } from "@/config/temporary-session";
-import { inspections, InspectionsWorkspace } from "@/features/inspections";
+import { CoordinationInspectionsWorkspace, inspections, InspectionsWorkspace } from "@/features/inspections";
 import { notFound } from "next/navigation";
 
 export default function InspectionsPage() {
@@ -10,7 +10,7 @@ export default function InspectionsPage() {
 
   return (
     <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]}>
-      <InspectionsWorkspace inspections={inspections} />
+      {role === "coordinator" ? <CoordinationInspectionsWorkspace inspections={inspections} /> : <InspectionsWorkspace inspections={inspections} />}
     </AppShell>
   );
 }
