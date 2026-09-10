@@ -1,75 +1,299 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, CloudOff, Edit3, FileCheck2, ImageIcon, Info, MapPin, MoreHorizontal, Plus, Trash2, WifiOff } from "lucide-react";
-import { useMemo } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  CloudOff,
+  Edit3,
+  ImageIcon,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionFinalization } from "../hooks/use-inspection-finalization";
-import type { InspectionDetail, InspectionFinding } from "../types";
+import type { InspectionDetail } from "../types";
 
-type InspectionDetailWorkspaceProps = { inspection: InspectionDetail };
-
-const dateFormatter = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" });
-
-const priorityCopy = {
-  high: { label: "Prioridad: alta", className: "bg-red-50 text-red-800" },
-  medium: { label: "Prioridad: media", className: "bg-amber-50 text-amber-900" },
-  low: { label: "Prioridad: baja", className: "bg-emerald-50 text-emerald-900" }
+const dateFormatter = new Intl.DateTimeFormat("es-MX", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+const priorityLabel = { high: "Alta", medium: "Media", low: "Baja" } as const;
+const statusLabel = {
+  pending: "Pendiente",
+  in_review: "En revisión",
+  resolved: "Atendido",
 } as const;
 
-const findingStatusCopy = { pending: "Seguimiento: pendiente", in_review: "Seguimiento: en revisión", resolved: "Seguimiento: resuelto" } as const;
-
-function formatDate(value: string) {
-  return dateFormatter.format(new Date(`${value.slice(0, 10)}T12:00:00`));
-}
-
-function FindingRecordCard({ finding, editable }: { finding: InspectionFinding; editable: boolean }) {
-  const priority = priorityCopy[finding.priority];
-  return <article className="rounded-lg bg-card p-5 shadow-sm" aria-labelledby={`finding-${finding.id}`}>
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex min-w-0 gap-3">
-        <span className={cn("grid size-9 shrink-0 place-items-center rounded-sm font-mono text-[11px] font-semibold", priority.className)} aria-label={`${finding.id}, ${priority.label}`}><span aria-hidden="true">{finding.id}</span></span>
-        <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><span className={cn("rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase", priority.className)}>{priority.label}</span><span className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground">{findingStatusCopy[finding.status]}</span></div><h3 id={`finding-${finding.id}`} className="mt-2 text-base font-semibold leading-snug">{finding.title}</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-secondary-foreground">{finding.description}</p></div>
-      </div>
-      {editable ? <div className="flex shrink-0 items-center gap-1 self-end sm:self-start"><Button variant="ghost" size="sm" className="h-8 rounded-sm px-2 font-mono text-[10px]"><Edit3 className="mr-1 size-3.5" aria-hidden="true" />Editar</Button><Button variant="ghost" size="sm" className="h-8 rounded-sm px-2 font-mono text-[10px] text-destructive hover:text-destructive"><Trash2 className="mr-1 size-3.5" aria-hidden="true" />Eliminar</Button></div> : null}
-    </div>
-    {finding.evidenceImage ? <div className="mt-4 flex items-center gap-3 border-t pt-4"><img src={finding.evidenceImage} alt={finding.evidenceLabel} className="size-14 rounded-sm border object-cover" /><div><p className="font-mono text-[10px] font-semibold uppercase tracking-[.08em] text-muted-foreground">Evidencia adjunta</p><p className="mt-0.5 text-xs text-secondary-foreground">{finding.evidenceLabel}</p></div></div> : null}
-  </article>;
-}
-
-function FinalizationDialog({ inspection, open, submitting, error, onOpenChange, onConfirm }: { inspection: InspectionDetail; open: boolean; submitting: boolean; error: boolean; onOpenChange: (open: boolean) => void; onConfirm: () => void }) {
-  const priorities = useMemo(() => inspection.findings.reduce<Record<InspectionFinding["priority"], number>>((total, finding) => ({ ...total, [finding.priority]: total[finding.priority] + 1 }), { high: 0, medium: 0, low: 0 }), [inspection.findings]);
-  const summary = `${inspection.findings.length} ítems (${priorities.high} alta prioridad, ${priorities.medium} media)`;
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-0 p-6 sm:p-8" onPointerDownOutside={(event) => submitting && event.preventDefault()} onEscapeKeyDown={(event) => submitting && event.preventDefault()}>
-    <div className="flex gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#cae8e8] text-primary"><FileCheck2 className="size-5" aria-hidden="true" /></span><div><p className="font-mono text-[10px] font-medium uppercase tracking-[.08em] text-secondary-foreground">Acción de cierre irrevocable</p><DialogTitle className="mt-0.5 text-xl font-semibold">Finalizar inspección</DialogTitle></div></div>
-    <DialogDescription className="text-sm leading-6 text-secondary-foreground">La inspección de la sala de cómputo quedará cerrada como documento definitivo.</DialogDescription>
-    <dl className="space-y-1.5 rounded-sm bg-secondary p-3 text-[13px]"><div className="flex flex-col justify-between gap-1 sm:flex-row sm:gap-3"><dt className="text-secondary-foreground">Identificador:</dt><dd className="font-mono font-semibold">#{inspection.folio} ({inspection.location})</dd></div><div className="flex flex-col justify-between gap-1 sm:flex-row sm:gap-3"><dt className="text-secondary-foreground">Hallazgos levantados:</dt><dd className="font-medium">{summary}</dd></div><div className="flex flex-col justify-between gap-1 sm:flex-row sm:gap-3"><dt className="text-secondary-foreground">Cola de transmisión:</dt><dd className="font-mono text-[11px]">{inspection.syncStatus === "pending" ? "Local IndexedDB -> Cloud Sync" : "Sincronizado"}</dd></div></dl>
-    <p className="flex gap-2 font-mono text-[11px] leading-5 text-secondary-foreground"><Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />Una vez finalizada, requerirá privilegios de Coordinación para reapertura.</p>
-    {error ? <p role="alert" className="rounded-sm border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">No fue posible finalizar la inspección. Intenta de nuevo.</p> : null}
-    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" className="rounded-sm px-6 font-mono text-[11px]" disabled={submitting} onClick={() => onOpenChange(false)}>Cancelar</Button><Button type="button" className="rounded-sm px-6 font-mono text-[11px]" disabled={submitting} onClick={onConfirm}>{submitting ? "Finalizando..." : "Confirmar y finalizar"}</Button></div>
-  </DialogContent></Dialog>;
-}
-
-export function InspectionDetailWorkspace({ inspection: initialInspection }: InspectionDetailWorkspaceProps) {
-  const { inspection, state, openConfirmation, closeConfirmation, finalize } = useInspectionFinalization(initialInspection);
-  const editable = state === "draft" || state === "confirming" || state === "error";
+export function InspectionDetailWorkspace({
+  inspection: initialInspection,
+}: {
+  inspection: InspectionDetail;
+}) {
+  const { inspection, state, openConfirmation, closeConfirmation, finalize } =
+    useInspectionFinalization(initialInspection);
+  const [findings, setFindings] = useState([...inspection.findings]);
+  const [deleteId, setDeleteId] = useState<string>();
+  const editable =
+    state === "draft" || state === "confirming" || state === "error";
   const completed = state === "finalized" || state === "offline-pending";
-  const isOfflinePending = state === "offline-pending";
-  const highPriorityCount = inspection.findings.filter((finding) => finding.priority === "high").length;
-
-  return <section className="mx-auto max-w-[1200px] pb-28" aria-labelledby="inspection-title">
-    <div className="mb-3 flex items-center justify-between gap-3"><Link href="/inspections" className="inline-flex items-center gap-1 rounded-sm py-1 text-sm text-secondary-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="size-3.5" aria-hidden="true" />Volver a inspecciones</Link><span className="hidden rounded-sm bg-secondary px-2 py-1 font-mono text-[10px] text-secondary-foreground sm:inline">LOGBOOK // REF: {inspection.logbookReference}</span></div>
-
-    <Card className="border-0 p-5 shadow-sm sm:p-8"><div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2 font-mono text-[11px]"><span className="rounded-sm bg-secondary px-1 py-0.5 text-foreground">FOLIO #{inspection.folio}</span><span className="text-muted-foreground">/</span><span className="font-medium uppercase tracking-[.08em] text-secondary-foreground">{inspection.building} · {inspection.floor}</span></div><h1 id="inspection-title" className="mt-2 text-[30px] font-semibold leading-tight tracking-tight sm:text-[32px]">{inspection.location}</h1><p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-secondary-foreground"><time dateTime={inspection.date}>{formatDate(inspection.date)}</time><span aria-hidden="true" className="text-muted-foreground">•</span><span>Registrado por <strong className="font-medium text-foreground">{inspection.technician}</strong></span><span aria-hidden="true" className="text-muted-foreground">•</span><span className="rounded-sm bg-secondary px-1 font-mono text-[10px]">{inspection.technicianId}</span></p></div><div className="flex flex-row flex-wrap gap-2 lg:flex-col lg:items-end"><span className="inline-flex items-center gap-1 rounded-sm bg-amber-50 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[.06em] text-amber-900"><AlertTriangle className="size-3.5" aria-hidden="true" />Requiere atención</span><span className={cn("inline-flex items-center gap-1 rounded-sm px-2 py-1 font-mono text-[10px]", completed ? "bg-emerald-100 text-emerald-900" : "bg-secondary text-secondary-foreground")}><span className={cn("size-1.5 rounded-full", completed ? "bg-emerald-700" : "bg-secondary-foreground")} aria-hidden="true" />{completed ? (isOfflinePending ? "Finalizada · pendiente de sincronizar" : "Inspección finalizada") : "Borrador activo"}</span></div></div><div className="mt-6 rounded-sm bg-secondary/70 p-3"><p className="font-mono text-[10px] font-medium uppercase tracking-[.08em] text-secondary-foreground">Alcance y objetivo</p><p className="mt-1 text-base leading-6">{inspection.scope}</p></div></Card>
-
-    <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]"><div className="min-w-0"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><span className="grid size-7 place-items-center rounded-sm bg-primary text-primary-foreground"><ClipboardCheck className="size-4" aria-hidden="true" /></span><h2 className="text-xl font-semibold">Hallazgos registrados <span className="font-mono text-xs font-normal text-secondary-foreground">({inspection.findings.length})</span></h2></div><Button type="button" variant="outline" className="rounded-sm font-mono text-[11px]" disabled={!editable}><Plus className="mr-1.5 size-3.5" aria-hidden="true" />Agregar hallazgo</Button></div><div className="mt-4 space-y-4">{inspection.findings.map((finding) => <FindingRecordCard key={finding.id} finding={finding} editable={editable} />)}</div></div>
-      <aside className="space-y-4" aria-label="Detalles del registro"><Card className="border-0 p-4 shadow-sm"><div className="flex items-center gap-2"><MoreHorizontal className="size-4 text-secondary-foreground" aria-hidden="true" /><h2 className="text-sm font-semibold">Detalles del registro</h2></div><dl className="mt-4 space-y-3 text-xs"><div className="border-t pt-3"><dt className="font-mono text-[10px] uppercase tracking-[.08em] text-muted-foreground">Creación</dt><dd className="mt-1 font-medium">{formatDate(inspection.createdAt)} · {inspection.createdAt.slice(11, 16)}</dd><dd className="mt-0.5 text-secondary-foreground">Dispositivo: {inspection.createdDevice}</dd></div><div className="border-t pt-3"><dt className="font-mono text-[10px] uppercase tracking-[.08em] text-muted-foreground">Última modificación</dt><dd className="mt-1 font-medium">{formatDate(inspection.updatedAt)} · {inspection.updatedAt.slice(11, 16)}</dd><dd className="mt-0.5 text-secondary-foreground">Agente: {inspection.updatedBy}</dd></div><div className="border-t pt-3"><dt className="font-mono text-[10px] uppercase tracking-[.08em] text-muted-foreground">Estado de sincronización</dt><dd className="mt-1 flex items-center gap-1.5 font-medium text-amber-900">{isOfflinePending || inspection.syncStatus === "pending" ? <CloudOff className="size-3.5" aria-hidden="true" /> : <CheckCircle2 className="size-3.5 text-emerald-700" aria-hidden="true" />}{isOfflinePending || inspection.syncStatus === "pending" ? "Pendiente de envío" : "Sincronizado"}</dd><dd className="mt-1 rounded-sm bg-secondary p-2 text-secondary-foreground">{isOfflinePending ? "El cierre está guardado localmente y se enviará cuando vuelva la conexión." : "Los cambios locales se enviarán al servidor al detectar conexión."}</dd></div></dl></Card><Card className="overflow-hidden border-0 shadow-sm"><img src={inspection.evidenceImage} alt={`Fotografía del ${inspection.location}`} className="h-36 w-full object-cover" /><div className="p-4"><div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[.08em] text-muted-foreground"><ImageIcon className="size-3.5" aria-hidden="true" />Evidencia del laboratorio</div><p className="mt-2 flex items-center gap-1 text-sm font-medium"><MapPin className="size-3.5 text-secondary-foreground" aria-hidden="true" />{inspection.building}, {inspection.floor}</p><dl className="mt-3 space-y-1 border-t pt-3 text-xs"><div className="flex justify-between gap-3"><dt className="text-secondary-foreground">Próxima inspección:</dt><dd className="font-medium">{formatDate(inspection.nextInspection)}</dd></div><div className="flex justify-between gap-3"><dt className="text-secondary-foreground">Protocolo aplicado:</dt><dd className="font-mono text-[10px]">{inspection.protocol}</dd></div></dl></div></Card></aside>
-    </div>
-
-    <Card className="sticky bottom-3 z-10 mt-7 border-0 bg-card/95 p-4 shadow-lg backdrop-blur sm:flex sm:items-center sm:justify-between"><p className="flex max-w-md gap-2 text-xs leading-5 text-secondary-foreground">{completed ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" /> : <WifiOff className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}<span><strong className="font-semibold text-foreground">{completed ? "Inspección cerrada." : "Modo edición borrador."}</strong> {completed ? (isOfflinePending ? "Pendiente de sincronización con el servidor." : "El documento ya no admite cambios del técnico.") : "Los datos están guardados localmente."}</span></p><div className="mt-3 flex flex-wrap gap-2 sm:mt-0"><Button type="button" variant="ghost" className="rounded-sm font-mono text-[11px] text-destructive hover:text-destructive" disabled={!editable}>Descartar borrador</Button><Button type="button" variant="outline" className="rounded-sm font-mono text-[11px]" disabled={!editable}>Continuar edición</Button><Button type="button" className="rounded-sm font-mono text-[11px]" disabled={!editable} onClick={openConfirmation}>Finalizar inspección</Button></div></Card>
-    <FinalizationDialog inspection={inspection} open={state === "confirming" || state === "submitting" || state === "error"} submitting={state === "submitting"} error={state === "error"} onOpenChange={(open) => !open && closeConfirmation()} onConfirm={finalize} />
-  </section>;
+  const pendingSync =
+    state === "offline-pending" || inspection.syncStatus === "pending";
+  return (
+    <section
+      className={s.page}
+      aria-labelledby="inspection-title"
+    >
+      <Link
+        href="/inspections"
+        className={s.backLink}
+      >
+        <ArrowLeft className={s.icon} />
+        Volver a inspecciones
+      </Link>
+      <Card className={s.summaryCard}>
+        <div className={s.summaryHeader}>
+          <div>
+            <p className={s.folio}>
+              Folio #{inspection.folio}
+            </p>
+            <h1
+              id="inspection-title"
+              className={s.title}
+            >
+              {inspection.location}
+            </h1>
+            <p className={s.metadata}>
+              <time dateTime={inspection.date}>
+                {dateFormatter.format(new Date(`${inspection.date}T12:00:00`))}
+              </time>{" "}
+              · {inspection.technician}
+            </p>
+          </div>
+          <div className={s.statuses}>
+            <span className={s.resultStatus}>
+              {findings.length ? "Requiere atención" : "Sin incidencias"}
+            </span>
+            <span className={s.workflowStatus}>
+              {completed ? "Finalizada" : "Borrador"}
+            </span>
+            {pendingSync ? (
+              <span className={s.syncStatus}>
+                <CloudOff className={s.syncIcon} />
+                Pendiente de sincronización
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className={s.scope}>
+          <h2 className={s.scopeTitle}>Resumen</h2>
+          <p className={s.scopeText}>
+            {inspection.scope}
+          </p>
+        </div>
+        {editable ? (
+          <Button asChild variant="outline" className={s.editInspectionButton}>
+            <Link href={`/inspections/${inspection.id}/edit`}>
+              <Edit3 className={s.buttonIcon} />
+              Editar inspección
+            </Link>
+          </Button>
+        ) : null}
+      </Card>
+      <section className={s.findingsSection} aria-labelledby="findings-title">
+        <div className={s.findingsHeader}>
+          <h2 id="findings-title" className={s.findingsTitle}>
+            Hallazgos
+          </h2>
+          <span className={s.findingsCount}>
+            {findings.length} registrado{findings.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className={s.findingsList}>
+          {findings.length === 0 ? (
+            <Card className={s.emptyFindings}>
+              No hay hallazgos registrados.
+            </Card>
+          ) : (
+            findings.map((finding) => (
+              <Card key={finding.id} className={s.findingCard}>
+                <div className={s.findingLayout}>
+                  <AlertTriangle className={s.findingIcon} />
+                  <div className={s.findingContent}>
+                    <div className={s.findingBadges}>
+                      <span className={s.findingBadge}>
+                        Prioridad {priorityLabel[finding.priority]}
+                      </span>
+                      <span className={s.findingBadge}>
+                        {statusLabel[finding.status]}
+                      </span>
+                    </div>
+                    <h3 className={s.findingTitle}>{finding.title}</h3>
+                    <p className={s.findingDescription}>
+                      {finding.description}
+                    </p>
+                    {finding.evidenceImage ? (
+                      <div className={s.evidence}>
+                        <img
+                          src={finding.evidenceImage}
+                          alt={finding.evidenceLabel}
+                          className={s.evidenceImage}
+                        />
+                        <p className={s.evidenceLabel}>
+                          <ImageIcon className={s.evidenceIcon} />
+                          Evidencia fotográfica
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                  {editable ? (
+                    <div className={s.findingActions}>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon"
+                        className={s.findingAction}
+                      >
+                        <Link
+                          href={`/inspections/${inspection.id}/edit`}
+                          aria-label={`Editar ${finding.title}`}
+                        >
+                          <Edit3 className={s.icon} />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={s.deleteFindingButton}
+                        aria-label={`Eliminar ${finding.title}`}
+                        onClick={() => setDeleteId(finding.id)}
+                      >
+                        <Trash2 className={s.icon} />
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+      </section>
+      {editable ? (
+        <Card className={s.actionBar}>
+          <p className={s.draftStatus}>
+            <span className={s.draftStatusDot} />
+            Borrador editable
+          </p>
+          <Button onClick={openConfirmation}>Finalizar inspección</Button>
+        </Card>
+      ) : (
+        <p className={s.completedNotice}>
+          <CheckCircle2 className={s.icon} />
+          Inspección finalizada en modo solo lectura.
+        </p>
+      )}
+      <AlertDialog
+        open={Boolean(deleteId)}
+        onOpenChange={(open) => !open && setDeleteId(undefined)}
+      >
+        <AlertDialogContent>
+          <AlertDialogTitle>Eliminar hallazgo</AlertDialogTitle>
+          <AlertDialogDescription>
+            El hallazgo se eliminará de este borrador.
+          </AlertDialogDescription>
+          <div className={s.dialogActions}>
+            <AlertDialogCancel asChild>
+              <Button variant="outline">Cancelar</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                className={s.destructiveButton}
+                onClick={() => {
+                  setFindings((current) =>
+                    current.filter((item) => item.id !== deleteId),
+                  );
+                  setDeleteId(undefined);
+                }}
+              >
+                Eliminar
+              </Button>
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+      <InspectionFinalizationDialog
+        open={
+          state === "confirming" || state === "submitting" || state === "error"
+        }
+        submitting={state === "submitting"}
+        error={state === "error"}
+        folio={inspection.folio}
+        laboratory={inspection.location}
+        findings={findings}
+        syncStatus={inspection.syncStatus}
+        onOpenChange={(open) => !open && closeConfirmation()}
+        onConfirm={finalize}
+      />
+    </section>
+  );
 }
+
+const s = {
+  page: "mx-auto max-w-[1050px] pb-24",
+  backLink: "inline-flex items-center gap-1 text-sm text-secondary-foreground hover:text-foreground",
+  icon: "size-4",
+  summaryCard: "mt-4 border-0 p-5 shadow-sm sm:p-7",
+  summaryHeader: "flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between",
+  folio: "font-mono text-[11px] text-muted-foreground",
+  title: "mt-1 text-[30px] font-semibold tracking-tight",
+  metadata: "mt-2 text-sm text-secondary-foreground",
+  statuses: "flex flex-wrap gap-2",
+  resultStatus: "rounded-sm bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900",
+  workflowStatus: "rounded-sm bg-secondary px-2 py-1 text-xs",
+  syncStatus: "flex items-center gap-1 rounded-sm bg-secondary px-2 py-1 text-xs",
+  syncIcon: "size-3",
+  scope: "mt-6 border-t pt-5",
+  scopeTitle: "text-sm font-semibold",
+  scopeText: "mt-2 leading-7 text-secondary-foreground",
+  editInspectionButton: "mt-5",
+  buttonIcon: "mr-1.5 size-4",
+  findingsSection: "mt-7",
+  findingsHeader: "flex items-center justify-between",
+  findingsTitle: "text-xl font-semibold",
+  findingsCount: "text-sm text-muted-foreground",
+  findingsList: "mt-3 space-y-3",
+  emptyFindings: "border-dashed p-8 text-center text-sm text-muted-foreground",
+  findingCard: "p-5 shadow-sm",
+  findingLayout: "flex gap-3",
+  findingIcon: "mt-1 size-4 shrink-0 text-amber-700",
+  findingContent: "min-w-0 flex-1",
+  findingBadges: "flex flex-wrap gap-1.5 text-xs",
+  findingBadge: "rounded-sm bg-secondary px-1.5 py-0.5",
+  findingTitle: "mt-2 font-semibold",
+  findingDescription: "mt-1 text-sm leading-6 text-secondary-foreground",
+  evidence: "mt-4 flex items-center gap-3 border-t pt-4",
+  evidenceImage: "size-14 rounded-sm object-cover",
+  evidenceLabel: "flex items-center gap-1 text-xs text-muted-foreground",
+  evidenceIcon: "size-3.5",
+  findingActions: "flex",
+  findingAction: "size-8",
+  deleteFindingButton: "size-8 text-destructive hover:text-destructive",
+  actionBar: "sticky bottom-3 z-10 mt-6 flex flex-col gap-3 border-0 bg-card/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between",
+  draftStatus: "flex items-center gap-2 text-sm",
+  draftStatusDot: "size-2 rounded-full bg-amber-700",
+  completedNotice: "mt-6 flex items-center gap-2 rounded-sm bg-emerald-50 p-3 text-sm text-emerald-900",
+  dialogActions: "flex justify-end gap-2",
+  destructiveButton: "bg-destructive text-destructive-foreground",
+};

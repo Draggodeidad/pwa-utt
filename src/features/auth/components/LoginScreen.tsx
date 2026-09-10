@@ -51,27 +51,27 @@ export function LoginScreen() {
   const PasswordIcon = passwordVisible ? EyeOff : Eye;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_hsl(var(--secondary))_0,_hsl(var(--background))_48%)] p-6 max-sm:items-start max-sm:p-4">
-      <Card className="w-full max-w-md overflow-hidden border-border/80 shadow-xl shadow-primary/5">
-        <CardHeader className="items-center space-y-3 border-b bg-muted/35 px-6 py-8 text-center max-sm:px-5">
+    <main className={s.page}>
+      <Card className={s.card}>
+        <CardHeader className={s.cardHeader}>
           <div
             aria-hidden="true"
-            className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"
+            className={s.brandIcon}
           >
-            <ShieldCheck className="size-6" strokeWidth={1.8} />
+            <ShieldCheck className={s.brandIconGlyph} strokeWidth={1.8} />
           </div>
           <Badge
             variant="secondary"
-            className="gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[.08em] text-secondary-foreground"
+            className={s.badge}
           >
             <span
-              className="size-1.5 rounded-full bg-emerald-600"
+              className={s.statusDot}
               aria-hidden="true"
             />
             Registro oficial · SGI-LAB
           </Badge>
-          <div className="space-y-1">
-            <CardTitle id="login-title" className="text-[28px] tracking-tight">
+          <div className={s.heading}>
+            <CardTitle id="login-title" className={s.title}>
               Inspecciones
             </CardTitle>
             <CardDescription>
@@ -80,9 +80,9 @@ export function LoginScreen() {
           </div>
         </CardHeader>
 
-        <CardContent className="p-6 max-sm:p-5">
+        <CardContent className={s.cardContent}>
           <form
-            className="space-y-5"
+            className={s.form}
             onSubmit={handleSubmit}
             noValidate
             aria-labelledby="login-title"
@@ -94,11 +94,11 @@ export function LoginScreen() {
             >
               <Mail
                 aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                className={s.fieldIcon}
               />
               <Input
                 autoComplete="username"
-                className="h-11 pl-10"
+                className={s.identifierInput}
                 id="identifier"
                 name="identifier"
                 onChange={(event) =>
@@ -113,11 +113,11 @@ export function LoginScreen() {
             <LoginField helper="" htmlFor="password" label="Contraseña">
               <LockKeyhole
                 aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                className={s.fieldIcon}
               />
               <Input
                 autoComplete="current-password"
-                className="h-11 pl-10 pr-11"
+                className={s.passwordInput}
                 id="password"
                 name="password"
                 onChange={(event) =>
@@ -131,13 +131,13 @@ export function LoginScreen() {
                 aria-label={
                   passwordVisible ? "Ocultar contraseña" : "Mostrar contraseña"
                 }
-                className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+                className={s.passwordToggle}
                 onClick={() => setPasswordVisible((visible) => !visible)}
                 size="icon"
                 type="button"
                 variant="ghost"
               >
-                <PasswordIcon aria-hidden="true" className="size-4" />
+                <PasswordIcon aria-hidden="true" className={s.icon} />
               </Button>
             </LoginField>
 
@@ -155,7 +155,7 @@ export function LoginScreen() {
             </div>
 
             <Button
-              className="h-11 w-full gap-2"
+              className={s.submitButton}
               disabled={isLoading}
               type="submit"
             >
@@ -163,14 +163,14 @@ export function LoginScreen() {
                 <>
                   <LoaderCircle
                     aria-hidden="true"
-                    className="size-4 animate-spin"
+                    className={s.spinner}
                   />
                   Validando acceso…
                 </>
               ) : (
                 <>
                   Iniciar sesión
-                  <ShieldCheck aria-hidden="true" className="size-4" />
+                  <ShieldCheck aria-hidden="true" className={s.icon} />
                 </>
               )}
             </Button>
@@ -193,14 +193,40 @@ function LoginField({
   label: string;
 }>) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-medium" htmlFor={htmlFor}>
+    <div className={s.field}>
+      <div className={s.fieldHeader}>
+        <label className={s.label} htmlFor={htmlFor}>
           {label}
         </label>
-        <span className="text-xs text-muted-foreground">{helper}</span>
+        <span className={s.helper}>{helper}</span>
       </div>
-      <div className="relative">{children}</div>
+      <div className={s.inputWrapper}>{children}</div>
     </div>
   );
 }
+
+const s = {
+  page: "flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_hsl(var(--secondary))_0,_hsl(var(--background))_48%)] p-6 max-sm:items-start max-sm:p-4",
+  card: "w-full max-w-md overflow-hidden border-border/80 shadow-xl shadow-primary/5",
+  cardHeader: "items-center space-y-3 border-b bg-muted/35 px-6 py-8 text-center max-sm:px-5",
+  brandIcon: "flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm",
+  brandIconGlyph: "size-6",
+  badge: "gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[.08em] text-secondary-foreground",
+  statusDot: "size-1.5 rounded-full bg-emerald-600",
+  heading: "space-y-1",
+  title: "text-[28px] tracking-tight",
+  cardContent: "p-6 max-sm:p-5",
+  form: "space-y-5",
+  fieldIcon: "pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground",
+  identifierInput: "h-11 pl-10",
+  passwordInput: "h-11 pl-10 pr-11",
+  passwordToggle: "absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground",
+  icon: "size-4",
+  submitButton: "h-11 w-full gap-2",
+  spinner: "size-4 animate-spin",
+  field: "space-y-2",
+  fieldHeader: "flex items-center justify-between gap-3",
+  label: "text-sm font-medium",
+  helper: "text-xs text-muted-foreground",
+  inputWrapper: "relative",
+};

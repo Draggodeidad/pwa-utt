@@ -9,7 +9,6 @@ export { useInspectionListState } from "./hooks/use-inspection-list-state";
 export { useInspectionFinalization } from "./hooks/use-inspection-finalization";
 export type { InspectionListState } from "./hooks/use-inspection-list-state";
 export { inspections } from "./data/inspections";
-export { technicianHomeData } from "./data/technician-home";
 export { inspectionDetail } from "./data/inspection-detail";
 export { createInspectionValues, editInspectionValues, laboratoryProfiles } from "./data/inspection-editor";
-export type { Inspection, InspectionDetail, InspectionEditorValues, InspectionFinding, InspectionListItem, InspectionResult, InspectionWorkflowStatus, LaboratoryProfile, SyncStatus, TechnicianHomeData } from "./types";
+export type { Inspection, InspectionDetail, InspectionEditorValues, InspectionFinding, InspectionListItem, InspectionResult, InspectionWorkflowStatus, LaboratoryProfile, SyncStatus } from "./types";

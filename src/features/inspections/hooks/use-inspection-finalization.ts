@@ -8,7 +8,7 @@ export type InspectionFinalizationState = "draft" | "confirming" | "submitting" 
 
 export function useInspectionFinalization(initialInspection: InspectionDetail) {
   const [inspection, setInspection] = useState(initialInspection);
-  const [state, setState] = useState<InspectionFinalizationState>("draft");
+  const [state, setState] = useState<InspectionFinalizationState>(initialInspection.workflowStatus === "completed" ? (initialInspection.syncStatus === "pending" ? "offline-pending" : "finalized") : "draft");
 
   const openConfirmation = useCallback(() => setState("confirming"), []);
   const closeConfirmation = useCallback(() => {
@@ -18,7 +18,7 @@ export function useInspectionFinalization(initialInspection: InspectionDetail) {
     setState("submitting");
     try {
       const result = await finalizeInspectionLocally();
-      setInspection((current) => ({ ...current, ...result, updatedAt: new Date().toISOString() }));
+      setInspection((current) => ({ ...current, ...result }));
       setState(result.syncStatus === "pending" ? "offline-pending" : "finalized");
     } catch {
       setState("error");
