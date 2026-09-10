@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { isRouteAllowedForRole, navigationSectionsByRole } from "@/config/navigation";
 import { temporarySession } from "@/config/temporary-session";
+import { createProfileForSession } from "@/features/profile";
 import { SyncWorkspace } from "@/features/sync";
 import { notFound } from "next/navigation";
 
@@ -9,7 +10,7 @@ export default function SyncPage() {
   if (role !== "technician" || !isRouteAllowedForRole(role, "/sync")) notFound();
 
   return (
-    <AppShell activePath="/sync" navigationSections={navigationSectionsByRole[role]}>
+    <AppShell activePath="/sync" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(temporarySession.user)}>
       <SyncWorkspace />
     </AppShell>
   );

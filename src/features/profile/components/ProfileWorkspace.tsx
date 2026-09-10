@@ -30,6 +30,9 @@ export function ProfileWorkspace({ profile }: { profile: ProfileView | undefined
   const { screenState, signOutState, retryLoading, signOut } = useProfileWorkspace(profile, () => router.push("/login"));
   const isOffline = screenState === "offline";
   const initials = profile?.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() ?? "";
+  const email = profile?.email ?? "No disponible";
+  const institutionalId = profile?.institutionalId ?? "No disponible";
+  const campusArea = profile?.campusArea ?? "No disponible";
 
   return (
     <section className={s.page} aria-labelledby="profile-title">
@@ -51,17 +54,17 @@ export function ProfileWorkspace({ profile }: { profile: ProfileView | undefined
         <div className={s.cards} aria-live="polite">
           <Card className={s.profileCard}>
             <div className={s.profileHeader}>
-              <div className={s.avatar} aria-label={`Avatar de ${profile.displayName}`} role="img"><UserRound className={s.avatarIcon} aria-hidden="true" /><span className={s.avatarInitials}>{initials}</span><span className={s.activeIndicator} aria-label="Cuenta activa"><ShieldCheck className={s.activeIcon} aria-hidden="true" /></span></div>
+              <div className={s.avatar} aria-label={`Avatar de ${profile.displayName}`} role="img">{profile.avatarUrl ? <img className={s.avatarImage} src={profile.avatarUrl} alt="" /> : <UserRound className={s.avatarIcon} aria-hidden="true" />}<span className={s.avatarInitials}>{initials}</span><span className={s.activeIndicator} aria-label="Cuenta activa"><ShieldCheck className={s.activeIcon} aria-hidden="true" /></span></div>
               <div className={s.identity}>
-                <p className={s.role}>Técnico de mantenimiento TI</p>
+                <p className={s.role}>{profile.roleLabel}</p>
                 <h2 className={s.name}>{profile.displayName}</h2>
-                <p className={s.area}>{profile.campusArea}</p>
+                <p className={s.area}>{campusArea}</p>
               </div>
             </div>
             <dl className={s.profileDetails}>
-              <div className={s.detailRow}><dt className={s.detailLabel}>Correo electrónico institucional</dt><dd className={s.detailValue}>{profile.email}</dd></div>
-              <div className={s.detailRow}><dt className={s.detailLabel}>Identificador institucional</dt><dd className={s.detailValueStrong}>#{profile.institutionalId}</dd></div>
-              <div className={s.detailRow}><dt className={s.detailLabel}>Campus / área asignada</dt><dd className={s.detailValue}>{profile.campusArea}</dd></div>
+              <div className={s.detailRow}><dt className={s.detailLabel}>Correo electrónico institucional</dt><dd className={s.detailValue}>{email}</dd></div>
+              <div className={s.detailRow}><dt className={s.detailLabel}>Identificador institucional</dt><dd className={s.detailValueStrong}>{profile.institutionalId ? `#${institutionalId}` : institutionalId}</dd></div>
+              <div className={s.detailRow}><dt className={s.detailLabel}>Campus / área asignada</dt><dd className={s.detailValue}>{campusArea}</dd></div>
             </dl>
           </Card>
 
@@ -107,6 +110,7 @@ const s = {
   profileHeader: "flex flex-col gap-5 sm:flex-row sm:items-start",
   avatar: "relative grid size-28 shrink-0 place-items-center overflow-hidden rounded-lg bg-secondary text-primary",
   avatarIcon: "size-12 opacity-20",
+  avatarImage: "absolute inset-0 size-full object-cover",
   avatarInitials: "absolute font-mono text-2xl font-semibold tracking-tight",
   activeIndicator: "absolute bottom-0 right-0 grid size-6 translate-x-1/4 translate-y-1/4 place-items-center rounded-full bg-[#4f625b] text-primary-foreground",
   activeIcon: "size-3.5",

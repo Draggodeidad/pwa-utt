@@ -3,9 +3,11 @@ import type { UserRole } from "@/features/auth";
 export type ProfileView = {
   displayName: string;
   role: UserRole;
-  email: string;
-  institutionalId: string;
-  campusArea: string;
+  roleLabel: string;
+  email?: string;
+  institutionalId?: string;
+  campusArea?: string;
+  avatarUrl?: string;
   deviceName?: string;
 };
 

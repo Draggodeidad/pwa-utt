@@ -3,6 +3,7 @@ import { isRouteAllowedForRole, navigationSectionsByRole } from "@/config/naviga
 import { temporarySession } from "@/config/temporary-session";
 import { inspectionDetail, inspections, InspectionDetailWorkspace } from "@/features/inspections";
 import type { InspectionDetail } from "@/features/inspections";
+import { createProfileForSession } from "@/features/profile";
 import { notFound } from "next/navigation";
 
 export default function InspectionDetailPage({ params }: { params: { inspectionId: string } }) {
@@ -23,5 +24,5 @@ export default function InspectionDetailPage({ params }: { params: { inspectionI
     findings: listItem.result === "requires_attention" ? [{ id: `${listItem.id}-finding`, title: "Hallazgo pendiente de seguimiento", description: "Observación registrada durante la inspección del laboratorio.", priority: "medium", status: "pending" }] : []
   };
 
-  return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]}><InspectionDetailWorkspace inspection={detail} /></AppShell>;
+  return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(temporarySession.user)}><InspectionDetailWorkspace inspection={detail} /></AppShell>;
 }
