@@ -5,3 +5,20 @@ export type CoordinationSummary = {
   findingCount: number;
   pendingFindingCount: number;
 };
+
+export type DashboardInspection = {
+  id: string;
+  location: string;
+  date: string;
+  inspector: string;
+  findingCount: number;
+  result: "without_findings" | "requires_attention";
+};
+
+export type CoordinationDashboard = {
+  summary: CoordinationSummary;
+  attentionInspections: readonly DashboardInspection[];
+  recentInspections: readonly DashboardInspection[];
+};
+
+export type DashboardState = "loading" | "ready" | "empty" | "error";

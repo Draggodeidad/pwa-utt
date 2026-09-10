@@ -1,11 +1,14 @@
 export { InspectionList } from "./components/InspectionList";
 export { InspectionsWorkspace } from "./components/InspectionsWorkspace";
+export { CoordinationInspectionsWorkspace } from "./components/CoordinationInspectionsWorkspace";
 export { InspectionLedger } from "./components/InspectionLedger";
 export { TechnicianHomeWorkspace } from "./components/TechnicianHomeWorkspace";
 export { InspectionDetailWorkspace } from "./components/InspectionDetailWorkspace";
 export { InspectionEditorWorkspace } from "./components/InspectionEditorWorkspace";
 export { InspectionFinalizationDialog } from "./components/InspectionFinalizationDialog";
 export { useInspectionListState } from "./hooks/use-inspection-list-state";
+export { useInspectionFilters } from "./hooks/use-inspection-filters";
+export type { InspectionResultFilter, InspectionStatusFilter } from "./hooks/use-inspection-filters";
 export { useInspectionFinalization } from "./hooks/use-inspection-finalization";
 export type { InspectionListState } from "./hooks/use-inspection-list-state";
 export { inspections } from "./data/inspections";

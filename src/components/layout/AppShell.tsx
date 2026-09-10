@@ -7,19 +7,22 @@ import { useState } from "react";
 
 export type AppShellNavigationItem = { label: string; href: string; icon: "home" | "inspections" | "new" | "sync" | "profile" | "summary" | "findings" };
 export type AppShellNavigationSection = { label: string; roleLabel: string; items: readonly AppShellNavigationItem[] };
+export type AppShellProfile = { displayName: string; roleLabel: string; email?: string; avatarUrl?: string };
 
 type AppShellProps = {
   children: ReactNode;
   navigationItems?: readonly { label: string; href: string }[];
   navigationSections?: readonly AppShellNavigationSection[];
   activePath?: string;
+  profile?: AppShellProfile;
 };
 
 const navigationIcons = { home: Home, inspections: ListChecks, new: CalendarCheck2, sync: RefreshCw, profile: UserRound, summary: Gauge, findings: AlertTriangle };
 
 /** Shared application frame; navigation is composed by the route for the active role. */
-export function AppShell({ children, navigationItems, navigationSections, activePath }: AppShellProps) {
+export function AppShell({ children, navigationItems, navigationSections, activePath, profile }: AppShellProps) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const initials = getInitials(profile?.displayName);
 
   if (!navigationItems && !navigationSections) {
     return <main className={s.standaloneContent}>{children}</main>;
@@ -45,9 +48,18 @@ export function AppShell({ children, navigationItems, navigationSections, active
         </nav>
         <div className={`${isNavigationOpen ? s.visible : s.hidden} ${s.connectivityPanel}`}><div className={s.connectivityStatus}><span className={s.connectivityLabel}><span className={s.connectivityDot} aria-hidden="true" />En línea</span><Cloud className={s.connectivityIcon} aria-hidden="true" /></div></div>
       </aside>
-      <main className={s.main}><header className={s.topBar}><p className={s.topBarTitle}>Inspecciones de laboratorios</p><button type="button" aria-label="Abrir perfil" className={s.profileButton}><UserRound className={s.icon} aria-hidden="true" /></button></header><div className={s.content}>{children}</div></main>
+      <main className={s.main}><header className={s.topBar}><p className={s.topBarTitle}>Inspecciones de laboratorios</p><Link href="/profile" aria-label="Abrir perfil" className={s.profileButton}>{profile ? <span className={s.profileText}><span className={s.profileName}>{profile.displayName}</span><span className={s.profileRole}>{profile.roleLabel}</span></span> : null}<span className={s.profileAvatar} title={profile?.email}>{profile?.avatarUrl ? <img src={profile.avatarUrl} alt="" className={s.profileAvatarImage} /> : <><UserRound className={s.profileIcon} aria-hidden="true" />{initials ? <span className={s.profileInitials}>{initials}</span> : null}</>}</span></Link></header><div className={s.content}>{children}</div></main>
     </div>
   );
+}
+
+function getInitials(displayName?: string) {
+  return displayName
+    ?.split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }
 
 const s = {
@@ -78,6 +90,13 @@ const s = {
   main: "min-w-0",
   topBar: "flex h-16 items-center justify-between border-b bg-card px-4 sm:px-8",
   topBarTitle: "text-sm font-medium text-secondary-foreground",
-  profileButton: "grid size-7 place-items-center rounded-full bg-primary text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  profileButton: "flex items-center gap-3 rounded-sm px-2 py-1.5 text-right transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  profileText: "hidden min-w-0 sm:block",
+  profileName: "block truncate text-sm font-medium leading-tight text-foreground",
+  profileRole: "block truncate text-xs leading-tight text-muted-foreground",
+  profileAvatar: "relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-primary text-primary-foreground",
+  profileAvatarImage: "absolute inset-0 size-full object-cover",
+  profileIcon: "size-4",
+  profileInitials: "sr-only",
   content: "px-4 py-8 sm:px-8 lg:px-8",
 };

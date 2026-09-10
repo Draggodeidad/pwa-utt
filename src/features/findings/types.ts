@@ -11,3 +11,28 @@ export type Finding = EntityTimestamps & {
   priority: FindingPriority;
   status: FindingStatus;
 };
+
+/** Read model used by Coordination to review findings across inspections. */
+export type CoordinationFinding = {
+  id: string;
+  inspectionId: string;
+  folio: string;
+  title: string;
+  description: string;
+  laboratory: string;
+  date: string;
+  technician: string;
+  priority: FindingPriority;
+  status: FindingStatus;
+  evidenceLabel?: string;
+  evidenceImage?: string;
+  internalNote: string;
+};
+
+export type FindingFilters = {
+  query: string;
+  priority: "all" | FindingPriority;
+  status: "all" | FindingStatus;
+};
+
+export type CoordinationFindingsState = "loading" | "ready" | "empty" | "error";
