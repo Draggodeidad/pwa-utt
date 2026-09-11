@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { AlertCircle, ArrowRight, CheckCircle2, ChevronRight, ClipboardPenLine, CloudOff, RefreshCw } from "lucide-react";
+import { AppShellState } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/feedback/EmptyState";
 import { useInspectionListState } from "../hooks/use-inspection-list-state";
 import type { InspectionListItem } from "../types";
 
@@ -24,9 +24,9 @@ export function TechnicianHomeWorkspace({ inspections, technicianName, isLoading
     <header className={s.header}><div><h1 id="home-title" className={s.title}>Buen día, {technicianName}</h1><p className={s.subtitle}>Consulta el estado de tus inspecciones recientes.</p></div><Button asChild className={s.newInspectionButton}><Link href="/inspections/new"><ClipboardPenLine className={s.buttonIcon} />Nueva inspección</Link></Button></header>
     <div className={s.metrics}><Metric label="Inspecciones" value={inspections.length} icon={<CheckCircle2 className={s.metricGlyph} />} /><Metric label="Requieren atención" value={attention} icon={<AlertCircle className={s.metricGlyph} />} /><Metric label="Pendientes de sincronización" value={pending} icon={<RefreshCw className={s.metricGlyph} />} /></div>
     <div className={s.recentHeader}><h2 className={s.sectionTitle}>Inspecciones recientes</h2><Link href="/inspections" className={s.viewAll}>Ver todas <ArrowRight className={s.icon} /></Link></div>
-    {state === "loading" ? <Card className={s.loadingState}>{Array.from({ length: 3 }, (_, index) => <div key={index} className={s.loadingRow} />)}</Card> : null}
-    {state === "empty" ? <Card className={s.stateCard}><EmptyState title="Todavía no hay inspecciones" description="Crea la primera inspección para comenzar." /></Card> : null}
-    {state === "error" ? <Card className={s.stateCard}><AlertCircle className={s.errorIcon} /><h2 className={s.errorTitle}>No se pudieron cargar las inspecciones</h2><Button className={s.stateAction} onClick={() => window.location.reload()}>Reintentar</Button></Card> : null}
+    {state === "loading" ? <AppShellState state="loading" /> : null}
+    {state === "empty" ? <AppShellState state="empty" title="Todavía no hay inspecciones" description="Crea la primera inspección para comenzar." /> : null}
+    {state === "error" ? <AppShellState state="error" title="No se pudieron cargar las inspecciones" description="Comprueba la conexión e inténtalo nuevamente." onRetry={() => window.location.reload()} /> : null}
     {state === "success" || state === "offline-with-data" ? <div className={s.recentList}>{inspections.slice(0, 4).map((inspection) => <article key={inspection.id} className={s.recentRow}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h3 className={s.location}>{inspection.location}</h3></div><time className={s.date} dateTime={inspection.date}>{dateFormatter.format(new Date(`${inspection.date}T12:00:00`))}</time><p className={s.findings}>{inspection.findingCount ? `${inspection.findingCount} hallazgos` : "Sin hallazgos"}</p><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir ${inspection.location}`}><ChevronRight className={s.icon} /></Link></Button></article>)}</div> : null}
   </section>;
 }
@@ -49,12 +49,6 @@ const s = {
   recentHeader: "mt-8 flex items-center justify-between",
   sectionTitle: "text-xl font-semibold",
   viewAll: "inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline",
-  loadingState: "mt-3 space-y-3 border-0 p-4",
-  loadingRow: "h-16 animate-pulse rounded-sm bg-secondary",
-  stateCard: "mt-3 p-8 text-center",
-  errorIcon: "mx-auto size-7 text-destructive",
-  errorTitle: "mt-3 font-semibold",
-  stateAction: "mt-4",
   recentList: "mt-3 overflow-hidden rounded-lg bg-card shadow-sm",
   recentRow: "grid gap-2 border-b px-4 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_8rem_8rem_2rem] sm:items-center",
   folio: "font-mono text-[10px] text-muted-foreground",

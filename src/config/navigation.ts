@@ -1,5 +1,5 @@
 import type { UserRole } from "@/features/auth";
-import type { AppShellNavigationSection } from "@/components/layout/AppShell";
+import type { AppShellNavigationSection } from "@/components/app-shell";
 
 export type NavigationItem = { label: string; href: string };
 

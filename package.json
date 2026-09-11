@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node tests/starter.spec.mjs",
+    "test": "node tests/starter.spec.mjs && node tests/manifest.spec.ts",
+    "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs"
   },
   "dependencies": {

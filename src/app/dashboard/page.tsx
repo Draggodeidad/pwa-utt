@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/components/app-shell";
 import { navigationSectionsByRole } from "@/config/navigation";
 import { temporarySession } from "@/config/temporary-session";
 import { CoordinationDashboardWorkspace, createCoordinationDashboard } from "@/features/dashboard";

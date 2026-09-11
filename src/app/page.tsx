@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/components/app-shell";
 import { navigationSectionsByRole } from "@/config/navigation";
 import { temporarySession } from "@/config/temporary-session";
 import { inspections, TechnicianHomeWorkspace } from "@/features/inspections";

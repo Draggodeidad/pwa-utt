@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/components/app-shell";
 import { isRouteAllowedForRole, navigationSectionsByRole } from "@/config/navigation";
 import { temporarySession } from "@/config/temporary-session";
 import { inspectionDetail, inspections, InspectionDetailWorkspace } from "@/features/inspections";
