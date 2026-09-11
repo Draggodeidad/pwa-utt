@@ -1,0 +1,38 @@
+# Formative feedback workflow supplied with the week 02 assignment.
+name: Week 02 — shell and manifest
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.6"
+          cache: npm
+      - name: Clean install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: AC-01 — typecheck, tests and build
+        run: make verify
+      - name: AC-02 — required artifacts
+        run: test -e public/manifest.webmanifest && test -e src/app/layout.tsx && test -e src/app/page.tsx && test -e src/components/app-shell.tsx && test -e tests/manifest.spec.ts
+      - name: AC-03 — public contract
+        run: bash public-tests/check.sh
+      - name: Save technical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: academic-evidence-w02-shell-manifest
+          if-no-files-found: warn
+          path: reports/verification.json
