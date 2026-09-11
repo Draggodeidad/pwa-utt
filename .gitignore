@@ -6,4 +6,4 @@ coverage/
 .env*
 !.env.example
 reports/verification.json
-
+/PWA-w02-kit-estudiante.zip

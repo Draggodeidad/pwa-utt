@@ -1,53 +1,70 @@
-# PWA de inspecciones de laboratorio — proyecto del equipo
+# PWA de inspecciones de laboratorio
 
-Comiencen por `START_HERE.md` y lean `ACTIVIDAD-01.md`. Este es un proyecto acumulativo: un repositorio privado por equipo durante el curso. La Semana 1 consiste en arrancar, documentar y explicar la verificación; no en implementar toda la PWA.
+Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenimiento de laboratorios con datos exclusivamente sintéticos. El incremento de la Semana 02 incorpora un shell instalable, navegación por rol, un Web App Manifest y estados accesibles de carga, error y vacío.
 
-## Entorno
+## Requisitos del entorno
 
-Node.js 20.19 o posterior compatible, npm 10 o posterior, Git y cuenta de GitHub. No se requiere Make.
+- Node.js 20.19 o posterior compatible.
+- npm 10 o posterior.
+- Git; Make es opcional.
 
-Versiones usadas por el equipo (registrado 2026-09-04):
+GitHub Actions usa Node.js 20.19.6. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
 
-- Node.js v26.2.0 (`node --version`)
-- npm 11.13.0 (`npm --version`)
-- Git 2.x · Fedora Linux 44 (Workstation)
+## Instalación y ejecución
 
-Dificultades de entorno encontradas: ninguna bloqueante. La verificación local se ejecutó sin Make y sin servicios adicionales; GitHub Actions usa Node 20.19.6.
-
-## Ejecución
+Desde la raíz del repositorio:
 
 ```bash
-npm ci
+npm ci --ignore-scripts --no-audit --no-fund
 npm run dev
 ```
 
-Abran `http://localhost:3000` y comprueben las tres inspecciones sintéticas. Detengan el servidor con Ctrl+C.
+Abre `http://localhost:3000`. La aplicación usa perfiles, laboratorios, inspecciones y hallazgos sintéticos; no contiene datos personales reales.
 
-## Verificación
+## Verificación reproducible
+
+La verificación completa puede ejecutarse con cualquiera de estos comandos equivalentes:
 
 ```bash
+make verify
+# o, si Make no está disponible
 npm run verify
 ```
 
-Ejecuta comprobación de archivos, prueba proporcionada y build; genera `reports/verification.json`. El reporte contiene resultados técnicos y documentos para revisión, no una calificación automática. `make verify` es equivalente. `bash public-tests/check.sh` es un check opcional de estructura.
+El verificador ejecuta, en orden, `npm run typecheck`, `npm test` y `npm run build`, y genera `reports/verification.json`. La suite incluye:
 
-GitHub Actions ejecuta la misma verificación y permite descargar el artefacto `starter-week-01-evidence`. El reporte local se excluye de Git: adjúntenlo en Classroom o descarguen el del SHA entregado desde Actions.
+- `tests/starter.spec.mjs`: conserva el comportamiento acumulativo del proyecto.
+- `tests/manifest.spec.ts`: valida campos de instalación, iconos reales, scope, shortcuts, metadata, landmarks y presencia de estados críticos.
+- `bash public-tests/check.sh`: comprueba los artefactos públicos de la Semana 02.
 
-## Trabajo y entrega en equipo
+El archivo `.github/workflows/week-02-w02-shell-manifest.yml` repite una instalación limpia y `make verify` en cada `push`, pull request o ejecución manual, y publica el reporte como artefacto. La evidencia debe asociarse al SHA exacto evaluado.
 
-Equipo: **9B-E02**. Repositorio privado: `https://github.com/Draggodeidad/pwa-utt`. Inviten a los integrantes y al docente al mismo repositorio privado. Cada persona registra su evidencia en una sección de `evidence/individual.md`. Todos entregan en Classroom el mismo SHA final y enlaces, identificando su sección. El formato exacto está en `ACTIVIDAD-01.md`; no se requiere un pull request adicional ni una copia por alumno.
+## Implementación de Semana 02
 
-## Supuestos y limitaciones de ejecución
+- `public/manifest.webmanifest` declara nombre, nombre corto, idioma, `start_url`, `scope`, modo `standalone`, colores, iconos `192x192` y `512x512`, icono maskable, shortcuts y capturas.
+- `src/app/layout.tsx` enlaza el manifest y expone metadata de iconos, Apple Web App y viewport.
+- `src/components/app-shell.tsx` concentra el shell responsive, landmarks, navegación principal operable por teclado, perfil y feedback de carga, error y vacío.
+- `src/app/loading.tsx` y `src/app/error.tsx` aíslan esperas y fallos de ruta; la vista inicial selecciona vacío cuando el repositorio sintético no entrega registros.
+- `src/app/page.tsx` compone el shell con la navegación declarativa del rol y el workspace de inspecciones.
 
-- Los datos del producto son 100 % sintéticos; no se incluyen datos reales de personas, laboratorios o estudiantes.
-- El starter todavía no implementa instalación PWA, offline, manifest, service worker ni sincronización: son requisitos futuros documentados en `docs/requirements.md`.
-- `reports/verification.json` se genera en cada verificación y se excluye de Git deliberadamente; se entrega en Classroom o se descarga del artefacto de Actions.
-- La verificación técnica (`npm run verify`) no califica la calidad de los documentos; la revisión académica se hace con la rúbrica de `ACTIVIDAD-01.md`.
+## Decisiones y trade-offs
 
-## Estructura y límites
+Se eligió un manifest estático en `public/` y metadata nativa de Next.js: el resultado es inspeccionable, no depende de una API y conserva una única fuente para las propiedades de instalación. El costo es que cualquier personalización por entorno requiere un build o un manifest generado en el futuro.
 
-- `src/app/`: pantalla Next.js.
-- `src/lib/data/`: inspecciones sintéticas.
-- `docs/`: requisitos y decisión del equipo.
-- `evidence/`: evidencia propia de cada integrante.
-- `tests/`: prueba inicial proporcionada; no es una suite completa de comportamiento.
+El shell recibe navegación y perfil mediante props en lugar de consultar sesión o datos por sí mismo. Esto mantiene el límite visual reutilizable y permite probar estados deterministas, a cambio de que cada ruta componga explícitamente su contexto.
+
+Los estados se representan con semántica accesible (`aria-busy`, regiones de estado, alerta y botón de reintento). La prueba automatizada protege su contrato estructural; no sustituye una auditoría WCAG ni una prueba E2E en varios navegadores.
+
+## Supuestos, límites y fallos encontrados
+
+- Se asume despliegue en la raíz del mismo origen (`scope` y `start_url` son `/`). Un despliegue bajo subruta exigiría ajustar ambos valores y los shortcuts.
+- La Semana 02 hace la aplicación instalable a nivel de manifest, pero todavía no añade un service worker ni garantiza navegación sin conexión. El shell solo comunica los datos locales que otras capas ya proporcionen.
+- La disponibilidad del botón de instalación depende de los criterios y políticas del navegador; debe validarse manualmente en el entorno de entrega.
+- La rama `feat/pwa-manifest-icons` divergió de `main` en `src/app/layout.tsx`. El merge conservó el título/descripción vigentes y la metadata PWA. Además, `manifest.json` se renombró a `manifest.webmanifest` para cumplir el contrato del profesor sin perder el historial de la contribución.
+- Las capturas e iconos son artefactos sintéticos del proyecto; no incluyen PII.
+
+## Evidencia y colaboración
+
+El reporte individual está en `evidence/individual.md`. El commit funcional principal de Imanol es `15f08bb763e29d966087414fc1299361bdf2fa6f`; los commits `4a163f1` y `d39ff30` preservan el aporte de Osbaldo al manifest y sus recursos.
+
+Las instrucciones acotadas para que los integrantes restantes verifiquen el resultado y completen únicamente su propia evidencia están en `docs/week-02-contributor-guide.md`.
