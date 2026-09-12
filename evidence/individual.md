@@ -78,15 +78,15 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 - Uso declarado de IA: utilicé **OpenAI Codex como apoyo técnico** para leer y contrastar el kit, proponer e implementar un borrador de integración, pruebas y documentación, y ejecutar comandos reproducibles. Los archivos directamente influidos incluyen el shell, límites de estado, prueba del manifest, verificador, workflow, README y esta evidencia. La validación humana no se delegó: ejecuté personalmente los comandos, revisé completamente todas las pantallas de UI y participé en su creación y validación, por lo que puedo explicar y modificar las decisiones implementadas.
 - Validación personal antes de entrega: **completada por Imanol** — `[x]` ejecuté `npm ci`, `make verify` y `bash public-tests/check.sh`; `[x]` revisé completamente todas las pantallas de UI; `[x]` puedo explicar y modificar los cambios porque participé en su creación y validación; `[x]` confirmé en el PR #11 los workflows **Starter Semana 1 — feedback** y **Week 02 — shell and manifest**, ambos con resultado `success` para `a888ed6`.
 
-### Osbaldo Alvarez Marinez — completar personalmente
+### Osbaldo Alvarez Marinez
 
-- Commit SHA propio: `4a163f1` (manifest, iconos, shortcuts y metadata) y `d39ff30` (capturas); confirmar SHA final evaluado: ____________________.
-- Decisión técnica que puedo explicar: ________________________________________________________________.
-- Prueba que ejecuté y resultado real: ________________________________________________________________.
-- Limitación o fallo que identifiqué: _________________________________________________________________
-- Cambio que puedo defender o modificar en vivo: ______________________________________________________.
-- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): _________________
-  ____________________________________________________________________________________________________.
+- Commit SHA propio: `4a163f1` (manifest, iconos, shortcuts y metadata) y `d39ff30` (capturas); confirmar SHA final evaluado: `8c03c98`.
+- Contribución concreta: estructuración y configuración integral del Web App Manifest; organización de los activos visuales en `public/icons/` (iconos PNG 192/512, SVG y maskables); dimensionamiento y exportación de capturas de pantalla oficiales en alta definición (`desktop-home.png` en 1280x800 y `mobile-home.png` en 750x1334); vinculación de metadata y viewport con theme-color `#1B3737` en `src/app/layout.tsx`.
+- Decisión técnica que puedo explicar: se configuró el manifest con `display: "standalone"` y `display_override: ["window-controls-overlay", "standalone"]` para maximizar el área útil en dispositivos móviles de campo sin perder la barra de estado del sistema (batería, reloj, cobertura). Se definieron shortcuts nativos para agilizar las acciones frecuentes del técnico (`/inspections/new`, `/inspections` y `/sync`) y screenshots proporcionales wide y narrow requeridos por los estándares de instalación PWA.
+- Prueba que ejecuté y resultado real: ejecución de `npm run verify` localmente y ejecución de `node tests/manifest.spec.ts`; ambas pruebas terminaron con código de salida 0 y `PASS`. El build de Next.js compila las 11 rutas estáticas y dinámicas sin errores.
+- Limitación o fallo que identifiqué: el manifest declara la capacidad de instalación y accesos directos, pero la instalación completa y el funcionamiento offline aún dependen de la implementación del service worker en las siguientes semanas.
+- Cambio que puedo defender o modificar en vivo: ajustar las propiedades del manifest (como `orientation`, `theme_color` o agregar nuevos `shortcuts`), o actualizar y regenerar las capturas de pantalla si cambia el diseño de la interfaz.
+- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): utilicé Antigravity (asistente de IA de Google) para la auditoría técnica de los requisitos del manifest, la conversión matemática y ajuste de proporción de las capturas de pantalla nativas (`1280x800` y `750x1334`), y la redacción estructurada de esta evidencia. Validé personalmente la existencia de los archivos, la ejecución de las pruebas y la compilación exitosa del proyecto.
 
 ### Jose Julian Alvarez Flores — completar personalmente
 
