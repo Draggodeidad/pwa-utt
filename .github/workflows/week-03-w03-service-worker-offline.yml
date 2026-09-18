@@ -1,0 +1,35 @@
+# Baseline derived from the Week 03 academic feedback workflow.
+# The implementation artifacts are deliberately deferred to Issues #16–#18.
+name: Week 03 — baseline verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.6"
+          cache: npm
+      - name: Clean install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify baseline
+        run: make verify
+      - name: Save technical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w03-baseline-verification
+          if-no-files-found: warn
+          path: reports/verification.json
