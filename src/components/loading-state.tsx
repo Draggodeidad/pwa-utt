@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { AlertTriangle, ClipboardList, LoaderCircle } from "lucide-react";
 
 type LoadingStateProps = {
   state?: "loading" | "error" | "empty";
   title?: string;
   description?: string;
   action?: ReactNode;
+  headingLevel?: 1 | 2;
 };
 
 /** Reusable feedback surface for asynchronous routes and empty collections. */
@@ -14,9 +15,11 @@ export function LoadingState({
   title,
   description,
   action,
+  headingLevel = 1,
 }: LoadingStateProps) {
   const copy = stateCopy[state];
-  const Icon = state === "loading" ? LoaderCircle : AlertTriangle;
+  const Icon = state === "loading" ? LoaderCircle : state === "error" ? AlertTriangle : ClipboardList;
+  const Heading = headingLevel === 1 ? "h1" : "h2";
 
   return (
     <section
@@ -29,7 +32,7 @@ export function LoadingState({
         aria-hidden="true"
         className={`${s.icon} ${state === "loading" ? s.loadingIcon : s.feedbackIcon}`}
       />
-      <h1 className={s.title}>{title ?? copy.title}</h1>
+      <Heading className={s.title}>{title ?? copy.title}</Heading>
       <p className={s.description}>{description ?? copy.description}</p>
       {action ? <div className={s.action}>{action}</div> : null}
     </section>

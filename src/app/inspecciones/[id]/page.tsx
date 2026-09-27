@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CalendarDays, ClipboardCheck, MapPin, UserRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { LoadingState } from "@/components/loading-state";
 import { navigationSectionsByRole } from "@/config/navigation";
 import { temporarySession } from "@/config/temporary-session";
-import { inspectionDetail, inspections } from "@/features/inspections";
+import { findInspectionDetail } from "@/features/inspections";
 import type { InspectionDetail } from "@/features/inspections";
 import { createProfileForSession } from "@/features/profile";
 
@@ -13,17 +14,24 @@ type InspectionDetailPageProps = {
   searchParams?: { estado?: string };
 };
 
+/** Resolve each request on the server; no static route snapshot is generated. */
+export const dynamic = "force-dynamic";
+
+export function generateMetadata({ params }: Pick<InspectionDetailPageProps, "params">) {
+  const inspection = findInspectionDetail(params.id);
+  if (!inspection) notFound();
+  return { title: `${inspection.location} | Inspecciones` };
+}
+
 export default function InspeccionDetailPage({ params, searchParams }: InspectionDetailPageProps) {
   const { user } = temporarySession;
-  const inspection = getInspectionDetail(params.id);
   const state = searchParams?.estado;
+  const inspection = findInspectionDetail(params.id);
+  if (!inspection) notFound();
 
   return (
-    <AppShell navigationSections={navigationSectionsByRole[user.role]} profile={createProfileForSession(user)}>
-      {state === "cargando" ? <LoadingState title="Cargando detalle" description="Estamos preparando los datos de la inspección." /> : null}
-      {state === "error" ? <LoadingState state="error" title="No fue posible cargar el detalle" action={<Link className={s.retryLink} href={`/inspecciones/${params.id}`}>Volver a intentar</Link>} /> : null}
-      {!state && !inspection ? <LoadingState state="empty" title="No encontramos esta inspección" description="El registro solicitado no existe o ya no está disponible." action={<Link className={s.retryLink} href="/inspecciones">Ver todas las inspecciones</Link>} /> : null}
-      {!state && inspection ? <InspectionDetailContent inspection={inspection} /> : null}
+    <AppShell activePath="/inspecciones" navigationSections={navigationSectionsByRole[user.role]} profile={createProfileForSession(user)}>
+      {state === "error" ? <LoadingState state="error" title="No fue posible cargar el detalle" action={<Link className={s.retryLink} href={`/inspecciones/${params.id}`}>Volver a intentar</Link>} /> : <InspectionDetailContent inspection={inspection} />}
     </AppShell>
   );
 }
@@ -34,7 +42,7 @@ function InspectionDetailContent({ inspection }: { inspection: InspectionDetail 
       <Link className={s.backLink} href="/inspecciones"><ArrowLeft aria-hidden="true" className={s.backIcon} />Volver al listado</Link>
       <header className={s.header}>
         <div>
-          <p className={s.folio}>Folio {inspection.folio}</p>
+          <p className={s.folio}>Referencia {inspection.folio}</p>
           <h1 id="inspeccion-title" className={s.title}>{inspection.location}</h1>
           <p className={s.description}>{inspection.scope}</p>
         </div>
@@ -70,25 +78,6 @@ function InspectionDetailContent({ inspection }: { inspection: InspectionDetail 
       </section>
     </section>
   );
-}
-
-function getInspectionDetail(id: string): InspectionDetail | undefined {
-  if (id === inspectionDetail.id) return inspectionDetail;
-  const listItem = inspections.find((item) => item.id === id);
-  if (!listItem) return undefined;
-
-  return {
-    id: listItem.id,
-    folio: listItem.id.replace("inspection-", "INS-"),
-    location: listItem.location,
-    date: listItem.date,
-    technician: listItem.inspector,
-    workflowStatus: listItem.workflowStatus,
-    result: listItem.result,
-    syncStatus: listItem.syncStatus,
-    scope: listItem.summary,
-    findings: listItem.result === "requires_attention" ? [{ id: `${listItem.id}-finding`, title: "Hallazgo pendiente de seguimiento", description: "Observación sintética registrada durante la inspección del laboratorio.", priority: "medium", status: "pending" }] : [],
-  };
 }
 
 function formatDate(date: string) {

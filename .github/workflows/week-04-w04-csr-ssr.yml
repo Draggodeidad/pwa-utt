@@ -1,0 +1,37 @@
+name: Week 04 — CSR and SSR rendering
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.6"
+          cache: npm
+      - name: Clean install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify public contract
+        run: bash public-tests/check.sh
+      - name: Typecheck, tests, build, and rendering measurement
+        run: make verify
+      - name: Save technical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: academic-evidence-w04-csr-ssr
+          if-no-files-found: warn
+          path: |
+            reports/verification.json
+            reports/rendering-metrics.json

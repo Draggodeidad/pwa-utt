@@ -149,17 +149,16 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 
 > Este documento registra hechos técnicos reproducibles. Cada integrante debe completar y validar personalmente su sección antes de entregar; no se atribuyen ejecuciones o decisiones que esa persona no pueda demostrar.
 
-### Imanol Antonio De la Cruz — completar personalmente
+### Imanol Antonio De la Cruz — evidencia técnica para revisión personal
 
-- Commit SHA propio o revisión trazable: ____________________.
-- Contribución concreta: ________________________________________________________________.
-- Decisión técnica que puedo explicar y por qué: ________________________________________________________________.
-- Prueba que ejecuté y resultado real: ________________________________________________________________.
-- Qué protege la prueba y qué no protege (límites declarados): ________________________________________________________________.
-- Limitación o fallo que identifiqué: _________________________________________________________________
-- Cambio que puedo defender o modificar en vivo: ______________________________________________________.
-- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): _________________
-  ____________________________________________________________________________________________________.
+- Commit y revisión trazable: commit funcional inicial `6c6e25d` y [PR #31](https://github.com/Draggodeidad/pwa-utt/pull/31). El SHA exacto evaluado corresponde al `commitSha` del artefacto `reports/verification.json` publicado por el workflow W04 para el head del PR; evita fijar dentro del mismo commit un hash autorreferencial.
+- Contribución concreta asistida: integración del baseline W04 sobre las rutas existentes, listado CSR con búsqueda/filtro, detalle SSR con resolución de datos sintéticos, estados accesibles, 404 previo al streaming, medición HTTP, documentación y workflow. Se integraron los commits de pruebas de Osbaldo conservando su autoría y se ampliaron con verificaciones de comportamiento.
+- Decisión técnica defendible: el listado pasa a datos en cliente para interacción sin recarga; el detalle entrega el registro en HTML por solicitud. El estado inicial de carga es idéntico antes y después de hidratar. El middleware evita que una frontera de carga fije HTTP 200 antes de resolver un ID inexistente.
+- Verificación ejecutada por Codex durante la integración: `npm ci --ignore-scripts --no-audit --no-fund` terminó con código 0; `make verify` terminó con `status: "pass"` e incluyó typecheck, las cinco suites, build y medición. `tests/rendering.spec.ts` verificó carga inicial CSR, datos SSR, error, vacío, 404, selector de filtros y consistencia de registros. Los valores y entorno de la medición están en `docs/rendering-decision.md` y en el artefacto de CI.
+- Límites: la suite HTTP no comprueba interacción física ni hidratación en navegador; la métrica HTTP no mide tiempo hasta mostrar los registros CSR. Los parámetros de error y vacío son escenarios sintéticos, no fallos de una API real.
+- Fallo diagnosticado: `notFound()` dentro de una ruta con carga por streaming devolvía contenido de ausencia con HTTP 200. La solución comprueba el ID antes del streaming; la build confirmó que el detalle siguió siendo dinámico y servido por solicitud.
+- Cambio defendible en vivo: ajustar el selector de filtros, los mensajes/semántica de `LoadingState` o el número de muestras de `scripts/measure-rendering.mjs`, y repetir la prueba de regresión correspondiente.
+- Uso declarado de IA: Codex ayudó a implementar las rutas, ampliar `tests/rendering.spec.ts`, redactar `docs/rendering-decision.md`, adaptar CI y producir esta evidencia técnica. La ejecución y los resultados arriba son verificables en los comandos y reportes; la revisión y defensa personal del estudiante quedan a su cargo antes de la entrega académica.
 
 ### Osbaldo Alvarez Marinez
 
@@ -172,6 +171,8 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 - Cambio que puedo defender o modificar en vivo: adaptar la suite para contrastar contra `src/app/inspecciones/page.tsx` una vez que la issue #27 sea fusionada, extender las aserciones sobre `docs/rendering-decision.md`, o añadir validaciones de props adicionales sobre `InspectionDetailWorkspace`.
 - Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): utilicé Antigravity (asistente de IA de Google) para la estructuración y redacción de los casos de prueba de `tests/rendering.spec.ts` y la verificación de comandos reproducibles. Validé manualmente la coherencia de los datos sintéticos de `inspections.ts`, el comportamiento de `notFound()`, la accesibilidad de `AppShellState` y el éxito en verde de `npm test` y `npm run verify`.
 
+Nota de integración: la sección anterior describe el aporte original de Osbaldo en el PR #30. En el PR #31 la suite se amplió para probar respuestas HTTP y selectores ejecutados; esas ampliaciones y la medición no se atribuyen a su validación personal.
+
 ### Jose Julian Alvarez Flores — completar personalmente
 
 - Commit SHA propio o revisión trazable: ____________________.
@@ -183,5 +184,3 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 - Cambio que puedo defender o modificar en vivo: ______________________________________________________.
 - Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): _________________
   ____________________________________________________________________________________________________.
-
-
