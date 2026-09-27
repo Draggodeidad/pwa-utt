@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
-const required = ["package.json", "package-lock.json", "README.md", "public/manifest.webmanifest", "public/sw.js", "src/app/layout.tsx", "src/app/page.tsx", "src/app/loading.tsx", "src/app/error.tsx", "src/app/globals.css", "src/components/app-shell.tsx", "src/lib/data/inspections.ts", "docs/requirements.md", "docs/decision-record.md", "tests/starter.spec.mjs", "tests/manifest.spec.ts", "tests/service-worker.spec.ts", "tests/offline.spec.ts", "evidence/individual.md"];
+const required = ["package.json", "package-lock.json", "README.md", "public/manifest.webmanifest", "public/sw.js", "src/app/layout.tsx", "src/app/page.tsx", "src/app/loading.tsx", "src/app/error.tsx", "src/app/globals.css", "src/app/inspecciones/page.tsx", "src/app/inspecciones/[id]/page.tsx", "src/components/app-shell.tsx", "src/components/loading-state.tsx", "src/lib/data/inspections.ts", "docs/requirements.md", "docs/decision-record.md", "docs/rendering-decision.md", "tests/starter.spec.mjs", "tests/manifest.spec.ts", "tests/service-worker.spec.ts", "tests/offline.spec.ts", "tests/rendering.spec.ts", "evidence/individual.md"];
 const missing = required.filter(file => !existsSync(resolve(root, file)));
 const structureOnly = process.argv.includes("--structure");
 if (structureOnly) {
@@ -12,7 +12,7 @@ if (structureOnly) {
 }
 const checks = [{ id: "structure", status: missing.length ? "fail" : "pass", missing }];
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-for (const [id, args] of [["typecheck", ["run", "typecheck"]], ["test", ["test"]], ["build", ["run", "build"]]]) {
+for (const [id, args] of [["typecheck", ["run", "typecheck"]], ["test", ["test"]], ["build", ["run", "build"]], ["rendering-metrics", ["run", "measure:rendering"]]]) {
   console.log(`\nVerificando ${id}...`);
   const run = spawnSync(npm, args, { cwd: root, encoding: "utf8", shell: process.platform === "win32", maxBuffer: 20 * 1024 * 1024 });
   if (run.stdout) process.stdout.write(run.stdout);
@@ -23,7 +23,7 @@ const git = args => {
   const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : null;
 };
-const documents = ["docs/requirements.md", "docs/decision-record.md", "evidence/individual.md", "README.md"].map(file => ({ file, content: existsSync(resolve(root, file)) ? readFileSync(resolve(root, file), "utf8") : null }));
+const documents = ["docs/requirements.md", "docs/decision-record.md", "docs/rendering-decision.md", "evidence/individual.md", "README.md"].map(file => ({ file, content: existsSync(resolve(root, file)) ? readFileSync(resolve(root, file), "utf8") : null }));
 const gitStatus = git(["status", "--porcelain"]);
 const result = {
   schemaVersion: 2,
@@ -34,7 +34,7 @@ const result = {
   status: checks.every(c => c.status === "pass") ? "pass" : "fail",
   checks,
   academicReview: { status: "pending", message: "Sin calificación automática. Revisar requisitos, decisión y evidencia por integrante con la rúbrica; existencia no implica calidad.", documents },
-  limits: ["La instalación se verifica mediante npm ci por separado.", "La revisión de credenciales requiere herramientas especializadas adicionales.", "Las pruebas no sustituyen una auditoría completa de accesibilidad ni una instalación manual de la PWA."]
+  limits: ["La instalación se verifica mediante npm ci por separado.", "La revisión de credenciales requiere herramientas especializadas adicionales.", "Las pruebas no sustituyen una auditoría completa de accesibilidad ni una instalación manual de la PWA.", "La métrica HTTP no mide hidratación ni tiempo hasta mostrar registros CSR."]
 };
 mkdirSync(resolve(root, "reports"), { recursive: true });
 writeFileSync(resolve(root, "reports/verification.json"), JSON.stringify(result, null, 2) + "\n");

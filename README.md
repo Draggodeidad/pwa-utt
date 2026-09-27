@@ -1,6 +1,6 @@
 # PWA de inspecciones de laboratorio
 
-Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenimiento de laboratorios con datos exclusivamente sintéticos. El incremento de la Semana 02 incorpora un shell instalable, navegación por rol, un Web App Manifest y estados accesibles de carga, error y vacío. El incremento de la Semana 03 incorpora un service worker con precache del app shell, navegación offline con fallback, caché de assets estáticos y actualización controlada.
+Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenimiento de laboratorios con datos exclusivamente sintéticos. El incremento de la Semana 02 incorpora un shell instalable, navegación por rol, un Web App Manifest y estados accesibles de carga, error y vacío. El incremento de la Semana 03 incorpora un service worker con precache del app shell, navegación offline con fallback, caché de assets estáticos y actualización controlada. La Semana 04 compara un listado CSR interactivo con un detalle SSR.
 
 ## Requisitos del entorno
 
@@ -31,15 +31,16 @@ make verify
 npm run verify
 ```
 
-El verificador ejecuta, en orden, `npm run typecheck`, `npm test` y `npm run build`, y genera `reports/verification.json`. La suite incluye:
+El verificador ejecuta, en orden, `npm run typecheck`, `npm test`, `npm run build` y `npm run measure:rendering`, y genera `reports/verification.json` y `reports/rendering-metrics.json`. La suite incluye:
 
 - `tests/starter.spec.mjs`: conserva el comportamiento acumulativo del proyecto.
 - `tests/manifest.spec.ts`: valida campos de instalación, iconos reales, scope, shortcuts, metadata, landmarks y presencia de estados críticos.
 - `tests/service-worker.spec.ts`: valida el ciclo de vida de `public/sw.js` (precache, activación, `SKIP_WAITING` y exclusiones de fetch).
 - `tests/offline.spec.ts`: valida navegación online/offline, fallback, cache-first de estáticos y poda FIFO.
-- `bash public-tests/check.sh`: comprueba los artefactos públicos de las Semanas 02 y 03.
+- `tests/rendering.spec.ts`: comprueba el HTML de CSR y SSR, filtros sintéticos, estados y respuesta 404.
+- `bash public-tests/check.sh`: comprueba los artefactos públicos acumulativos, incluidos los de Semana 04.
 
-Los workflows `.github/workflows/week-02-w02-shell-manifest.yml` y `.github/workflows/week-03-w03-service-worker-offline.yml` repiten una instalación limpia y `make verify` en cada `push`, pull request o ejecución manual, y publican el reporte como artefacto. La evidencia debe asociarse al SHA exacto evaluado.
+Los workflows de las Semanas 02, 03 y 04 repiten una instalación limpia y `make verify` en cada `push`, pull request o ejecución manual. El workflow W04 publica ambos reportes como artefactos. La evidencia debe asociarse al SHA exacto evaluado.
 
 ## Implementación de Semana 02
 
@@ -57,6 +58,13 @@ Los workflows `.github/workflows/week-02-w02-shell-manifest.yml` y `.github/work
 - `src/lib/pwa/register-service-worker.ts` registra `/sw.js` con scope `/` desde un límite client-only, no falla en SSR ni en navegadores sin soporte, y expone callbacks de registro, error, actualización disponible y cambio de controller.
 - `src/components/pwa/service-worker-registration.tsx` monta el registro desde `src/app/layout.tsx`; `activateServiceWorkerUpdate` envía `{ type: "SKIP_WAITING" }` para activar la versión nueva sin bucle de recarga.
 - `docs/cache-strategy.md` especifica el inventario, clasificación, versionado, límites, exclusiones, fallbacks, supuestos y trade-offs de la política de caché.
+
+## Implementación de Semana 04 (CSR y SSR)
+
+- `/inspecciones` muestra un estado de carga inicial y luego consulta los registros sintéticos en cliente. Permite buscar por laboratorio, código o responsable, filtrar por resultado y abrir el detalle. `?estado=error` y `?estado=vacio` muestran escenarios de error recuperable y ausencia de datos.
+- `/inspecciones/inspection-001` es un ejemplo de detalle renderizado en servidor; `/inspecciones/inspection-004` muestra dos hallazgos. Un ID inexistente responde HTTP 404. `?estado=error` muestra el error de demostración del detalle.
+- `src/components/loading-state.tsx` comparte la presentación accesible de carga, error y vacío; las fronteras de ruta atienden esperas o fallos inesperados.
+- `docs/rendering-decision.md` explica la elección, los límites de datos, la accesibilidad y el método de medición. `npm run measure:rendering` requiere una build previa y registra cinco muestras HTTP por ruta; no mide la hidratación ni el tiempo hasta mostrar datos CSR.
 
 ## Decisiones y trade-offs
 

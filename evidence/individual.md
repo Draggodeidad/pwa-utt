@@ -140,3 +140,47 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 - Cambio que puedo defender o modificar en vivo: ajustar la matriz de estrategias de caché, modificar las políticas de invalidación o versionado, ampliar o reducir las rutas consideradas sensibles, o adaptar el comportamiento del fallback offline en función de los resultados obtenidos durante la implementación y validación del Service Worker.
 - Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): utilicé Microsoft Copilot como apoyo para estructurar el borrador inicial de `docs/cache-strategy.md`, revisar la coherencia de las estrategias de caché y redactar partes de la documentación y evidencia individual. La validación del contenido fue realizada manualmente mediante revisión del proyecto, contraste con `docs/requirements.md`, `docs/decision-record.md` y los entregables de Semana 03, verificando que no se afirmaran funcionalidades inexistentes y que todas las decisiones documentadas pudieran ser explicadas y defendidas técnicamente.
 
+---
+
+## Semana 04
+
+- Grupo y equipo: **9B-E02**
+- Repositorio: <https://github.com/Draggodeidad/pwa-utt>
+
+> Este documento registra hechos técnicos reproducibles. Cada integrante debe completar y validar personalmente su sección antes de entregar; no se atribuyen ejecuciones o decisiones que esa persona no pueda demostrar.
+
+### Imanol Antonio De la Cruz — evidencia técnica para revisión personal
+
+- Commit y revisión trazable: commit funcional inicial `6c6e25d` y [PR #31](https://github.com/Draggodeidad/pwa-utt/pull/31). El SHA exacto evaluado corresponde al `commitSha` del artefacto `reports/verification.json` publicado por el workflow W04 para el head del PR; evita fijar dentro del mismo commit un hash autorreferencial.
+- Contribución concreta asistida: integración del baseline W04 sobre las rutas existentes, listado CSR con búsqueda/filtro, detalle SSR con resolución de datos sintéticos, estados accesibles, 404 previo al streaming, medición HTTP, documentación y workflow. Se integraron los commits de pruebas de Osbaldo conservando su autoría y se ampliaron con verificaciones de comportamiento.
+- Decisión técnica defendible: el listado pasa a datos en cliente para interacción sin recarga; el detalle entrega el registro en HTML por solicitud. El estado inicial de carga es idéntico antes y después de hidratar. El middleware evita que una frontera de carga fije HTTP 200 antes de resolver un ID inexistente.
+- Verificación ejecutada por Codex durante la integración: `npm ci --ignore-scripts --no-audit --no-fund` terminó con código 0; `make verify` terminó con `status: "pass"` e incluyó typecheck, las cinco suites, build y medición. `tests/rendering.spec.ts` verificó carga inicial CSR, datos SSR, error, vacío, 404, selector de filtros y consistencia de registros. Los valores y entorno de la medición están en `docs/rendering-decision.md` y en el artefacto de CI.
+- Límites: la suite HTTP no comprueba interacción física ni hidratación en navegador; la métrica HTTP no mide tiempo hasta mostrar los registros CSR. Los parámetros de error y vacío son escenarios sintéticos, no fallos de una API real.
+- Fallo diagnosticado: `notFound()` dentro de una ruta con carga por streaming devolvía contenido de ausencia con HTTP 200. La solución comprueba el ID antes del streaming; la build confirmó que el detalle siguió siendo dinámico y servido por solicitud.
+- Cambio defendible en vivo: ajustar el selector de filtros, los mensajes/semántica de `LoadingState` o el número de muestras de `scripts/measure-rendering.mjs`, y repetir la prueba de regresión correspondiente.
+- Uso declarado de IA: Codex ayudó a implementar las rutas, ampliar `tests/rendering.spec.ts`, redactar `docs/rendering-decision.md`, adaptar CI y producir esta evidencia técnica. La ejecución y los resultados arriba son verificables en los comandos y reportes; la revisión y defensa personal del estudiante quedan a su cargo antes de la entrega académica.
+
+### Osbaldo Alvarez Marinez
+
+- Commit SHA propio o revisión trazable: `96e75cf` (`96e75cf823cfb8b15d2a933ff2d62299d5caeec0`), asociado a la issue [#28](https://github.com/Draggodeidad/pwa-utt/issues/28).
+- Contribución concreta: diseño e implementación de la suite automatizada de pruebas `tests/rendering.spec.ts` para validar las rutas de inspecciones (listado y detalle), datos sintéticos reales de `src/features/inspections/data/inspections.ts`, comportamiento ante ID válido e inexistente (`notFound()`), accesibilidad en estados de carga (`aria-busy`, `aria-live`, `role="status"`), feedback ante errores y discriminación de estrategias CSR vs SSR; integración en `package.json` (script `test`) y `scripts/verify.mjs` (lista `required`).
+- Decisión técnica que puedo explicar y por qué: se implementó la suite utilizando módulos nativos de Node.js (`node:assert/strict`, `node:fs`, `node:path`) sin dependencias E2E pesadas (Playwright/Puppeteer) ni entornos DOM sintetizados complejos. Esta decisión garantiza pruebas ultra-rápidas, reproducibles y deterministas tanto en local como en GitHub Actions, verificando los contratos estructurales, la consistencia de datos sintéticos y la accesibilidad sin acoplarse a dependencias externas.
+- Prueba que ejecuté y resultado real: ejecución de `npm test` con las 5 suites consecutivas (`starter.spec.mjs: PASS`, `manifest.spec.ts: PASS`, `service-worker.spec.ts: PASS`, `offline.spec.ts: PASS` y `rendering.spec.ts: PASS`), y `npm run verify` (`make verify`) con typecheck, pruebas y build de producción de Next.js generando 11 rutas estáticas y dinámicas, emitiendo `reports/verification.json` con status `"pass"`.
+- Qué protege la prueba y qué no protege (límites declarados): protege la integridad estructural y semántica de las rutas de inspecciones, la correcta resolución de datos sintéticos, la activación de `notFound()` ante IDs inexistentes, la presencia de atributos accesibles en el estado de carga y la trazabilidad de la estrategia CSR/SSR. NO protege el renderizado visual en un navegador físico real ni pruebas de rendimiento con usuarios concurrentes.
+- Limitación o fallo que identifiqué: las rutas oficiales solicitadas en la Semana 04 (`src/app/inspecciones/`) pertenecen a la issue #27 y no estaban integradas al momento de implementar esta suite; se implementó una estrategia resiliente que audita la ruta activa sin romper la integración continua. Se validó la capacidad de detección de regresiones invirtiendo intencionalmente un assert en `tests/rendering.spec.ts`, confirmando fallo inmediato (`AssertionError`) con código de salida 1, y retorno a código 0 tras revertir.
+- Cambio que puedo defender o modificar en vivo: adaptar la suite para contrastar contra `src/app/inspecciones/page.tsx` una vez que la issue #27 sea fusionada, extender las aserciones sobre `docs/rendering-decision.md`, o añadir validaciones de props adicionales sobre `InspectionDetailWorkspace`.
+- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): utilicé Antigravity (asistente de IA de Google) para la estructuración y redacción de los casos de prueba de `tests/rendering.spec.ts` y la verificación de comandos reproducibles. Validé manualmente la coherencia de los datos sintéticos de `inspections.ts`, el comportamiento de `notFound()`, la accesibilidad de `AppShellState` y el éxito en verde de `npm test` y `npm run verify`.
+
+Nota de integración: la sección anterior describe el aporte original de Osbaldo en el PR #30. En el PR #31 la suite se amplió para probar respuestas HTTP y selectores ejecutados; esas ampliaciones y la medición no se atribuyen a su validación personal.
+
+### Jose Julian Alvarez Flores — completar personalmente
+
+- Commit SHA propio o revisión trazable: ____________________.
+- Contribución concreta: ________________________________________________________________.
+- Decisión técnica que puedo explicar y por qué: ________________________________________________________________.
+- Prueba que ejecuté y resultado real: ________________________________________________________________.
+- Qué protege la prueba y qué no protege (límites declarados): ________________________________________________________________.
+- Limitación o fallo que identifiqué: _________________________________________________________________
+- Cambio que puedo defender o modificar en vivo: ______________________________________________________.
+- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): _________________
+  ____________________________________________________________________________________________________.
