@@ -45,7 +45,7 @@ export const inspections: InspectionListItem[] = [
     date: "2026-08-25",
     inspector: "Técnico B",
     result: "requires_attention",
-    findingCount: 3,
+    findingCount: 2,
     syncStatus: "pending",
     workflowStatus: "draft",
     summary: "Registro sintético pendiente de sincronización para el mantenimiento de estaciones."

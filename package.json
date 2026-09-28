@@ -8,7 +8,8 @@
     "start": "next start",
     "test": "node tests/starter.spec.mjs && node tests/manifest.spec.ts && node tests/service-worker.spec.ts && node tests/offline.spec.ts && node tests/rendering.spec.ts",
     "typecheck": "tsc --noEmit",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "measure:rendering": "node scripts/measure-rendering.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

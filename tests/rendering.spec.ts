@@ -1,161 +1,129 @@
-// tests/rendering.spec.ts
-// Suite de validación de renderizado CSR/SSR para la Semana 04 (Issue #28)
-// Diseñada contra el contrato oficial de la Issue #27:
-//   - src/app/inspecciones/page.tsx
-//   - src/app/inspecciones/[id]/page.tsx
-//   - src/components/loading-state.tsx
-
-require.extensions[".ts"] = require.extensions[".js"];
-
+// Behavioral rendering checks for the Week 04 CSR and SSR routes.
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
+const { spawn } = require("node:child_process");
+const { readFileSync } = require("node:fs");
+const { createServer } = require("node:net");
+const { resolve } = require("node:path");
+const { createElement } = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
+const typescript = require("typescript");
 
-const root = path.resolve(__dirname, "..");
+const root = resolve(__dirname, "..");
 
-function readRequiredFile(relativePath, issueContext = "Issue #27") {
-  const fullPath = path.resolve(root, relativePath);
-  assert.ok(
-    fs.existsSync(fullPath),
-    `[BLOCKED BY ${issueContext}] Archivo obligatorio ausente: ${relativePath}. Esta prueba requiere la integración de ${issueContext}.`
-  );
-  return fs.readFileSync(fullPath, "utf8");
+for (const extension of [".ts", ".tsx"]) {
+  require.extensions[extension] = (module, filename) => {
+    const source = readFileSync(filename, "utf8");
+    const output = typescript.transpileModule(source, { compilerOptions: { module: typescript.ModuleKind.CommonJS, jsx: typescript.JsxEmit.ReactJSX, target: typescript.ScriptTarget.ES2022 } });
+    module._compile(output.outputText, filename);
+  };
 }
 
-function getSyntheticDataset() {
-  const syntheticPath = path.resolve(root, "src/features/inspections/data/inspections.ts");
-  assert.ok(fs.existsSync(syntheticPath), "No se encontró el archivo de datos sintéticos: src/features/inspections/data/inspections.ts");
-  const raw = fs.readFileSync(syntheticPath, "utf8");
+const { inspections } = require("../src/features/inspections/data/inspections.ts");
+const { findInspectionDetail } = require("../src/features/inspections/data/inspection-detail.ts");
+const { filterInspections } = require("../src/features/inspections/hooks/use-inspection-filters.ts");
+const { LoadingState } = require("../src/components/loading-state.tsx");
 
-  const ids = [];
-  const idRegex = /id:\s*"([^"]+)"/g;
-  let m;
-  while ((m = idRegex.exec(raw)) !== null) {
-    ids.push(m[1]);
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolveReady) => server.listen(0, "127.0.0.1", resolveReady));
+  const address = server.address();
+  await new Promise((resolveClosed) => server.close(resolveClosed));
+  return address.port;
+}
+
+async function startServer(port) {
+  const child = spawn(process.execPath, [resolve(root, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output = `${output}${chunk}`.slice(-8000); });
+  child.stderr.on("data", (chunk) => { output = `${output}${chunk}`.slice(-8000); });
+  const base = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + 45000;
+
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) throw new Error(`Next terminó antes de iniciar:\n${output}`);
+    try {
+      const response = await fetch(`${base}/inspecciones`, { signal: AbortSignal.timeout(2000) });
+      if (response.ok) return { child, base };
+    } catch { /* Wait for the dev server to become ready. */ }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+  }
+  child.kill("SIGTERM");
+  throw new Error(`Next no inició en 45 segundos:\n${output}`);
+}
+
+async function readRoute(base, path) {
+  const response = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(15000) });
+  return { status: response.status, html: await response.text() };
+}
+
+async function main() {
+  const loading = renderToStaticMarkup(createElement(LoadingState));
+  const error = renderToStaticMarkup(createElement(LoadingState, { state: "error" }));
+  const empty = renderToStaticMarkup(createElement(LoadingState, { state: "empty", headingLevel: 2 }));
+  assert.match(loading, /role="status"/);
+  assert.match(loading, /aria-busy="true"/);
+  assert.match(error, /role="alert"/);
+  assert.match(empty, /<h2/);
+
+  assert.equal(filterInspections(inspections, "cómputo a", "all", "all").length, 1);
+  assert.equal(filterInspections(inspections, "LAB-COMP-02", "requires_attention", "all")[0]?.id, "inspection-002");
+  assert.equal(filterInspections(inspections, "sin coincidencia", "all", "all").length, 0);
+  assert.equal(filterInspections(inspections, "", "without_findings", "all").length, 2);
+  assert.equal(findInspectionDetail("inspection-inexistente"), undefined);
+  for (const item of inspections) {
+    const detail = findInspectionDetail(item.id);
+    assert.equal(detail?.location, item.location);
+    assert.equal(detail?.date, item.date);
+    assert.equal(detail?.findings.length, item.findingCount);
   }
 
-  assert.ok(ids.length > 0, "El dataset sintético debe contener al menos un registro");
-  return { raw, ids };
-}
+  const { child, base } = await startServer(await freePort());
+  try {
+    const list = await readRoute(base, "/inspecciones");
+    assert.equal(list.status, 200);
+    assert.match(list.html, /Cargando inspecciones/);
+    assert.match(list.html, /aria-busy="true"/);
+    assert.match(list.html, /Inspecciones/);
 
-function runRenderingSuite() {
-  console.log("Iniciando suite de pruebas de renderizado (tests/rendering.spec.ts)...");
-  console.log("Contrato esperado de la Issue #27 (Semana 04):");
-  console.log("  - src/app/inspecciones/page.tsx");
-  console.log("  - src/app/inspecciones/[id]/page.tsx");
-  console.log("  - src/components/loading-state.tsx\n");
+    const listError = await readRoute(base, "/inspecciones?estado=error");
+    assert.equal(listError.status, 200);
+    assert.match(listError.html, /No fue posible cargar la información/);
+    assert.match(listError.html, /Volver a intentar/);
 
-  const listPath = "src/app/inspecciones/page.tsx";
-  const detailPath = "src/app/inspecciones/[id]/page.tsx";
-  const loadingPath = "src/components/loading-state.tsx";
+    const listEmpty = await readRoute(base, "/inspecciones?estado=vacio");
+    assert.equal(listEmpty.status, 200);
+    assert.match(listEmpty.html, /No hay inspecciones para mostrar/);
 
-  // ===========================================================================
-  // PRUEBA 1 — Existencia física de las rutas y componentes de #27
-  // ===========================================================================
-  console.log("  [PRUEBA 1] Validando existencia física de artefactos de #27...");
-  const listCode = readRequiredFile(listPath, "Issue #27");
-  const detailCode = readRequiredFile(detailPath, "Issue #27");
-  const loadingCode = readRequiredFile(loadingPath, "Issue #27");
-  console.log("             Artefactos de #27 confirmados en disco.");
+    const detail = await readRoute(base, "/inspecciones/inspection-001");
+    assert.equal(detail.status, 200);
+    assert.match(detail.html, /Laboratorio de Cómputo A/);
+    assert.match(detail.html, /href="\/inspecciones"/);
+    assert.match(detail.html, /No se registraron hallazgos/);
 
-  // ===========================================================================
-  // PRUEBA 2 — Estrategia CSR / SSR
-  // ===========================================================================
-  console.log("  [PRUEBA 2] Validando estrategia de renderizado (CSR vs SSR)...");
-  const isListClient = listCode.includes('"use client"') || listCode.includes("'use client'");
-  const isDetailClient = detailCode.includes('"use client"') || detailCode.includes("'use client'");
+    const detailWithFindings = await readRoute(base, "/inspecciones/inspection-004");
+    assert.equal(detailWithFindings.status, 200);
+    assert.match(detailWithFindings.html, /Centro de Cómputo General/);
+    assert.equal(inspections.find((item) => item.id === "inspection-004")?.findingCount, 2);
+    assert.match(detailWithFindings.html, /registrado/);
+    assert.match(detailWithFindings.html, /Cableado expuesto/);
 
-  const decisionPath = path.resolve(root, "docs/rendering-decision.md");
-  if (fs.existsSync(decisionPath)) {
-    const decisionContent = fs.readFileSync(decisionPath, "utf8");
-    console.log("             Contratando contra docs/rendering-decision.md...");
-    if (/listado.*(client|csr)/i.test(decisionContent)) {
-      assert.ok(isListClient, "El listado debe ser Client Component según docs/rendering-decision.md");
+    const missing = await readRoute(base, "/inspecciones/inspection-inexistente");
+    assert.equal(missing.status, 404);
+    assert.match(missing.html, /La página o inspección solicitada no está disponible/);
+
+    const detailError = await readRoute(base, "/inspecciones/inspection-001?estado=error");
+    assert.match(detailError.html, /No fue posible cargar el detalle/);
+    console.log("rendering.spec.ts: PASS");
+  } finally {
+    if (child.exitCode === null) {
+      child.kill("SIGTERM");
+      await Promise.race([
+        new Promise((finished) => child.once("exit", finished)),
+        new Promise((finished) => setTimeout(finished, 5000)),
+      ]);
+      if (child.exitCode === null) child.kill("SIGKILL");
     }
-    if (/detalle.*(server|ssr)/i.test(decisionContent)) {
-      assert.ok(!isDetailClient, "El detalle debe ser Server Component según docs/rendering-decision.md");
-    }
-  } else {
-    // Si no existe aún el documento, la arquitectura exige que una ruta sea cliente y otra servidor
-    assert.ok(
-      isListClient !== isDetailClient || (!isListClient && !isDetailClient) || (isListClient && isDetailClient),
-      "Las rutas deben definir claramente su estrategia de renderizado"
-    );
   }
-  console.log(`             Listado: ${isListClient ? "Client Component (CSR)" : "Server Component (SSR)"}`);
-  console.log(`             Detalle: ${isDetailClient ? "Client Component (CSR)" : "Server Component (SSR)"}`);
-
-  // ===========================================================================
-  // PRUEBA 3 — Listado consume datos sintéticos reales
-  // ===========================================================================
-  console.log("  [PRUEBA 3] Validando que el listado consuma datos sintéticos reales...");
-  const dataset = getSyntheticDataset();
-
-  // Validar que el listado haga referencia o importe los datos sintéticos
-  const referencesSyntheticData =
-    /inspections|inspecciones|features\/inspections|data\/inspections/i.test(listCode);
-  assert.ok(
-    referencesSyntheticData,
-    "src/app/inspecciones/page.tsx debe consumir o importar la fuente de datos sintéticos de inspecciones"
-  );
-
-  // ===========================================================================
-  // PRUEBA 4 — Detalle resuelve ID válido real
-  // ===========================================================================
-  console.log("  [PRUEBA 4] Validando resolución de detalle con identificador válido...");
-  const validSyntheticId = dataset.ids[0]; // e.g. "inspection-001"
-  assert.ok(validSyntheticId, "Debe existir al menos un ID real en los datos sintéticos");
-
-  // La vista de detalle debe leer params.id (o params) para resolver la inspección
-  const readsParams = /params/i.test(detailCode);
-  assert.ok(readsParams, "src/app/inspecciones/[id]/page.tsx debe recibir y utilizar params");
-
-  // Debe buscar en la colección o resolver el ID válido
-  const resolvesRecord = /find|filter|inspectionDetail|getInspection|id/i.test(detailCode);
-  assert.ok(resolvesRecord, "La vista de detalle debe resolver la inspección asociada al ID proporcionado");
-
-  // ===========================================================================
-  // PRUEBA 5 — Detalle ante identificador inexistente
-  // ===========================================================================
-  console.log("  [PRUEBA 5] Validando manejo ante identificador inexistente...");
-  const nonExistentTestId = "__test_nonexistent_inspection__";
-  assert.ok(!dataset.ids.includes(nonExistentTestId), "El ID de prueba no debe coincidir con datos reales");
-
-  // Debe contemplar notFound(), estado de error, mensaje de ausencia o fallback
-  const handlesNotFound = /notFound\s*\(|not-found|error|no\s+encontrada|ausencia/i.test(detailCode);
-  assert.ok(
-    handlesNotFound,
-    "src/app/inspecciones/[id]/page.tsx debe manejar identificadores inexistentes (notFound, mensaje o fallback)"
-  );
-
-  // ===========================================================================
-  // PRUEBA 6 — Loading State accesible
-  // ===========================================================================
-  console.log("  [PRUEBA 6] Validando accesibilidad del estado de carga (loading-state.tsx)...");
-  const hasAccessibilitySignals =
-    /role=["']status["']|aria-busy=["']true["']|aria-live=["']polite["']|loading|spinner|skeleton/i.test(loadingCode);
-  assert.ok(
-    hasAccessibilitySignals,
-    "src/components/loading-state.tsx debe proporcionar señales de accesibilidad (role='status', aria-busy, aria-live o skeleton)"
-  );
-
-  // ===========================================================================
-  // PRUEBA 7 — Manejo de Error / Ausencia de datos
-  // ===========================================================================
-  console.log("  [PRUEBA 7] Validando manejo de errores y estados vacíos...");
-  const handlesErrorOrEmpty =
-    /error|empty|vacío|sin\s+inspecciones|alert|fallback/i.test(listCode + detailCode);
-  assert.ok(
-    handlesErrorOrEmpty,
-    "La implementación de #27 debe contemplar retroalimentación visual ante errores o ausencia de datos"
-  );
-
-  console.log("\ntests/rendering.spec.ts: PASS (Contrato de Issue #27 verificado)");
 }
 
-try {
-  runRenderingSuite();
-} catch (error) {
-  console.error("\nFallo en tests/rendering.spec.ts:\n", error.message || error);
-  process.exit(1);
-}
+main().catch((error) => { console.error(error); process.exitCode = 1; });
