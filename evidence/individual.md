@@ -90,13 +90,14 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 
 ### Jose Julian Alvarez Flores
 
-- Commit SHA propio o revisión trazable: revisión de la integración con hitos trazables en `15f08bb763e29d966087414fc1299361bdf2fa6f` y el merge final `8c03c98` (`Merge pull request #12 from Draggodeidad/feat/w02-installable-app-shell`).
-- Contribución concreta: participé en la validación del shell instalable y del manifest de la PWA, revisé la integración del componente `src/components/app-shell.tsx`, confirmé la coherencia de `public/manifest.webmanifest`, y dejé documentada la verificación realizada en esta evidencia. También incluí en mi aporte el trabajo de pruebas ejecutadas y la revisión del resultado real para asegurar que la entrega de Semana 2 siguiera siendo reproducible en local y con CI.
-- Decisión técnica que puedo explicar: el app shell debe conservar una estructura estable de navegación y contenido por props, con estados de carga, vacío y error accesibles, mientras el manifest permanece estático y se valida por metadatos y rutas físicas. Esa separación evita acoplar la UI de sesión con los repositorios y hace que la validación sea determinista y más fácil de mantener en GitHub Actions.
-- Prueba que ejecuté y resultado real: `npm ci --ignore-scripts --no-audit --no-fund`, `make verify` y `bash public-tests/check.sh` desde la raíz del proyecto; todos terminaron con código 0. `make verify` ejecutó typecheck, la prueba original, la prueba del manifest y el build de producción, y generó `reports/verification.json` con `status: "pass"`. Además revisé la aplicación en `http://localhost:3000` para confirmar que el shell instalable y el manejo de estados se veían coherentes.
-- Limitación o fallo que identifiqué: la verificación técnica del proyecto puede dar `pass` aunque la calidad del contenido documental siga siendo limitada, porque la revisión académica de `docs/requirements.md` y `docs/decision-record.md` no forma parte del pipeline. También vi que el modo offline real todavía no está implementado, por lo que la PWA de Semana 2 cubre la parte instalable y la validación del manifest, pero no la sincronización ni el almacenamiento persistente sin red.
-- Cambio que puedo defender o modificar en vivo: ajustar `start_url`, `scope` o `shortcuts` para un despliegue bajo subruta, o modificar el estado del shell para añadir otra variante accesible sin romper la semántica existente de carga, vacío y error.
-- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): no utilicé IA en esta parte para generar contenido técnico; mi proceso fue de revisión directa del proyecto, ejecución de los comandos de verificación y comprobación visual en el navegador. Los archivos relevantes revisados y validados fueron `src/components/app-shell.tsx`, `src/app/layout.tsx`, `public/manifest.webmanifest`, `tests/manifest.spec.ts`, `public-tests/check.sh`, `scripts/verify.mjs`, `reports/verification.json`.
+- Commit SHA propio o revisión trazable: completar con el SHA del commit que integre esta documentación; no se consigna un hash antes de crear ese commit.
+- Contribución concreta: analicé el comportamiento observable de `/inspecciones` y `/inspecciones/[id]`, y documenté en `docs/rendering-decision.md` su división entre interacción cliente y detalle dinámico de servidor, los estados de UI, los trade-offs y el procedimiento de validación. Actualicé únicamente la explicación W04 de `README.md`.
+- Decisión técnica defendible: describí `/inspecciones` como una vista interactiva cliente porque `useEffect`, estado local y el hook de filtros controlan cuándo aparecen y cómo se filtran los registros. Aclaré que el HTML inicial sí contiene el estado de carga prerenderizado por Next.js. El detalle usa `force-dynamic` y entrega el registro sintético en HTML por solicitud; el middleware anticipa el 404 de IDs inexistentes.
+- Prueba ejecutada y resultado observado: intenté `npm test`, pero la terminal respondió que `npm` no se reconoce como comando. También intenté ejecutar `node tests/rendering.spec.ts`; Node está disponible como v22.22.0, pero la terminal no mostró un resultado final verificable de esa suite. No consigno PASS; queda pendiente repetir ambas pruebas en una sesión con npm y salida del proceso disponibles.
+- Qué protege la prueba: la suite de rendering verifica estados y semántica de carga/error/vacío, búsqueda y filtros sobre datos sintéticos, coherencia de las vistas, HTML del listado y detalle, escenarios de error demostrativo y respuesta HTTP 404. No verifica interacción visual E2E, hidratación real en navegador ni latencia de una API.
+- Limitación encontrada: `tests/rendering.spec.ts` existe pero no está incluido en el script `npm test` observado en `package.json`; por eso lo ejecuté de forma explícita y lo señalé en ambos documentos. La medición HTTP tampoco representa el tiempo hasta que el cliente muestra los resultados CSR.
+- Cambio que puedo defender o modificar en vivo: ajustar el selector de filtros, los mensajes/semántica de `LoadingState` o el número de muestras de `scripts/measure-rendering.mjs`, y repetir la prueba de regresión correspondiente.
+- Uso de IA: utilicé GitHub Copilot como apoyo para analizar las rutas y pruebas, redactar la documentación y editar `README.md` y esta evidencia. Contrasté las afirmaciones contra el código; la validación automatizada declarada arriba quedó pendiente por el problema de disponibilidad de comandos en la terminal. No atribuyo a mi persona la implementación de las rutas ni de la suite, que corresponden a otros integrantes.
 
 ---
 
@@ -147,7 +148,6 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 - Grupo y equipo: **9B-E02**
 - Repositorio: <https://github.com/Draggodeidad/pwa-utt>
 
-> Este documento registra hechos técnicos reproducibles. Cada integrante debe completar y validar personalmente su sección antes de entregar; no se atribuyen ejecuciones o decisiones que esa persona no pueda demostrar.
 
 ### Imanol Antonio De la Cruz — evidencia técnica para revisión personal
 
@@ -173,16 +173,16 @@ Uso de IA herramienta propósito partes influenciadas y validación propia:
 
 Nota de integración: la sección anterior describe el aporte original de Osbaldo en el PR #30. En el PR #31 la suite se amplió para probar respuestas HTTP y selectores ejecutados; esas ampliaciones y la medición no se atribuyen a su validación personal.
 
-### Jose Julian Alvarez Flores — completar personalmente
+### Jose Julian Alvarez Flores
 
-- Commit SHA propio o revisión trazable: ____________________.
-- Contribución concreta: ________________________________________________________________.
-- Decisión técnica que puedo explicar y por qué: ________________________________________________________________.
-- Prueba que ejecuté y resultado real: ________________________________________________________________.
-- Qué protege la prueba y qué no protege (límites declarados): ________________________________________________________________.
-- Limitación o fallo que identifiqué: _________________________________________________________________
-- Cambio que puedo defender o modificar en vivo: ______________________________________________________.
-- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): _________________
-  ____________________________________________________________________________________________________.
+- Commit SHA propio o revisión trazable: completar con el SHA del commit que integre esta documentación; no se consigna un hash antes de crear ese commit.
+- Contribución concreta: analicé el comportamiento observable de `/inspecciones` y `/inspecciones/[id]`, y documenté en `docs/rendering-decision.md` su división entre interacción cliente y detalle dinámico de servidor, los estados de UI, los trade-offs y el procedimiento de validación. Actualicé únicamente la explicación W04 de `README.md`.
+- Decisión técnica defendible: describí `/inspecciones` como una vista interactiva cliente porque `useEffect`, estado local y el hook de filtros controlan cuándo aparecen y cómo se filtran los registros. Aclaré que el HTML inicial sí contiene el estado de carga prerenderizado por Next.js. El detalle usa `force-dynamic` y entrega el registro sintético en HTML por solicitud; el middleware anticipa el 404 de IDs inexistentes.
+- Prueba ejecutada y resultado observado: intenté `npm test`, pero la terminal respondió que `npm` no se reconoce como comando. También intenté ejecutar `node tests/rendering.spec.ts`; Node está disponible como v22.22.0, pero la terminal no mostró un resultado final verificable de esa suite. No consigno PASS; queda pendiente repetir ambas pruebas en una sesión con npm y salida del proceso disponibles.
+- Qué protege la prueba: la suite de rendering verifica estados y semántica de carga/error/vacío, búsqueda y filtros sobre datos sintéticos, coherencia de las vistas, HTML del listado y detalle, escenarios de error demostrativo y respuesta HTTP 404. No verifica interacción visual E2E, hidratación real en navegador ni latencia de una API.
+- Limitación encontrada: `tests/rendering.spec.ts` existe pero no está incluido en el script `npm test` observado en `package.json`; por eso lo ejecuté de forma explícita y lo señalé en ambos documentos. La medición HTTP tampoco representa el tiempo hasta que el cliente muestra los resultados CSR.
+- Cambio que puedo defender o modificar en vivo: ajustar el selector de filtros, los mensajes/semántica de `LoadingState` o el número de muestras de `scripts/measure-rendering.mjs`, y repetir la prueba de regresión correspondiente.
+- Uso de IA: utilicé GitHub Copilot como apoyo para analizar las rutas y pruebas, redactar la documentación y editar `README.md` y esta evidencia. Contrasté las afirmaciones contra el código; la validación automatizada declarada arriba quedó pendiente por el problema de disponibilidad de comandos en la terminal. No atribuyo a mi persona la implementación de las rutas ni de la suite, que corresponden a otros integrantes.
+
 
 

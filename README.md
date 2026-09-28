@@ -61,10 +61,10 @@ Los workflows de las Semanas 02, 03 y 04 repiten una instalación limpia y `make
 
 ## Implementación de Semana 04 (CSR y SSR)
 
-- `/inspecciones` muestra un estado de carga inicial y luego consulta los registros sintéticos en cliente. Permite buscar por laboratorio, código o responsable, filtrar por resultado y abrir el detalle. `?estado=error` y `?estado=vacio` muestran escenarios de error recuperable y ausencia de datos.
-- `/inspecciones/inspection-001` es un ejemplo de detalle renderizado en servidor; `/inspecciones/inspection-004` muestra dos hallazgos. Un ID inexistente responde HTTP 404. `?estado=error` muestra el error de demostración del detalle.
-- `src/components/loading-state.tsx` comparte la presentación accesible de carga, error y vacío; las fronteras de ruta atienden esperas o fallos inesperados.
-- `docs/rendering-decision.md` explica la elección, los límites de datos, la accesibilidad y el método de medición. `npm run measure:rendering` requiere una build previa y registra cinco muestras HTTP por ruta; no mide la hidratación ni el tiempo hasta mostrar datos CSR.
+- `/inspecciones` gestiona en cliente la carga de la colección sintética, búsqueda y filtros. Next.js prerenderiza el estado de carga inicial en HTML; no confundir ese HTML inicial con los registros, que aparecen tras la transición de cliente. `?estado=cargando`, `?estado=error` y `?estado=vacio` permiten inspeccionar estados de demostración.
+- `/inspecciones/[id]` declara `dynamic = "force-dynamic"` y resuelve los datos sintéticos en servidor para incluirlos en el HTML. Un ID desconocido responde HTTP 404; `?estado=error` muestra el estado de error de demostración. `src/app/inspecciones/loading.tsx` y `src/app/inspecciones/[id]/loading.tsx` presentan carga, y la ruta detalle tiene `error.tsx` para fallos inesperados.
+- `tests/rendering.spec.ts` comprueba estados accesibles, contenido HTML, filtros, consistencia de registros y 404. En el `package.json` actual no está encadenada en `npm test`; puede ejecutarse directamente con `node tests/rendering.spec.ts`.
+- `npm run measure:rendering` requiere una build previa y registra tiempos HTTP y tamaño HTML para listado y detalle; no mide hidratación ni tiempo hasta mostrar datos CSR. `docs/rendering-decision.md` documenta la decisión, sus supuestos, límites y validación.
 
 ## Decisiones y trade-offs
 
