@@ -184,3 +184,5 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Cambio que puedo defender o modificar en vivo: ______________________________________________________.
 - Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): _________________
   ____________________________________________________________________________________________________.
+
+
