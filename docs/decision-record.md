@@ -61,7 +61,7 @@ Riesgos técnicos y mitigaciones:
 
 - Riesgo: comportamiento distinto entre navegadores. Mitigación: probar la instalación y el offline en al menos dos navegadores cuando se implementen esas capacidades (semanas posteriores).
 - Riesgo: que el service worker sirva contenido viejo. Mitigación: estrategia de versionado de caché con limpieza al actualizar, y pruebas de actualización.
-- Riesgo: complejidad de sincronización con conectividad intermitente. Mitigación: cola de registros pendientes con identificación única y resolución de conflictos por fecha, documentada antes de implementarse (RF-08).
+- Riesgo: complejidad de sincronización con conectividad intermitente. Mitigación: cola local con UUID de operación, idempotencia y control de versiones; la revisión del ADR-002 reemplaza la resolución por fecha (RF-08).
 
 ## Validación
 
@@ -81,6 +81,8 @@ No se afirma haber validado sincronización, permisos u offline: esas capacidade
 Documento del equipo **9B-E02**. Previo al diseño de UI/UX (RF-09 a RF-90).
 
 ## Estado
+
+Aceptada para el MVP — 2026-09-28. Revisión de permisos y conflictos acordada para la implementación del backend.
 
 ## Contexto y restricciones
 
@@ -130,18 +132,26 @@ Adoptar **hallazgo como entidad de primera clase**, separada de la inspección:
   (`draft` / `completed`) se almacena. Un solo estado no mezcla flujo con resultado.
 - Operación offline-first: IDs UUID generados en el dispositivo; persistencia local en
   IndexedDB (`inspections`, `findings`, `syncQueue`); la cola sincroniza por entidad.
-- Política de conflictos mínima por `updatedAt` (LWW) con casos explícitos:
-  registro nuevo local → crear; sin cambios → no hacer nada; local más reciente →
-  actualizar servidor; servidor más reciente → actualizar local o solicitar resolución;
-  ambos modificados → conflicto. Límite conocido: comparación de relojes; se documenta
-  como política simple y revisable, adecuada al alcance académico.
-- Matriz de permisos por rol definida y aprobada antes de la navegación (técnico crea/
-  edita borradores; coordinación consulta, asigna prioridad y actualiza seguimiento;
-  una inspección finalizada no altera su evidencia original).
+- Control optimista de concurrencia por `version` incremental del servidor. Cada edición
+  envía `baseVersion`; una diferencia devuelve 409 y conserva copia local, copia remota
+  y operación fallida. `updatedAt` sirve para auditoría, no para LWW ni para decidir
+  por el reloj del dispositivo. La resolución mínima es explícita: "Mantener la mía"
+  reaplica el cambio sobre una versión vigente si la entidad sigue editable, o copia
+  la captura a un borrador nuevo; "Usar la del servidor" conserva una copia local
+  recuperable. No se sobrescribe ni fusiona silenciosamente.
+- El técnico crea y edita solo sus borradores y hallazgos. Puede asignar prioridad
+  inicial, con `medium` por defecto. Coordinación consulta solo inspecciones
+  finalizadas y actualiza prioridad y seguimiento, sin modificar la captura original.
+  El seguimiento permite únicamente `pending → in_review → resolved`, sin saltos ni
+  reapertura. Una inspección finalizada no se reabre.
+- El backend del MVP usa Next.js Route Handlers + Supabase PostgreSQL/Auth/RLS; el
+  dispositivo conserva borradores y cola en IndexedDB. UUID de entidad y operación
+  se generan en cliente. El servidor registra la operación y su receipt en una sola
+  transacción para que los reintentos no dupliquen datos. La sincronización se intenta
+  con la aplicación abierta; no se garantiza con la aplicación cerrada.
 
-Quedan **pendientes de cierre en la Fase 1** del plan antes de la UI (no se deciden aquí):
-transiciones permitidas del seguimiento (¿reabrir `resolved`? ¿saltos directos?) y si el
-técnico puede asignar prioridad inicial u "opcional".
+Estas reglas cierran para el MVP las transiciones, la prioridad inicial, la visibilidad
+por rol y la estrategia de conflictos. Se comprobarán con dos cuentas sintéticas.
 
 ## Consecuencias y riesgos
 
@@ -161,10 +171,16 @@ Costos:
 
 Riesgos y mitigaciones:
 
-- Riesgo: LWW por `updatedAt` con relojes de dispositivo imprecisos. Mitigación: documentar
-  la política simple, definir tiebreaker y limitar edición concurrente en el alcance académico.
+- Riesgo: dos cambios concurrentes o una respuesta perdida. Mitigación: `version`
+  incremental, 409 con ambas copias conservadas, UUID de operación y receipt
+  transaccional. Probar reintentos y permisos directamente con cuentas normales.
 - Riesgo: requisitos desactualizados respecto del modelo (Fase 9 del plan). Mitigación:
   actualizar `docs/requirements.md` con hallazgo-entidad, prioridad, seguimiento, estados,
   permisos y conflictos — o referenciar este ADR — antes de iniciar UI/UX.
 - Riesgo: que la UI se diseñe alrededor de estados no contemplados. Mitigación: checklist de
   salida (criterios de §13 del plan) antes de diseño visual definitivo.
+
+
+## Alcance de validación del MVP (2026-09-28)
+
+La entrega se prueba en navegadores de escritorio sobre Windows, macOS y Linux. La interfaz sigue siendo responsive, pero la validación móvil no bloquea este MVP escolar. El recorrido mínimo es: iniciar sesión como técnico, crear inspección y hallazgos, recargar offline, finalizar, sincronizar sin duplicados y revisar el resultado como coordinación. Filtros avanzados, fotos, Realtime, reapertura y trabajo garantizado con la app cerrada quedan pos-MVP. Esta sección documenta la decisión; no afirma que el backend ya esté implementado.

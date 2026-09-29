@@ -22,9 +22,9 @@ export function InspectionFinalizationDialog({ open, submitting = false, error =
   const medium = findings.filter((finding) => finding.priority === "medium").length;
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className={s.content} onPointerDownOutside={(event) => submitting && event.preventDefault()} onEscapeKeyDown={(event) => submitting && event.preventDefault()}>
     <div className={s.header}><span className={s.headerIcon}><FileCheck2 className={s.icon} aria-hidden="true" /></span><div><p className={s.eyebrow}>Acción de cierre irrevocable</p><DialogTitle className={s.title}>Finalizar inspección</DialogTitle></div></div>
-    <DialogDescription className={s.description}>La inspección de la sala de cómputo quedará cerrada como documento definitivo.</DialogDescription>
+    <DialogDescription className={s.description}>La inspección de {laboratory} quedará cerrada como documento definitivo.</DialogDescription>
     <dl className={s.summary}><div className={s.summaryRow}><dt className={s.summaryLabel}>Identificador:</dt><dd className={s.folio}>#{folio} ({laboratory})</dd></div><div className={s.summaryRow}><dt className={s.summaryLabel}>Hallazgos levantados:</dt><dd className={s.summaryValue}>{findings.length} ítems ({high} alta prioridad, {medium} media)</dd></div><div className={s.summaryRow}><dt className={s.summaryLabel}>Cola de transmisión:</dt><dd className={s.syncStatus}>{syncStatus === "pending" ? "Local IndexedDB -> Cloud Sync" : "Sincronizado"}</dd></div></dl>
-    <p className={s.notice}><Info className={s.noticeIcon} aria-hidden="true" />Una vez finalizada, requerirá privilegios de Coordinación para reapertura.</p>
+    <p className={s.notice}><Info className={s.noticeIcon} aria-hidden="true" />Una vez finalizada, no se podrá reabrir ni editar. Coordinación podrá actualizar la prioridad y el seguimiento de los hallazgos.</p>
     {error ? <p role="alert" className={s.error}>No fue posible finalizar la inspección. Intenta de nuevo.</p> : null}
     <div className={s.actions}><Button type="button" variant="outline" className={s.action} disabled={submitting} onClick={() => onOpenChange(false)}>Cancelar</Button><Button type="button" className={s.action} disabled={submitting} onClick={onConfirm}>{submitting ? "Finalizando..." : "Confirmar y finalizar"}</Button></div>
   </DialogContent></Dialog>;
