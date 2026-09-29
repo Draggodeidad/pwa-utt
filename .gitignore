@@ -8,3 +8,10 @@ coverage/
 reports/verification.json
 reports/rendering-metrics.json
 /PWA-w02-kit-estudiante.zip
+
+# Local AI-agent planning and technical context
+/BACKEND_ANALYSIS_REPORT.md
+/docs/Base de datos.md
+/docs/Stack tecnológico.md
+/docs/STATUS.md
+/docs/tasks/
