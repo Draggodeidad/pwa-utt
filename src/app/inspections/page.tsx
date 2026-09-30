@@ -1,14 +1,15 @@
 import { AppShell } from "@/components/app-shell";
-import { isRouteAllowedForRole, navigationSectionsByRole } from "@/config/navigation";
-import { requireServerSession } from "@/lib/auth/session-store";
-import { CoordinationInspectionsWorkspace, inspections, InspectionsWorkspace } from "@/features/inspections";
+import { navigationSectionsByRole } from "@/config/navigation";
+import { requireRole } from "@/lib/auth/guards";
+import { CoordinationInspectionsWorkspace, InspectionsWorkspace } from "@/features/inspections";
 import { createProfileForSession } from "@/features/profile";
-import { notFound } from "next/navigation";
+import { listVisibleInspections } from "@/lib/repositories/inspections";
+import { createComponentSupabaseClient } from "@/lib/supabase/server";
 
 export default async function InspectionsPage() {
-  const { user } = await requireServerSession();
+  const { user } = await requireRole(["technician", "coordinator"]);
   const role = user.role;
-  if (!isRouteAllowedForRole(role, "/inspections")) notFound();
+  const inspections = await listVisibleInspections(createComponentSupabaseClient());
 
   return (
     <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}>

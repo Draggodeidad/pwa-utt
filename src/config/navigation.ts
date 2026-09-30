@@ -31,7 +31,3 @@ export const navigationSectionsByRole: Record<UserRole, readonly AppShellNavigat
     { label: "Resumen", href: "/dashboard", icon: "summary" }, { label: "Inspecciones", href: "/inspections", icon: "inspections" }, { label: "Consultar inspecciones", href: "/inspecciones", icon: "inspections" }, { label: "Hallazgos", href: "/findings", icon: "findings" }, { label: "Perfil", href: "/profile", icon: "profile" }
   ] }]
 };
-
-export function isRouteAllowedForRole(role: UserRole, pathname: string) {
-  return navigationByRole[role].some((item) => item.href === pathname);
-}
