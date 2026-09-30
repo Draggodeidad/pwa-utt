@@ -20,6 +20,19 @@ export type LocalEntityRecord =
 
 type CatalogRecord = { id: "catalog"; ownerUserId: Uuid; laboratories: LaboratoryOption[] };
 type MetadataRecord = { name: string; value: string };
+type LeaseRecord = { token: string; expiresAt: number };
+
+export class LeaseLostError extends Error {
+  constructor() { super("Lease de sincronización vencido o reemplazado"); this.name = "LeaseLostError"; }
+}
+
+const leaseName = (owner: Uuid) => `syncLease:${owner}`;
+
+async function assertLease(store: IDBObjectStore, owner: Uuid, token: string, now: number): Promise<void> {
+  const record = await requestToPromise<MetadataRecord | undefined>(store.get(leaseName(owner)));
+  const lease = record ? JSON.parse(record.value) as LeaseRecord : null;
+  if (!lease || lease.token !== token || lease.expiresAt <= now) throw new LeaseLostError();
+}
 
 function announceQueueChange(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("pwa-utt:queue-changed"));
@@ -71,6 +84,44 @@ export class LocalStorage {
     return runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
       await requestToPromise(stores.metadata.put({ name, value }));
     });
+  }
+
+  /** A readwrite metadata transaction serializes contenders across tabs. */
+  async acquireLease(owner: Uuid, now: number, durationMs: number): Promise<string | null> {
+    requireOwner(owner);
+    return runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
+      const name = leaseName(owner);
+      const record = await requestToPromise<MetadataRecord | undefined>(stores.metadata.get(name));
+      const current = record ? JSON.parse(record.value) as LeaseRecord : null;
+      if (current && current.expiresAt > now) return null;
+      const token = crypto.randomUUID();
+      await requestToPromise(stores.metadata.put({ name, value: JSON.stringify({ token, expiresAt: now + durationMs }) }));
+      return token;
+    });
+  }
+
+  async renewLease(owner: Uuid, token: string, now: number, durationMs: number): Promise<void> {
+    requireOwner(owner);
+    await runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
+      await assertLease(stores.metadata, owner, token, now);
+      await requestToPromise(stores.metadata.put({ name: leaseName(owner), value: JSON.stringify({ token, expiresAt: now + durationMs }) }));
+    });
+  }
+
+  async releaseLease(owner: Uuid, token: string): Promise<void> {
+    requireOwner(owner);
+    await runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
+      const record = await requestToPromise<MetadataRecord | undefined>(stores.metadata.get(leaseName(owner)));
+      if (record && (JSON.parse(record.value) as LeaseRecord).token === token) {
+        await requestToPromise(stores.metadata.delete(leaseName(owner)));
+      }
+    });
+  }
+
+  async leaseExpiresAt(owner: Uuid): Promise<number | null> {
+    requireOwner(owner);
+    const record = await this.readMetadata(leaseName(owner));
+    return record ? (JSON.parse(record) as LeaseRecord).expiresAt : null;
   }
 
   async saveInspection(owner: Uuid, inspection: LocalInspection): Promise<void> {
@@ -275,9 +326,10 @@ export class LocalStorage {
   }
 
   /** Freezes the complete request before HTTP; a later edit never changes its key or body. */
-  async prepareSend(owner: Uuid, operationId: string, clientId: Uuid): Promise<SyncQueueItem | null> {
+  async prepareSend(owner: Uuid, operationId: string, clientId: Uuid, leaseToken?: string, now = Date.now()): Promise<SyncQueueItem | null> {
     requireOwner(owner);
-    return runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local"], "readwrite", async (stores) => {
+    return runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+      if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const item = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
       if (!item || item.ownerUserId !== owner) return null;
       const store = item.entity === "inspection" ? stores.inspection_local : stores.finding_local;
@@ -298,10 +350,11 @@ export class LocalStorage {
   }
 
   /** Applies the ACK and dependent version chain in one committed transaction. */
-  async acknowledge(owner: Uuid, sent: SyncQueueItem, ack: OperationAcknowledgement): Promise<void> {
+  async acknowledge(owner: Uuid, sent: SyncQueueItem, ack: OperationAcknowledgement, leaseToken?: string, now = Date.now()): Promise<void> {
     requireOwner(owner);
     if (sent.ownerUserId !== owner || ack.operationId !== sent.operationId || ack.entityId !== sent.entityId || ack.entityType !== sent.entity || !Number.isSafeInteger(ack.version) || ack.version < 1 || typeof ack.appliedAt !== "string") throw new Error("ACK incompatible");
-    await runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local"], "readwrite", async (stores) => {
+    await runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+      if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const queued = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
       if (!queued || queued.ownerUserId !== owner || !queued.frozenRequest || JSON.stringify(queued.frozenRequest) !== JSON.stringify(sent.frozenRequest)) throw new PartitionRequiredError();
       const store = sent.entity === "inspection" ? stores.inspection_local : stores.finding_local;
@@ -333,12 +386,13 @@ export class LocalStorage {
     });
   }
 
-  async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError): Promise<void> {
+  async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError, nextAttemptAt: string | null = null, leaseToken?: string, now = Date.now(), retryExhausted = false): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["sync_queue"], "readwrite", async (stores) => {
+    await runTransaction(this.db, ["sync_queue", "metadata"], "readwrite", async (stores) => {
+      if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const current = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
       if (!current || current.ownerUserId !== owner) return;
-      await requestToPromise(stores.sync_queue.put({ ...current, status: "error", lastError: error }));
+      await requestToPromise(stores.sync_queue.put({ ...current, status: "error", nextAttemptAt, lastError: error, retryExhausted }));
     });
   }
 }

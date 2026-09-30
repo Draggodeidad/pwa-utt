@@ -32,10 +32,12 @@ export function SessionMemory() {
     run();
     window.addEventListener("online", run);
     window.addEventListener("pwa-utt:queue-changed", run);
+    window.addEventListener("pwa-utt:sync-now", run);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.removeEventListener("online", run);
       window.removeEventListener("pwa-utt:queue-changed", run);
+      window.removeEventListener("pwa-utt:sync-now", run);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);

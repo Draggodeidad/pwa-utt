@@ -3,12 +3,14 @@ import type { DomainOperationError } from "@/features/sync/types";
 export class ApiClientError extends Error {
   readonly status: number;
   readonly payload: DomainOperationError;
+  readonly retryAfterMs: number | null;
 
-  constructor(status: number, payload: DomainOperationError) {
+  constructor(status: number, payload: DomainOperationError, retryAfterMs: number | null = null) {
     super(payload.message);
     this.name = "ApiClientError";
     this.status = status;
     this.payload = payload;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
