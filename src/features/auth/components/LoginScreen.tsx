@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { establishLocalSession, sessionEpoch } from "@/lib/pwa/offline-session";
 
 type LoginStatus = "idle" | "loading" | "error";
 type LoginFormValues = { identifier: string; password: string };
@@ -45,6 +46,7 @@ export function LoginScreen() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("loading");
+    const epoch = sessionEpoch();
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -54,7 +56,9 @@ export function LoginScreen() {
         body: JSON.stringify({ email: values.identifier, password: values.password }),
       });
       if (!response.ok) throw new Error("Acceso no concedido");
-      const session = await response.json() as { user: { role: "technician" | "coordinator" } };
+      const session = await response.json() as { user: { id: string; displayName: string; role: "technician" | "coordinator" } };
+      if (sessionEpoch() !== epoch) throw new Error("La sesión cambió durante el acceso");
+      establishLocalSession({ userId: session.user.id, displayName: session.user.displayName });
       setValues(initialValues);
       router.replace(session.user.role === "coordinator" ? "/dashboard" : "/");
       router.refresh();

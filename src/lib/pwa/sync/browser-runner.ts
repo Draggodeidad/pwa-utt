@@ -1,10 +1,16 @@
 import { HttpClient } from "../../api/http-client";
 import { LocalStorage } from "../offline-storage";
 import { runQueue } from "./runner";
+import { completeRemoteLogout, isRemoteLogoutPending, isSessionBlocked, isSessionCurrent, sessionEpoch } from "../offline-session";
 
 let running = false;
 let requested = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function pauseBrowserQueue(): void {
+  requested = false;
+  scheduleRetry(null);
+}
 
 function scheduleRetry(at: number | null): void {
   if (retryTimer) clearTimeout(retryTimer);
@@ -14,32 +20,46 @@ function scheduleRetry(at: number | null): void {
   }, Math.max(0, at - Date.now()));
 }
 
-async function verifiedOwner(): Promise<string | null> {
+async function verifiedOwner(epoch: string): Promise<string | null> {
+  if (!isSessionCurrent(epoch)) return null;
   try {
     const response = await fetch("/api/session", { cache: "no-store", credentials: "same-origin" });
+    if (!isSessionCurrent(epoch)) return null;
     if (!response.ok) return null;
     const body = await response.json() as { user?: { id?: string } };
-    return body.user?.id ?? null;
+    return isSessionCurrent(epoch, body.user?.id) ? body.user?.id ?? null : null;
   } catch {
     return null;
   }
 }
 
+async function reconcileLogout(): Promise<void> {
+  if (!isRemoteLogoutPending()) return;
+  const epoch = sessionEpoch();
+  try {
+    const response = await fetch("/api/auth/logout", { method: "POST", cache: "no-store", credentials: "same-origin" });
+    if (response.status === 204) completeRemoteLogout(epoch);
+  } catch { /* remain blocked until a later online attempt or fresh login */ }
+}
+
 /** Open-app transport with a durable per-account lease and scheduled retries. */
 export async function runBrowserQueue(): Promise<void> {
+  if (isSessionBlocked()) { scheduleRetry(null); await reconcileLogout(); return; }
   if (running) { requested = true; return; }
   running = true;
   try {
     do {
       requested = false;
-      const owner = await verifiedOwner();
+      const epoch = sessionEpoch();
+      const owner = await verifiedOwner(epoch);
       if (!owner) { scheduleRetry(null); return; }
       const storage = await LocalStorage.open();
       try {
         await runQueue(storage, owner, {
           client: new HttpClient(),
-          verifyOwner: async (expected) => await verifiedOwner() === expected,
+          verifyOwner: async (expected) => isSessionCurrent(epoch, expected) && await verifiedOwner(epoch) === expected,
         });
+        if (!isSessionCurrent(epoch, owner)) { scheduleRetry(null); return; }
         const pending = await storage.listQueue(owner);
         const next = pending.flatMap((item) => item.nextAttemptAt ? [Date.parse(item.nextAttemptAt)] : []);
         const leaseExpiry = await storage.leaseExpiresAt(owner);

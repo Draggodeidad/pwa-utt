@@ -7,6 +7,11 @@ import { createRequestSupabaseClient } from "@/lib/supabase/server";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (pathname === "/login") return NextResponse.next();
+  if (request.cookies.get("pwa-utt-logout-blocked")?.value === "1") {
+    const response = NextResponse.redirect(new URL("/login", request.url));
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
   const auth = createRequestSupabaseClient(request);
   const session = await readSession(auth.client);
   if (!session) return auth.withCookies(NextResponse.redirect(new URL("/login", request.url)));

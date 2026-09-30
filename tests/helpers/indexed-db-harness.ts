@@ -225,6 +225,11 @@ function createIndexedDbHarness() {
 
   return {
     indexedDB: { open: openDatabase },
+    snapshot(name) {
+      const state = databases.get(name);
+      if (!state) return {};
+      return Object.fromEntries([...state.stores].map(([storeName, rows]) => [storeName, [...rows.values()].map(clone)]));
+    },
     failNextPut(storeName, error) {
       pendingPutError = { storeName, error };
     },

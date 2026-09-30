@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getConnectivityState } from "@/lib/pwa/connectivity";
+import { isSessionCurrent, sessionEpoch } from "@/lib/pwa/offline-session";
 import { initialLastSyncAt, initialSyncQueue } from "../data/sync-queue";
 import type { SyncQueueRecord, SyncViewState } from "../types";
 
@@ -21,11 +22,22 @@ export function useSyncWorkspace() {
   queueRef.current = queue;
 
   const schedule = (callback: () => void, delay: number) => {
-    const timeoutId = window.setTimeout(callback, delay);
+    const epoch = sessionEpoch();
+    const timeoutId = window.setTimeout(() => { if (isSessionCurrent(epoch)) callback(); }, delay);
     timeoutIds.current.push(timeoutId);
   };
 
   useEffect(() => {
+    const epoch = sessionEpoch();
+    const lock = () => {
+      if (!isSessionCurrent(epoch)) {
+        timeoutIds.current.forEach((id) => window.clearTimeout(id));
+        setQueue([]);
+        setProgress(0);
+        setLastSyncAt("");
+        setState("empty");
+      }
+    };
     const updateConnectivity = () => {
       if (getConnectivityState() === "offline") {
         setState("offline");
@@ -40,10 +52,14 @@ export function useSyncWorkspace() {
 
     window.addEventListener("online", updateConnectivity);
     window.addEventListener("offline", updateConnectivity);
+    window.addEventListener("pwa-utt:session-changed", lock);
+    window.addEventListener("storage", lock);
     return () => {
       window.clearTimeout(initialize);
       window.removeEventListener("online", updateConnectivity);
       window.removeEventListener("offline", updateConnectivity);
+      window.removeEventListener("pwa-utt:session-changed", lock);
+      window.removeEventListener("storage", lock);
       timeoutIds.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
   }, []);
@@ -57,7 +73,7 @@ export function useSyncWorkspace() {
   };
 
   const syncNow = () => {
-    if (state === "offline" || state === "syncing" || queue.length === 0) return;
+    if (!isSessionCurrent(sessionEpoch()) || state === "offline" || state === "syncing" || queue.length === 0) return;
 
     window.dispatchEvent(new Event("pwa-utt:sync-now"));
     setState("syncing");
@@ -69,7 +85,7 @@ export function useSyncWorkspace() {
   };
 
   const retry = (id: string) => {
-    if (state === "offline" || state === "syncing") return;
+    if (!isSessionCurrent(sessionEpoch()) || state === "offline" || state === "syncing") return;
 
     const remainingQueue = queue.filter((record) => record.id !== id);
     setState("syncing");
