@@ -96,7 +96,9 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
       const current = valuesRef.current;
       const existing = await storage.getInspection(owner, inspectionId);
       const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
-      const findings = current.findings.map((finding) => toLocalFinding(finding.id, inspectionId, finding, owner, finding.version ?? null, null));
+      const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
+        finding.id, inspectionId, finding, owner, finding.version ?? null, await storage.getFinding(owner, finding.id)
+      )));
       await saveDraft(owner, storage, { owner, inspection, findings, removedFindings: removedRef.current });
       removedRef.current = [];
       setValues((currentValues) => ({ ...currentValues, syncStatus: "local" }));
@@ -146,7 +148,9 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
       const current = valuesRef.current;
       const existing = await storage.getInspection(owner, inspectionId);
       const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
-      const findings = current.findings.map((finding) => toLocalFinding(finding.id, inspectionId, finding, owner, finding.version ?? null, null));
+      const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
+        finding.id, inspectionId, finding, owner, finding.version ?? null, await storage.getFinding(owner, finding.id)
+      )));
       await finalizeDraft(owner, storage, {
         owner,
         inspection,

@@ -15,6 +15,7 @@ export type DraftCapture = {
 
 export type FindingsCapture = {
   owner: Uuid;
+  inspectionId?: string;
   findings: readonly LocalFinding[];
   removedFindings: readonly RemovedFindingRef[];
 };
@@ -25,6 +26,7 @@ export function createIntent(input: {
   owner: Uuid;
   entity: SyncEntityKind;
   entityId: string;
+  parentEntityId?: string;
   operation: DomainOperationKind;
   payload: Record<string, unknown>;
   baseVersion: number | null;
@@ -36,6 +38,7 @@ export function createIntent(input: {
     ownerUserId: input.owner,
     entity: input.entity,
     entityId: input.entityId,
+    ...(input.parentEntityId ? { parentEntityId: input.parentEntityId } : {}),
     operation: input.operation,
     payload: input.payload,
     baseVersion: input.baseVersion,
@@ -56,10 +59,19 @@ function draftPayload(inspection: LocalInspection): Record<string, unknown> {
   return payload;
 }
 
-function buildCaptureIntents(draft: DraftCapture): SyncQueueItem[] {
+function lastForEntity(queue: readonly SyncQueueItem[], entityId: string): SyncQueueItem | undefined {
+  return queue.filter((item) => item.entityId === entityId).at(-1);
+}
+
+function nextOrder(queue: readonly SyncQueueItem[]): number {
+  return Math.max(0, ...queue.map((item) => item.localOrder)) + 1;
+}
+
+function buildCaptureIntents(draft: DraftCapture, queue: readonly SyncQueueItem[]): SyncQueueItem[] {
   const intents: SyncQueueItem[] = [];
-  const inspectionCreate = draft.inspection.baseVersion === null;
-  let order = 1;
+  const precedingInspection = lastForEntity(queue, draft.inspection.id);
+  const inspectionCreate = draft.inspection.baseVersion === null && !precedingInspection;
+  let order = nextOrder(queue);
   const inspectionIntent = createIntent({
     owner: draft.owner,
     entity: "inspection",
@@ -67,40 +79,46 @@ function buildCaptureIntents(draft: DraftCapture): SyncQueueItem[] {
     operation: inspectionCreate ? "inspection.create" : "inspection.update",
     payload: draftPayload(draft.inspection),
     baseVersion: draft.inspection.baseVersion,
-    dependsOn: [],
+    dependsOn: precedingInspection ? [precedingInspection.operationId] : [],
     localOrder: order++,
   });
   intents.push(inspectionIntent);
-  for (const intent of buildFindingIntents(draft, inspectionIntent.operationId, order)) intents.push(intent);
+  for (const intent of buildFindingIntents({ ...draft, inspectionId: draft.inspection.id }, inspectionIntent.operationId, order, [...queue, inspectionIntent])) intents.push(intent);
   return intents;
 }
 
-function buildFindingIntents(capture: FindingsCapture, inspectionIntentId: string | null, startOrder: number): SyncQueueItem[] {
+function buildFindingIntents(capture: FindingsCapture, inspectionIntentId: string | null, startOrder: number, queue: readonly SyncQueueItem[]): SyncQueueItem[] {
   const intents: SyncQueueItem[] = [];
   let order = startOrder;
   for (const finding of capture.findings) {
-    const isCreate = finding.baseVersion === null;
+    const preceding = lastForEntity([...queue, ...intents], finding.id);
+    const isCreate = finding.baseVersion === null && !preceding;
     intents.push(createIntent({
       owner: capture.owner,
       entity: "finding",
       entityId: finding.id,
+      parentEntityId: finding.inspectionId,
       operation: isCreate ? "finding.create" : "finding.update",
-      payload: { title: finding.title, description: finding.description, priority: finding.priority },
+      payload: isCreate
+        ? { inspectionId: finding.inspectionId, title: finding.title, description: finding.description, priority: finding.priority }
+        : { title: finding.title, description: finding.description, priority: finding.priority },
       baseVersion: finding.baseVersion,
-      dependsOn: isCreate && inspectionIntentId ? [inspectionIntentId] : [],
+      dependsOn: [...(preceding ? [preceding.operationId] : []), ...(inspectionIntentId ? [inspectionIntentId] : [])],
       localOrder: order++,
     }));
   }
   for (const removed of capture.removedFindings) {
-    if (removed.baseVersion === null) continue;
+    const preceding = lastForEntity([...queue, ...intents], removed.id);
+    if (removed.baseVersion === null && !preceding?.frozenRequest) continue;
     intents.push(createIntent({
       owner: capture.owner,
       entity: "finding",
       entityId: removed.id,
+      parentEntityId: capture.inspectionId ?? capture.findings[0]?.inspectionId,
       operation: "finding.delete",
       payload: {},
       baseVersion: removed.baseVersion,
-      dependsOn: [],
+      dependsOn: preceding ? [preceding.operationId] : [],
       localOrder: order++,
     }));
   }
@@ -113,24 +131,28 @@ export async function saveDraft(owner: Uuid, storage: LocalStorage, draft: Draft
     { store: "inspection_local", value: draft.inspection },
     ...draft.findings.map((finding) => ({ store: "finding_local" as const, value: finding })),
   ];
-  const intents = buildCaptureIntents(draft);
-  await storage.saveCapture(owner, records, intents);
+  const intents = buildCaptureIntents(draft, await storage.listQueue(owner));
+  await storage.saveCapture(owner, records, intents, draft.removedFindings);
   return intents;
 }
 
 /** Persists findings and their intents without touching the inspection (detail-only edits). */
 export async function saveFindings(owner: Uuid, storage: LocalStorage, capture: FindingsCapture): Promise<SyncQueueItem[]> {
   const records: LocalEntityRecord[] = capture.findings.map((finding) => ({ store: "finding_local" as const, value: finding }));
-  const intents = buildFindingIntents(capture, null, 1);
-  await storage.saveCapture(owner, records, intents);
+  const queue = await storage.listQueue(owner);
+  const parentId = capture.inspectionId ?? capture.findings[0]?.inspectionId;
+  const parentIntent = parentId ? lastForEntity(queue, parentId) : undefined;
+  const intents = buildFindingIntents(capture, parentIntent?.operationId ?? null, nextOrder(queue), queue);
+  await storage.saveCapture(owner, records, intents, capture.removedFindings);
   return intents;
 }
 
 /** Appends a finalize intent ordered after the inspection's pending intents. */
 export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, input: { inspectionId: string; baseVersion: number | null; expectedFindingIds: readonly string[] }): Promise<SyncQueueItem> {
   const queue = await storage.listQueue(owner);
-  const related = queue.filter((item) => item.entityId === input.inspectionId);
-  const lastOrder = related.length ? Math.max(...related.map((item) => item.localOrder)) : 0;
+  const findings = await storage.listFindings(owner, input.inspectionId);
+  const findingIds = new Set([...findings.map((finding) => finding.id), ...input.expectedFindingIds]);
+  const dependencies = queue.filter((item) => item.entityId === input.inspectionId || item.parentEntityId === input.inspectionId || findingIds.has(item.entityId));
   const intent = createIntent({
     owner,
     entity: "inspection",
@@ -138,8 +160,8 @@ export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, 
     operation: "inspection.finalize",
     payload: { expectedFindingIds: [...input.expectedFindingIds] },
     baseVersion: input.baseVersion,
-    dependsOn: related.length ? [related[related.length - 1].operationId] : [],
-    localOrder: lastOrder + 1,
+    dependsOn: dependencies.map((item) => item.operationId),
+    localOrder: nextOrder(queue),
   });
   await storage.enqueue(owner, intent);
   const existing = await storage.getInspection(owner, input.inspectionId);
@@ -156,7 +178,8 @@ export async function finalizeDraft(owner: Uuid, storage: LocalStorage, capture:
     { store: "inspection_local", value: inspection },
     ...capture.findings.map((finding) => ({ store: "finding_local" as const, value: finding })),
   ];
-  const intents = buildCaptureIntents({ ...capture, inspection });
+  const existingQueue = await storage.listQueue(owner);
+  const intents = buildCaptureIntents({ ...capture, inspection }, existingQueue);
   const finalizeIntent = createIntent({
     owner,
     entity: "inspection",
@@ -164,10 +187,12 @@ export async function finalizeDraft(owner: Uuid, storage: LocalStorage, capture:
     operation: "inspection.finalize",
     payload: { expectedFindingIds: [...capture.expectedFindingIds] },
     baseVersion: inspection.baseVersion,
-    dependsOn: intents.map((intent) => intent.operationId),
-    localOrder: intents.length + 1,
+    dependsOn: [...existingQueue, ...intents].filter((item) =>
+      item.entityId === inspection.id || item.parentEntityId === inspection.id || capture.findings.some((finding) => finding.id === item.entityId) || capture.removedFindings.some((finding) => finding.id === item.entityId)
+    ).map((item) => item.operationId),
+    localOrder: nextOrder([...existingQueue, ...intents]),
   });
-  await storage.saveCapture(owner, records, [...intents, finalizeIntent]);
+  await storage.saveCapture(owner, records, [...intents, finalizeIntent], capture.removedFindings);
   return finalizeIntent;
 }
 
@@ -175,13 +200,12 @@ export async function finalizeDraft(owner: Uuid, storage: LocalStorage, capture:
 export async function discardDraft(owner: Uuid, storage: LocalStorage, inspectionId: string): Promise<void> {
   const inspection = await storage.getInspection(owner, inspectionId);
   if (!inspection || inspection.deletedAt !== null) return;
-  if (inspection.baseVersion === null) {
+  const queue = await storage.listQueue(owner);
+  const related = queue.filter((item) => item.entityId === inspectionId || item.parentEntityId === inspectionId);
+  if (inspection.baseVersion === null && !related.some((item) => item.frozenRequest)) {
     await storage.removeCapture(owner, inspectionId);
     return;
   }
-  const queue = await storage.listQueue(owner);
-  const related = queue.filter((item) => item.entityId === inspectionId);
-  const lastOrder = related.length ? Math.max(...related.map((item) => item.localOrder)) : 0;
   const discardIntent = createIntent({
     owner,
     entity: "inspection",
@@ -189,8 +213,8 @@ export async function discardDraft(owner: Uuid, storage: LocalStorage, inspectio
     operation: "inspection.discard",
     payload: {},
     baseVersion: inspection.baseVersion,
-    dependsOn: related.length ? [related[related.length - 1].operationId] : [],
-    localOrder: lastOrder + 1,
+    dependsOn: related.map((item) => item.operationId),
+    localOrder: nextOrder(queue),
   });
   const tombstone: LocalInspection = {
     ...inspection,
@@ -259,7 +283,7 @@ export function toLocalInspectionListItem(local: LocalInspection, findingCount: 
 /** Builds a durable local inspection from editor values, preserving server fields. */
 export function toLocalInspection(
   id: string,
-  values: Pick<InspectionEditorValues, "laboratoryCode" | "date" | "summary" | "syncStatus">,
+  values: Pick<InspectionEditorValues, "laboratoryCode" | "date" | "summary" | "syncStatus" | "version">,
   owner: Uuid,
   catalog: readonly LaboratoryOption[],
   existing: LocalInspection | null
@@ -277,12 +301,12 @@ export function toLocalInspection(
     updatedBy: owner,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-    version: existing?.version ?? 0,
+    version: existing?.version ?? values.version ?? 0,
     completedAt: existing?.completedAt ?? null,
     deletedAt: existing?.deletedAt ?? null,
     ownerUserId: owner,
     localRevision: (existing?.localRevision ?? 0) + 1,
-    baseVersion: existing?.baseVersion ?? null,
+    baseVersion: existing ? existing.baseVersion : values.version ?? null,
     syncStatus: values.syncStatus ?? "local",
     localUpdatedAt: now,
   };
@@ -314,7 +338,7 @@ export function toLocalFinding(
     deletedAt: existing?.deletedAt ?? null,
     ownerUserId: owner,
     localRevision: (existing?.localRevision ?? 0) + 1,
-    baseVersion: existing?.baseVersion ?? baseVersion,
+    baseVersion: existing ? existing.baseVersion : baseVersion,
     syncStatus: "local",
     localUpdatedAt: now,
   };

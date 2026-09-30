@@ -8,7 +8,6 @@ import {
   loadLocalDraft,
   saveFindings,
   toLocalFinding,
-  type RemovedFindingRef,
 } from "../services/local-capture";
 import type { InspectionDetail, InspectionFinding } from "../types";
 import type { Uuid } from "@/types/entity";
@@ -27,7 +26,6 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
   const [storage, setStorage] = useState<LocalStorage | null>(null);
   const [inspection, setInspection] = useState(initialInspection);
   const [findings, setFindings] = useState<readonly InspectionFinding[]>(() => [...initialInspection.findings]);
-  const [removed, setRemoved] = useState<readonly RemovedFindingRef[]>([]);
   const [state, setState] = useState<InspectionFinalizationState>(initialInspection.workflowStatus === "completed" ? "finalized" : "draft");
   const [error, setError] = useState<string | null>(null);
   const [finalizationPending, setFinalizationPending] = useState(false);
@@ -67,15 +65,17 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
     if (!finding) return;
     const remaining = findings.filter((item) => item.id !== id);
     if (storage) {
-      const findingsLocal = remaining.map((item) => toLocalFinding(item.id, inspection.id, item, owner, item.version ?? null, null));
+      const findingsLocal = await Promise.all(remaining.map(async (item) => toLocalFinding(
+        item.id, inspection.id, item, owner, item.version ?? null, await storage.getFinding(owner, item.id)
+      )));
       await saveFindings(owner, storage, {
         owner,
+        inspectionId: inspection.id,
         findings: findingsLocal,
         removedFindings: [{ id, baseVersion: finding.version ?? null }],
       });
     }
     setFindings(remaining);
-    setRemoved((current) => [...current, { id, baseVersion: finding.version ?? null }]);
     setError(null);
   }, [findings, inspection.id, owner, storage]);
 
@@ -83,14 +83,6 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
     setState("submitting");
     try {
       if (!storage) throw new Error("storage unavailable");
-      if (removed.length) {
-        const findingsLocal = findings.map((item) => toLocalFinding(item.id, inspection.id, item, owner, item.version ?? null, null));
-        await saveFindings(owner, storage, {
-          owner,
-          findings: findingsLocal,
-          removedFindings: removed,
-        });
-      }
       const existing = await storage.getInspection(owner, inspection.id);
       await enqueueFinalizeIntent(owner, storage, {
         inspectionId: inspection.id,
@@ -105,7 +97,7 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
       setError(readErrorMessage(failure));
       setState("error");
     }
-  }, [findings, removed, inspection.id, inspection.version, owner, storage]);
+  }, [findings, inspection.id, inspection.version, owner, storage]);
 
   return { inspection, findings, state, error, finalizationPending, openConfirmation, closeConfirmation, removeFinding, finalize };
 }

@@ -42,6 +42,7 @@ export type OperationAcknowledgement = {
   version: number;
   appliedAt: string;
   replayed: boolean;
+  folioNumber?: number;
 };
 
 export type DomainErrorCode =
@@ -71,6 +72,7 @@ export type SyncQueueItem = {
   ownerUserId: Uuid;
   entity: SyncEntityKind;
   entityId: Uuid;
+  parentEntityId?: Uuid;
   operation: DomainOperationKind;
   payload: DomainOperation["payload"];
   baseVersion: number | null;
@@ -81,6 +83,9 @@ export type SyncQueueItem = {
   lastError: DomainOperationError | null;
   createdAt: string;
   status: Extract<SyncStatus, "pending" | "syncing" | "error">;
+  /** Persisted before HTTP: retries must use these exact bytes and identity. */
+  frozenRequest?: DomainOperation;
+  sentRevision?: number | null;
 };
 
 /** Read model for the technician's local inspection queue. */

@@ -35,7 +35,7 @@ function mapRpcFailure(code: string | undefined, message: string): { domain: Dom
   }
 }
 
-type OperationRow = { version: number; updated_at: string };
+type OperationRow = { version: number; updated_at: string; folio_number?: number; __replayed?: boolean };
 
 /**
  * Shared remote write path. `apply_operation` is the only write entry point and
@@ -72,7 +72,8 @@ async function applyOperation(
     entityType,
     version: row.version,
     appliedAt: row.updated_at,
-    replayed: false,
+    replayed: row.__replayed === true,
+    ...(Number.isSafeInteger(row.folio_number) && (row.folio_number as number) > 0 ? { folioNumber: row.folio_number } : {}),
   };
 }
 

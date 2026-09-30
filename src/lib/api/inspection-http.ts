@@ -59,7 +59,7 @@ export async function runInspectionMutation(
       throw new DomainValidationError([{ path: "entityId", message: "must match the resource id" }]);
     }
     const acknowledgement = await applyInspectionOperation(auth.client, operationId, operation);
-    return { response: auth.withCookies(privateJson(acknowledgement, 201)) };
+    return { response: auth.withCookies(privateJson(acknowledgement, acknowledgement.replayed ? 200 : 201)) };
   } catch (error) {
     if (error instanceof DomainValidationError) {
       return {
