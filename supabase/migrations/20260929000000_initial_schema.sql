@@ -166,6 +166,8 @@ alter table public.operation_receipts enable row level security;
 
 revoke all on public.profiles, public.laboratories, public.inspections,
   public.findings, public.operation_receipts from public, anon, authenticated;
+revoke all on sequence public.inspections_folio_number_seq
+  from public, anon, authenticated;
 revoke all on function public.touch_record(), public.handle_new_user()
   from public, anon, authenticated;
 

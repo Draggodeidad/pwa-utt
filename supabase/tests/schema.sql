@@ -62,6 +62,10 @@ begin
   if has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE') then
     raise exception 'Signup trigger function is callable by authenticated';
   end if;
+  if has_sequence_privilege('anon', pg_get_serial_sequence('public.inspections','folio_number'), 'USAGE')
+    or has_sequence_privilege('authenticated', pg_get_serial_sequence('public.inspections','folio_number'), 'USAGE') then
+    raise exception 'App role can advance the server folio sequence';
+  end if;
 
   -- Auth metadata must never elevate a profile. This row is transaction-local.
   insert into auth.users (id, raw_user_meta_data)
