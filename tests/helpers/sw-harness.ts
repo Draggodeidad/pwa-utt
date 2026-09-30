@@ -82,6 +82,11 @@ class MockResponse {
     return copy;
   }
 
+  async json() {
+    if (typeof this.body === "string") return JSON.parse(this.body);
+    return this.body;
+  }
+
   static error() {
     const err = new MockResponse(null, { status: 0, statusText: "" });
     err.ok = false;
@@ -219,6 +224,11 @@ function createSWHarness(options = {}) {
   };
 
   const caches = new MockCacheStorage();
+  let offlineAssets = [];
+  let manifestHandler = () => new MockResponse(JSON.stringify({ version: 1, assets: offlineAssets }), {
+    status: 200,
+    headers: { "Cache-Control": "public, max-age=3600" }
+  });
 
   const harness = {
     origin,
@@ -234,9 +244,17 @@ function createSWHarness(options = {}) {
     setFetchHandler(fn) {
       fetchHandler = fn;
     },
+    setOfflineAssets(list) {
+      offlineAssets = [...list];
+    },
+    setManifestHandler(fn) {
+      manifestHandler = fn;
+    },
     fetch: async (request) => {
       const req = typeof request === "string" ? new MockRequest(request) : request;
       networkCalls.push({ url: req.url, method: req.method, request: req });
+      const url = new URL(req.url, origin);
+      if (url.pathname === "/offline-assets.json") return manifestHandler();
       return await fetchHandler(req);
     }
   };
@@ -251,7 +269,8 @@ function createSWHarness(options = {}) {
       claim: async () => {
         clientsClaimCalled = true;
         return undefined;
-      }
+      },
+      matchAll: async () => []
     },
     skipWaiting: () => {
       skipWaitingCalled = true;
@@ -298,6 +317,7 @@ function createSWHarness(options = {}) {
     MAX_NAVIGATION_RESPONSES: getVar("MAX_NAVIGATION_RESPONSES"),
     MAX_STATIC_ASSETS: getVar("MAX_STATIC_ASSETS"),
     APP_SHELL_URLS: getVar("APP_SHELL_URLS"),
+    ESSENTIAL_ASSET_URLS: getVar("ESSENTIAL_ASSET_URLS"),
     SENSITIVE_PATHS: getVar("SENSITIVE_PATHS")
   };
 
@@ -323,11 +343,10 @@ function createSWHarness(options = {}) {
     await Promise.all(promises);
   };
 
-  harness.triggerMessage = (data) => {
-    const event = { data };
-    for (const handler of listeners.message) {
-      handler(event);
-    }
+  harness.triggerMessage = async (data, source) => {
+    const event = { data, source: source ?? null };
+    const results = listeners.message.map((handler) => handler(event));
+    await Promise.all(results);
   };
 
   harness.triggerFetch = async (request) => {

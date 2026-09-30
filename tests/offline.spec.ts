@@ -109,6 +109,43 @@ async function runTests() {
   }));
   await assert.rejects(rscShell.triggerInstall(), /not cacheable: \/offline/);
 
+  // Los assets esenciales del manifest se precachean y no se someten a la poda runtime.
+  const essentialAssets = ["/_next/static/chunks/app.js", "/_next/static/css/app.css"];
+  const essential = createSWHarness();
+  essential.setFetchHandler(async request => new MockResponse(`asset: ${request.url}`, {
+    headers: { "Cache-Control": "public, max-age=3600", "Content-Type": "text/javascript" }
+  }));
+  essential.setOfflineAssets(essentialAssets);
+  await essential.triggerInstall();
+
+  const shellCache = await essential.caches.open(essential.constants.APP_SHELL_CACHE);
+  for (const url of essentialAssets) assert.ok(await shellCache.match(url), `${url} debe precachearse como esencial`);
+  const essentialSet = essential.constants.ESSENTIAL_ASSET_URLS;
+  assert.equal(essentialSet.size, essentialAssets.length, "el manifest puebla el conjunto esencial");
+
+  // Un asset esencial se sirve cache-first sin red y no entra en la poda de 50.
+  const essentialStaticCache = await essential.caches.open(essential.constants.STATIC_ASSET_CACHE);
+  for (let index = 0; index < essential.constants.MAX_STATIC_ASSETS; index++) {
+    await essentialStaticCache.put(new MockRequest(`/_next/static/chunks/runtime-${index}.js`), new MockResponse(`runtime-${index}`));
+  }
+  essential.setFetchHandler(async () => { throw new TypeError("offline"); });
+  const essentialFetch = await essential.triggerFetch(new MockRequest(essentialAssets[0], { destination: "script" }));
+  assert.equal(essentialFetch.response.body, `asset: https://example.com${essentialAssets[0]}`, "el asset esencial sale del precache sin red");
+  assert.equal((await essential.caches.open(essential.constants.APP_SHELL_CACHE)).entries.size, essential.constants.APP_SHELL_URLS.length + essentialAssets.length, "los esenciales sobreviven sin poda");
+
+  // READY_QUERY responde preparación solo cuando shell + esenciales están cacheados.
+  const readyReplies = [];
+  const readySource = { postMessage: (payload) => readyReplies.push(payload) };
+  await essential.triggerMessage({ type: "READY_QUERY" }, readySource);
+  assert.equal(readyReplies.length, 1);
+  assert.equal(readyReplies[0].type, "OFFLINE_READY_STATE");
+  assert.equal(readyReplies[0].ready, true, "con shell y esenciales cacheados el worker se declara listo");
+
+  // Un manifest inválido/ausente hace fallar la instalación (primera visita offline no es "lista").
+  const broken = createSWHarness();
+  broken.setManifestHandler(() => new MockResponse("no-json", { headers: { "Cache-Control": "public" } }));
+  await assert.rejects(broken.triggerInstall(), /manifest is not valid JSON/);
+
   console.log("offline.spec.ts: PASS");
 }
 

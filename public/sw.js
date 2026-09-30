@@ -1,4 +1,4 @@
-const CACHE_VERSION = "phase-08-v1";
+const CACHE_VERSION = "phase-17-v1";
 const APP_SHELL_CACHE = `inspecciones-shell-${CACHE_VERSION}`;
 const STATIC_ASSET_CACHE = `inspecciones-static-${CACHE_VERSION}`;
 const MAX_STATIC_ASSETS = 50;
@@ -15,11 +15,16 @@ const APP_SHELL_URLS = [
   "/apple-touch-icon.png"
 ];
 
+// Build-time manifest of essential JS/CSS for the offline shell. These assets
+// are precached into the shell cache and never subject to the runtime trim.
+const OFFLINE_ASSETS_MANIFEST = "/offline-assets.json";
+const ESSENTIAL_ASSET_URLS = new Set();
+
 const PUBLIC_ASSET_URLS = new Set(APP_SHELL_URLS.filter(path => path !== "/offline"));
 const SENSITIVE_PATHS = ["/api", "/login", "/sync", "/auth", "/_next/webpack-hmr"];
 
 self.addEventListener("install", event => {
-  event.waitUntil(precachePublicShell());
+  event.waitUntil(precachePublicShell().then(notifyReady));
 });
 
 self.addEventListener("activate", event => {
@@ -41,8 +46,15 @@ self.addEventListener("activate", event => {
   );
 });
 
-self.addEventListener("message", event => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+self.addEventListener("message", async event => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
+  if (event.data?.type === "READY_QUERY") {
+    const ready = await isOfflineReady();
+    if (event.source) event.source.postMessage({ type: "OFFLINE_READY_STATE", ready });
+  }
 });
 
 self.addEventListener("fetch", event => {
@@ -71,6 +83,48 @@ async function precachePublicShell() {
     }
     await cache.put(request, response);
   }
+
+  const manifestResponse = await fetch(new Request(new URL(OFFLINE_ASSETS_MANIFEST, self.location.origin).toString(), { credentials: "omit" }));
+  if (!manifestResponse.ok || !isCacheable(manifestResponse)) {
+    throw new Error("Offline asset manifest is not available");
+  }
+  let manifest;
+  try {
+    manifest = await manifestResponse.json();
+  } catch {
+    throw new Error("Offline asset manifest is not valid JSON");
+  }
+  if (!Array.isArray(manifest?.assets)) throw new Error("Offline asset manifest is invalid");
+
+  for (const path of manifest.assets) {
+    if (typeof path !== "string" || !path.startsWith("/_next/static/")) continue;
+    const request = new Request(new URL(path, self.location.origin).toString(), { credentials: "omit" });
+    const response = await fetch(request);
+    if (!isCacheable(response) || isHtmlOrRsc(response)) {
+      throw new Error(`Essential asset is not cacheable: ${path}`);
+    }
+    await cache.put(request, response);
+    ESSENTIAL_ASSET_URLS.add(new URL(path, self.location.origin).pathname);
+  }
+}
+
+function notifyReady() {
+  return self.clients.matchAll({ type: "window" }).then(clients => {
+    clients.forEach(client => client.postMessage({ type: "OFFLINE_READY" }));
+  });
+}
+
+async function isOfflineReady() {
+  try {
+    const cache = await caches.open(APP_SHELL_CACHE);
+    if (!(await cache.match("/offline"))) return false;
+    for (const url of ESSENTIAL_ASSET_URLS) {
+      if (!(await cache.match(url))) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isSensitiveRequest(url) {
@@ -92,7 +146,7 @@ async function navigateWithPublicFallback(request) {
 
 async function cacheFirstPublicAsset(request) {
   const url = new URL(request.url);
-  if (PUBLIC_ASSET_URLS.has(url.pathname)) {
+  if (PUBLIC_ASSET_URLS.has(url.pathname) || ESSENTIAL_ASSET_URLS.has(url.pathname)) {
     const shellCache = await caches.open(APP_SHELL_CACHE);
     const precachedResponse = await shellCache.match(request);
     if (precachedResponse) return precachedResponse;
