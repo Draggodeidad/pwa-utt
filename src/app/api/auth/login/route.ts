@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { hasValidMutationOrigin, privateJson } from "@/lib/auth/http";
+import { apiError, privateJson, readJsonMutation } from "@/lib/auth/http";
 import { readSession } from "@/lib/auth/session-store";
 import { createRequestSupabaseClient } from "@/lib/supabase/server";
 
@@ -15,23 +15,10 @@ function isCredentials(value: unknown): value is { email: string; password: stri
 }
 
 export async function POST(request: NextRequest) {
-  if (!hasValidMutationOrigin(request)) return privateJson({ error: "Origen no permitido" }, 403);
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
-    return privateJson({ error: "Solicitud no válida" }, 422);
-  }
-  if (Number(request.headers.get("content-length") ?? 0) > 4096) {
-    return privateJson({ error: "Solicitud no válida" }, 422);
-  }
-
-  let body: unknown;
-  try {
-    const text = await request.text();
-    if (text.length > 4096) return privateJson({ error: "Solicitud no válida" }, 422);
-    body = JSON.parse(text);
-  } catch {
-    return privateJson({ error: "Solicitud no válida" }, 422);
-  }
-  if (!isCredentials(body)) return privateJson({ error: "Solicitud no válida" }, 422);
+  const parsed = await readJsonMutation(request);
+  if (parsed.error) return parsed.error;
+  const body = parsed.body;
+  if (!isCredentials(body)) return apiError("INVALID_REQUEST");
 
   const auth = createRequestSupabaseClient(request);
   const { error } = await auth.client.auth.signInWithPassword({
@@ -41,14 +28,14 @@ export async function POST(request: NextRequest) {
   if (error) {
     const upstreamStatus = error.status ?? 0;
     const status = upstreamStatus === 429 ? 429 : upstreamStatus === 0 || upstreamStatus >= 500 ? 503 : 401;
-    const message = status === 429 ? "Intenta más tarde" : status === 503 ? "Servicio no disponible" : "Acceso no concedido";
-    return auth.withCookies(privateJson({ error: message }, status));
+    const code = status === 429 ? "RATE_LIMITED" : status === 503 ? "UNAVAILABLE" : "AUTH_DENIED";
+    return auth.withCookies(apiError(code));
   }
 
   const session = await readSession(auth.client);
   if (!session) {
     await auth.client.auth.signOut({ scope: "local" });
-    return auth.withCookies(privateJson({ error: "Acceso no concedido" }, 401));
+    return auth.withCookies(apiError("AUTH_DENIED"));
   }
   return auth.withCookies(privateJson(session));
 }
