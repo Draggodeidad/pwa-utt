@@ -1,3 +1,4 @@
+import type { InspectionWorkflowStatus } from "../inspections/types";
 import type { LocalEntityMetadata, RemoteEntity, Uuid } from "../../types/entity";
 
 export type FindingPriority = "low" | "medium" | "high";
@@ -86,6 +87,33 @@ export type CoordinationFinding = {
   evidenceLabel?: string;
   evidenceImage?: string;
   internalNote: string;
+};
+
+/** Minimal read model for the finding API: origin data plus capture/follow-up fields. */
+export type FindingDto = {
+  id: Uuid;
+  inspectionId: Uuid;
+  folio: string;
+  folioNumber: number;
+  location: string;
+  laboratoryCode: string;
+  inspectionDate: string | null;
+  date: string;
+  technician: string;
+  title: string;
+  description: string;
+  priority: FindingPriority;
+  status: FindingStatus;
+  workflowStatus: InspectionWorkflowStatus;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+};
+
+export type FindingListPage = {
+  items: FindingDto[];
+  nextCursor: string | null;
 };
 
 export type FindingFilters = {
