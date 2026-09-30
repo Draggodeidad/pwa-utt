@@ -15,9 +15,27 @@ const errors: Record<ApiErrorCode, { status: number; message: string }> = {
   UNAVAILABLE: { status: 503, message: "Servicio no disponible" },
 };
 
-export function apiError(code: ApiErrorCode) {
+/** A transport error keeps the HTTP status of its code while preserving domain details. */
+export type ApiErrorDetails = {
+  code?: string;
+  message?: string;
+  fieldErrors?: Record<string, string>;
+};
+
+export function apiError(code: ApiErrorCode, details?: ApiErrorDetails) {
   const { status, message } = errors[code];
-  return privateJson({ code, error: message }, status);
+  return privateJson({
+    code: details?.code ?? code,
+    error: details?.message ?? message,
+    ...(details?.fieldErrors ? { fieldErrors: details.fieldErrors } : {}),
+  }, status);
+}
+
+/** Flattens validation issues into the fieldErrors contract without exposing internals. */
+export function toFieldErrors(error: { issues: readonly { path: string; message: string }[] }): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of error.issues) fieldErrors[issue.path] = issue.message;
+  return fieldErrors;
 }
 
 /** Reject cross-origin and oversized JSON before parsing a cookie-authenticated mutation. */
