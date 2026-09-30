@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { clearLocalSession, rememberLocalSession } from "@/lib/pwa/offline-session";
+import { runBrowserQueue } from "@/lib/pwa/sync/browser-runner";
 
 /** Persists the active user locally so the offline shell can open their partition. */
 export function SessionMemory() {
@@ -23,6 +24,20 @@ export function SessionMemory() {
       })
       .catch(() => { /* offline: keep the last remembered session */ });
     return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const run = () => { void runBrowserQueue().catch(() => { /* keep durable queue for next open */ }); };
+    const onVisible = () => { if (document.visibilityState === "visible") run(); };
+    run();
+    window.addEventListener("online", run);
+    window.addEventListener("pwa-utt:queue-changed", run);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", run);
+      window.removeEventListener("pwa-utt:queue-changed", run);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   return null;
