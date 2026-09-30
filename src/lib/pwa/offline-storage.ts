@@ -1,6 +1,7 @@
 import type { LocalInspection, LaboratoryOption } from "@/features/inspections";
 import type { LocalFinding } from "@/features/findings";
 import type { SyncQueueItem } from "@/features/sync";
+import type { DomainOperation, DomainOperationError, OperationAcknowledgement } from "@/features/sync/types";
 import type { Uuid } from "@/types/entity";
 import { openLocalDatabase, requestToPromise, runTransaction } from "./indexed-db.ts";
 
@@ -19,6 +20,10 @@ export type LocalEntityRecord =
 
 type CatalogRecord = { id: "catalog"; ownerUserId: Uuid; laboratories: LaboratoryOption[] };
 type MetadataRecord = { name: string; value: string };
+
+function announceQueueChange(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pwa-utt:queue-changed"));
+}
 
 const ownerPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -162,6 +167,7 @@ export class LocalStorage {
       await requestToPromise(stores[record.store].put(record.value));
       await requestToPromise(stores.sync_queue.put(intent));
     });
+    announceQueueChange();
   }
 
   async enqueue(owner: Uuid, item: SyncQueueItem): Promise<void> {
@@ -170,6 +176,7 @@ export class LocalStorage {
     await runTransaction(this.db, ["sync_queue"], "readwrite", async (stores) => {
       await requestToPromise(stores.sync_queue.put(item));
     });
+    announceQueueChange();
   }
 
   async listQueue(owner: Uuid): Promise<SyncQueueItem[]> {
@@ -203,15 +210,31 @@ export class LocalStorage {
   }
 
   /** Writes all records and their intents in one transaction (atomic capture). */
-  async saveCapture(owner: Uuid, records: readonly LocalEntityRecord[], intents: readonly SyncQueueItem[]): Promise<void> {
+  async saveCapture(owner: Uuid, records: readonly LocalEntityRecord[], intents: readonly SyncQueueItem[], removedFindings: readonly { id: string; baseVersion: number | null }[] = []): Promise<void> {
     requireOwner(owner);
     for (const record of records) if (record.value.ownerUserId !== owner) throw new PartitionRequiredError();
     for (const intent of intents) if (intent.ownerUserId !== owner) throw new PartitionRequiredError();
-    const storeNames = Array.from(new Set([...records.map((record) => record.store), "sync_queue"]));
+    const storeNames = Array.from(new Set([...records.map((record) => record.store), ...(removedFindings.length ? ["finding_local"] : []), "sync_queue"]));
     await runTransaction(this.db, storeNames, "readwrite", async (stores) => {
+      for (const removed of removedFindings) {
+        const related = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("entity").getAll(removed.id));
+        const owned = related.filter((item) => item.ownerUserId === owner);
+        const neverSent = removed.baseVersion === null && owned.every((item) => !item.frozenRequest);
+        const current = await requestToPromise<LocalFinding | undefined>(stores.finding_local.get(removed.id));
+        if (current && current.ownerUserId !== owner) throw new PartitionRequiredError();
+        if (neverSent) {
+          for (const item of owned) await requestToPromise(stores.sync_queue.delete(item.operationId));
+          if (current) await requestToPromise(stores.finding_local.delete(removed.id));
+        } else if (current) {
+          await requestToPromise(stores.finding_local.put({
+            ...current, deletedAt: new Date().toISOString(), localRevision: current.localRevision + 1, syncStatus: "pending",
+          }));
+        }
+      }
       for (const record of records) await requestToPromise(stores[record.store].put(record.value));
       for (const intent of intents) await requestToPromise(stores.sync_queue.put(intent));
     });
+    announceQueueChange();
   }
 
   /**
@@ -247,6 +270,75 @@ export class LocalStorage {
     await runTransaction(this.db, ["inspection_local", "sync_queue"], "readwrite", async (stores) => {
       await requestToPromise(stores.inspection_local.put(tombstone));
       await requestToPromise(stores.sync_queue.put(discardIntent));
+    });
+    announceQueueChange();
+  }
+
+  /** Freezes the complete request before HTTP; a later edit never changes its key or body. */
+  async prepareSend(owner: Uuid, operationId: string, clientId: Uuid): Promise<SyncQueueItem | null> {
+    requireOwner(owner);
+    return runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local"], "readwrite", async (stores) => {
+      const item = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
+      if (!item || item.ownerUserId !== owner) return null;
+      const store = item.entity === "inspection" ? stores.inspection_local : stores.finding_local;
+      const entity = await requestToPromise<LocalInspection | LocalFinding | undefined>(store.get(item.entityId));
+      if (entity && entity.ownerUserId !== owner) throw new PartitionRequiredError();
+      if (!entity && !["finding.delete", "finding.followup", "inspection.finalize", "inspection.discard"].includes(item.operation)) throw new PartitionRequiredError();
+      const request: DomainOperation = item.frozenRequest ?? {
+        clientId, kind: item.operation, entityId: item.entityId,
+        baseVersion: item.baseVersion, payload: item.payload,
+      } as DomainOperation;
+      const prepared: SyncQueueItem = {
+        ...item, frozenRequest: request, sentRevision: item.sentRevision ?? entity?.localRevision ?? null,
+        status: "syncing", attempts: item.attempts + 1,
+      };
+      await requestToPromise(stores.sync_queue.put(prepared));
+      return prepared;
+    });
+  }
+
+  /** Applies the ACK and dependent version chain in one committed transaction. */
+  async acknowledge(owner: Uuid, sent: SyncQueueItem, ack: OperationAcknowledgement): Promise<void> {
+    requireOwner(owner);
+    if (sent.ownerUserId !== owner || ack.operationId !== sent.operationId || ack.entityId !== sent.entityId || ack.entityType !== sent.entity || !Number.isSafeInteger(ack.version) || ack.version < 1 || typeof ack.appliedAt !== "string") throw new Error("ACK incompatible");
+    await runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local"], "readwrite", async (stores) => {
+      const queued = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
+      if (!queued || queued.ownerUserId !== owner || !queued.frozenRequest || JSON.stringify(queued.frozenRequest) !== JSON.stringify(sent.frozenRequest)) throw new PartitionRequiredError();
+      const store = sent.entity === "inspection" ? stores.inspection_local : stores.finding_local;
+      const entity = await requestToPromise<LocalInspection | LocalFinding | undefined>(store.get(sent.entityId));
+      if (entity && entity.ownerUserId !== owner) throw new PartitionRequiredError();
+      const queue = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("owner").getAll(owner));
+      const later = queue.some((item) => item.operationId !== sent.operationId && item.entityId === sent.entityId && item.localOrder > sent.localOrder);
+      const editedAfterSend = entity ? entity.localRevision !== sent.sentRevision : false;
+      const synced = !later && !editedAfterSend;
+      if (entity) {
+        const updated = {
+          ...entity, version: ack.version, baseVersion: ack.version,
+          updatedAt: ack.appliedAt, syncStatus: synced ? "synced" as const : "pending" as const,
+          ...(sent.entity === "inspection" && Number.isSafeInteger(ack.folioNumber) && (ack.folioNumber as number) > 0 ? { folioNumber: ack.folioNumber } : {}),
+          ...(sent.operation === "inspection.finalize" && synced ? { workflowStatus: "completed" as const, completedAt: ack.appliedAt } : {}),
+          ...(sent.operation === "finding.delete" && synced ? { deletedAt: ack.appliedAt } : {}),
+        };
+        await requestToPromise(store.put(updated));
+      }
+      for (const dependent of queue) {
+        if (dependent.ownerUserId !== owner || dependent.operationId === sent.operationId || dependent.frozenRequest || !dependent.dependsOn.includes(sent.operationId)) continue;
+        const next = {
+          ...dependent,
+          baseVersion: dependent.entityId === sent.entityId ? ack.version : dependent.baseVersion,
+        };
+        await requestToPromise(stores.sync_queue.put(next));
+      }
+      await requestToPromise(stores.sync_queue.delete(sent.operationId));
+    });
+  }
+
+  async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError): Promise<void> {
+    requireOwner(owner);
+    await runTransaction(this.db, ["sync_queue"], "readwrite", async (stores) => {
+      const current = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
+      if (!current || current.ownerUserId !== owner) return;
+      await requestToPromise(stores.sync_queue.put({ ...current, status: "error", lastError: error }));
     });
   }
 }
