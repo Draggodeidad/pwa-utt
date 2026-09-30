@@ -113,6 +113,8 @@ class MockRequest {
     if (init.destination) this.destination = init.destination;
     if (!this.destination) this.destination = "";
 
+    this.credentials = init.credentials || "same-origin";
+
     this.headers = new MockHeaders(init.headers);
   }
 }
