@@ -32,8 +32,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionEditor } from "../hooks/use-inspection-editor";
 import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
+import type { Uuid } from "@/types/entity";
 
-type Props = { mode: "create" | "edit"; initialValues: InspectionEditorValues; catalog: readonly LaboratoryOption[] };
+type Props = { mode: "create" | "edit"; initialValues: InspectionEditorValues; catalog: readonly LaboratoryOption[]; owner: Uuid };
 const maxSummary = 500;
 
 function FindingDialog({
@@ -114,9 +115,9 @@ function FindingDialog({
   );
 }
 
-export function InspectionEditorWorkspace({ mode, initialValues, catalog }: Props) {
+export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner }: Props) {
   const router = useRouter();
-  const editor = useInspectionEditor(initialValues, { mode, catalog });
+  const editor = useInspectionEditor(initialValues, { mode, catalog, owner, technician: initialValues.technician });
   const {
     inspectionId,
     values,
@@ -148,7 +149,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog }: Prop
     state === "saving"
       ? "Guardando..."
       : state === "saved"
-        ? "Guardado en el servidor"
+        ? "Guardado en este dispositivo"
         : state === "save-error"
           ? "No se pudo guardar"
           : state === "dirty"
@@ -175,7 +176,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog }: Prop
     <section className={s.page} aria-labelledby="editor-title">
       {toast ? (
         <div role="status" className={s.toast}>
-          Borrador guardado en el servidor.
+          Borrador guardado en este dispositivo.
         </div>
       ) : null}
       {state === "save-error" && errors.form ? (

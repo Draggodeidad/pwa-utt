@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { HttpClient } from "@/lib/api/http-client";
-import { RemoteInspectionRepository } from "../services/remote-inspection.repository";
-import { RemoteFindingRepository } from "../../findings/services/remote-finding.repository";
-import { finalizeInspection as runFinalize, type FinalizeFinding } from "../services/finalize-inspection";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LocalStorage } from "@/lib/pwa/offline-storage";
+import {
+  discardDraft,
+  finalizeDraft,
+  loadLocalDraft,
+  saveDraft,
+  toEditorValues,
+  toLocalFinding,
+  toLocalInspection,
+  type RemovedFindingRef,
+} from "../services/local-capture";
 import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
-import type { InspectionDraftInput } from "../schemas/inspection.schema";
+import type { Uuid } from "@/types/entity";
 
 export type InspectionEditorState = "pristine" | "dirty" | "saving" | "saved" | "validation-error" | "save-error" | "finalizing" | "finalized";
 
-type EditorOptions = { mode: "create" | "edit"; catalog: readonly LaboratoryOption[] };
+type EditorOptions = { mode: "create" | "edit"; catalog: readonly LaboratoryOption[]; owner: Uuid; technician: string };
 
 function readErrorMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "payload" in error) {
@@ -20,55 +27,57 @@ function readErrorMessage(error: unknown): string {
   return "No se pudo completar la operación. Intenta de nuevo.";
 }
 
-function buildDraft(values: InspectionEditorValues, catalog: readonly LaboratoryOption[]): InspectionDraftInput {
-  const draft: InspectionDraftInput = { summary: values.summary };
-  const laboratory = catalog.find((item) => item.code === values.laboratoryCode);
-  if (laboratory) draft.laboratoryId = laboratory.id;
-  if (values.date) draft.inspectionDate = values.date;
-  return draft;
-}
-
 export function useInspectionEditor(initial: InspectionEditorValues, options: EditorOptions) {
-  const { mode, catalog } = options;
-  const repositories = useMemo(() => {
-    const client = new HttpClient();
-    return { inspections: new RemoteInspectionRepository(client), findings: new RemoteFindingRepository(client) };
-  }, []);
-  const [values, setValues] = useState(initial);
+  const { mode, catalog, owner, technician } = options;
+  const [storage, setStorage] = useState<LocalStorage | null>(null);
+  const [values, setValues] = useState<InspectionEditorValues>(initial);
   const [state, setState] = useState<InspectionEditorState>("pristine");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState(false);
   const [inspectionId] = useState(initial.id || crypto.randomUUID());
-  const [inspectionVersion, setInspectionVersion] = useState<number | null>(initial.version ?? null);
-  const [created, setCreated] = useState(mode === "edit");
-  const [findingVersions, setFindingVersions] = useState<Record<string, number>>(() => {
-    const versions: Record<string, number> = {};
-    for (const finding of initial.findings) if (finding.version != null) versions[finding.id] = finding.version;
-    return versions;
-  });
-  const [pendingUpdates, setPendingUpdates] = useState<ReadonlySet<string>>(new Set());
-  const [removedFindingIds, setRemovedFindingIds] = useState<readonly string[]>([]);
   const dirtyRef = useRef(false);
-  const inspectionDirtyRef = useRef(false);
+  const savingRef = useRef(false);
+  const removedRef = useRef<readonly RemovedFindingRef[]>([]);
   const valuesRef = useRef(values);
   valuesRef.current = values;
 
-  const mutate = (next: Partial<InspectionEditorValues>) => {
-    dirtyRef.current = true;
-    inspectionDirtyRef.current = true;
-    setValues((current) => ({ ...current, ...next }));
-    setState("dirty");
-  };
+  useEffect(() => {
+    let active = true;
+    LocalStorage.open().then((store) => {
+      if (active) setStorage(store);
+    }).catch(() => {
+      if (active) setErrors({ form: "Almacenamiento local no disponible" });
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "edit" || !storage) return;
+    let active = true;
+    loadLocalDraft(owner, storage, initial.id).then((draft) => {
+      if (active && draft) setValues(toEditorValues(draft.inspection, draft.findings, catalog, technician));
+    }).catch(() => { /* keep the server-provided initial values */ });
+    return () => { active = false; };
+  }, [storage, mode, owner, initial.id, catalog, technician]);
+
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirtyRef.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
+
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(false), 3000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  const mutate = (next: Partial<InspectionEditorValues>) => {
+    dirtyRef.current = true;
+    setValues((current) => ({ ...current, ...next }));
+    setState("dirty");
+  };
+
   const validate = () => {
     const next: Record<string, string> = {};
     if (!values.laboratoryCode) next.laboratoryCode = "Selecciona un laboratorio.";
@@ -79,119 +88,74 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
     return true;
   };
 
-  /** Persists the draft and pending findings; resolves only after every remote ACK. */
-  const flush = async (): Promise<number> => {
-    const draft = buildDraft(valuesRef.current, catalog);
-    let version: number;
-    if (!created) {
-      const ack = await repositories.inspections.create(inspectionId, draft);
-      version = ack.version;
-      setInspectionVersion(version);
-      setCreated(true);
-    } else {
-      version = inspectionVersion as number;
-      if (inspectionDirtyRef.current) {
-        const ack = await repositories.inspections.update(inspectionId, version, draft);
-        version = ack.version;
-        setInspectionVersion(version);
-      }
-    }
-    inspectionDirtyRef.current = false;
-    for (const id of removedFindingIds) {
-      const persistedVersion = findingVersions[id];
-      if (persistedVersion != null) await repositories.findings.delete(id, persistedVersion);
-    }
-    setRemovedFindingIds([]);
-    for (const finding of valuesRef.current.findings) {
-      const persistedVersion = findingVersions[finding.id];
-      if (persistedVersion == null) {
-        const ack = await repositories.findings.create(finding.id, {
-          inspectionId, title: finding.title, description: finding.description, priority: finding.priority,
-        });
-        setFindingVersions((current) => ({ ...current, [finding.id]: ack.version }));
-      } else if (pendingUpdates.has(finding.id)) {
-        const ack = await repositories.findings.update(finding.id, persistedVersion, {
-          title: finding.title, description: finding.description, priority: finding.priority,
-        });
-        setFindingVersions((current) => ({ ...current, [finding.id]: ack.version }));
-      }
-    }
-    setPendingUpdates(new Set());
-    dirtyRef.current = false;
-    return version;
-  };
-
-  const save = async () => {
+  const save = useCallback(async () => {
+    if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
+    savingRef.current = true;
     setState("saving");
     try {
-      await flush();
-      setValues((current) => ({ ...current, syncStatus: "synced" }));
+      const current = valuesRef.current;
+      const existing = await storage.getInspection(owner, inspectionId);
+      const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
+      const findings = current.findings.map((finding) => toLocalFinding(finding.id, inspectionId, finding, owner, finding.version ?? null, null));
+      await saveDraft(owner, storage, { owner, inspection, findings, removedFindings: removedRef.current });
+      removedRef.current = [];
+      setValues((currentValues) => ({ ...currentValues, syncStatus: "local" }));
       setState("saved");
       setToast(true);
+      savingRef.current = false;
       return true;
     } catch (error) {
       setErrors({ form: readErrorMessage(error) });
       setState("save-error");
+      savingRef.current = false;
       return false;
     }
-  };
+  }, [storage, owner, inspectionId, catalog]);
+
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  useEffect(() => {
+    if (!storage || state !== "dirty" || savingRef.current) return;
+    const timer = window.setTimeout(() => { void saveRef.current(); }, 700);
+    return () => window.clearTimeout(timer);
+  }, [values, storage, state]);
 
   const addFinding = (finding: InspectionFinding) => {
     dirtyRef.current = true;
     setValues((current) => ({ ...current, findings: [...current.findings, finding] }));
-    setPendingUpdates((current) => new Set(current).add(finding.id));
     setState("dirty");
   };
   const updateFinding = (finding: InspectionFinding) => {
     dirtyRef.current = true;
     setValues((current) => ({ ...current, findings: current.findings.map((item) => (item.id === finding.id ? finding : item)) }));
-    setPendingUpdates((current) => new Set(current).add(finding.id));
     setState("dirty");
   };
   const removeFinding = (id: string) => {
     dirtyRef.current = true;
+    const removed = valuesRef.current.findings.find((finding) => finding.id === id);
+    removedRef.current = [...removedRef.current, { id, baseVersion: removed?.version ?? null }];
     setValues((current) => ({ ...current, findings: current.findings.filter((finding) => finding.id !== id) }));
-    if (findingVersions[id] != null) setRemovedFindingIds((current) => [...current, id]);
     setState("dirty");
   };
 
-  const finalizeInspection = async () => {
+  const finalizeInspection = useCallback(async () => {
+    if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
     setState("finalizing");
     try {
-      const findings: FinalizeFinding[] = [
-        ...valuesRef.current.findings.map((finding) => ({
-          id: finding.id,
-          version: findingVersions[finding.id] ?? null,
-          title: finding.title,
-          description: finding.description,
-          priority: finding.priority,
-          status: finding.status,
-          pendingUpdate: pendingUpdates.has(finding.id),
-        })),
-        ...removedFindingIds.map((id) => ({
-          id,
-          version: findingVersions[id] ?? null,
-          title: "",
-          description: "",
-          priority: "medium" as const,
-          status: "pending" as const,
-          removed: true,
-        })),
-      ];
-      const result = await runFinalize({
-        inspectionId,
-        inspectionVersion,
-        inspectionDraft: buildDraft(valuesRef.current, catalog),
-        inspectionDirty: !created || inspectionDirtyRef.current,
+      const current = valuesRef.current;
+      const existing = await storage.getInspection(owner, inspectionId);
+      const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
+      const findings = current.findings.map((finding) => toLocalFinding(finding.id, inspectionId, finding, owner, finding.version ?? null, null));
+      await finalizeDraft(owner, storage, {
+        owner,
+        inspection,
         findings,
-        inspectionRepository: repositories.inspections,
-        findingRepository: repositories.findings,
+        removedFindings: removedRef.current,
+        expectedFindingIds: current.findings.map((finding) => finding.id),
       });
-      dirtyRef.current = false;
-      inspectionDirtyRef.current = false;
-      setPendingUpdates(new Set());
-      setRemovedFindingIds([]);
-      setValues((current) => ({ ...current, syncStatus: result.syncStatus }));
+      removedRef.current = [];
+      setValues((currentValues) => ({ ...currentValues, syncStatus: "pending" }));
       setState("finalized");
       return true;
     } catch (error) {
@@ -199,33 +163,27 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
       setState("save-error");
       return false;
     }
-  };
+  }, [storage, owner, inspectionId, catalog]);
 
-  const discard = async () => {
-    if (created) {
-      try {
-        await repositories.inspections.discard(inspectionId, inspectionVersion as number);
-      } catch {
-        setErrors({ form: "No fue posible descartar el borrador. Intenta de nuevo." });
-        setState("save-error");
-        return false;
-      }
+  const discard = useCallback(async () => {
+    if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
+    try {
+      await discardDraft(owner, storage, inspectionId);
+      removedRef.current = [];
+      dirtyRef.current = false;
+      setErrors({});
+      setState("pristine");
+      return true;
+    } catch {
+      setErrors({ form: "No fue posible descartar el borrador. Intenta de nuevo." });
+      setState("save-error");
+      return false;
     }
-    dirtyRef.current = false;
-    inspectionDirtyRef.current = false;
-    setPendingUpdates(new Set());
-    setRemovedFindingIds([]);
-    setErrors({});
-    setValues(initial);
-    setState("pristine");
-    return true;
-  };
+  }, [storage, owner, inspectionId]);
 
   const reset = () => {
     dirtyRef.current = false;
-    inspectionDirtyRef.current = false;
-    setPendingUpdates(new Set());
-    setRemovedFindingIds([]);
+    removedRef.current = [];
     setErrors({});
     setValues(initial);
     setState("pristine");

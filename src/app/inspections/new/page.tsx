@@ -14,7 +14,7 @@ export default async function NewInspectionPage() {
 
   return (
     <AppShell activePath="/inspections/new" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}>
-      <InspectionEditorWorkspace mode="create" initialValues={{ ...createInspectionValues, technician: user.displayName }} catalog={catalog} />
+      <InspectionEditorWorkspace mode="create" initialValues={{ ...createInspectionValues, technician: user.displayName }} catalog={catalog} owner={user.id} />
     </AppShell>
   );
 }
