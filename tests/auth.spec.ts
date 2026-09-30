@@ -4,6 +4,7 @@ const { spawn } = require("node:child_process");
 const { createServer } = require("node:http");
 const { resolve } = require("node:path");
 const { once } = require("node:events");
+const { randomUUID } = require("node:crypto");
 
 const root = resolve(__dirname, "..");
 const production = process.env.AUTH_TEST_PRODUCTION === "1";
@@ -20,7 +21,7 @@ let refreshCount = 0;
 
 function token(userId, expiry) {
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiry, role: "authenticated" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: expiry, role: "authenticated", jti: randomUUID() })).toString("base64url");
   return `${header}.${payload}.synthetic-signature`;
 }
 function authUser(account, email) {
@@ -151,9 +152,28 @@ async function main() {
     const profile = await request("/profile", {}, jar);
     assert.equal(profile.status, 200);
     assert.match(await profile.text(), /Técnica de prueba/);
+    jar.set("pwa-utt-logout-blocked", "1");
+    assert.equal((await request("/api/session", {}, jar)).status, 401);
+    assert.equal((await request("/api/laboratories", {}, jar)).status, 401);
+    const blockedProfile = await request("/profile", {}, jar);
+    assert.equal(blockedProfile.status, 307);
+    assert.match(blockedProfile.headers.get("location") || "", /\/login$/);
+    assert.equal((await login("tech@example.invalid", "synthetic-password", jar)).status, 200, "fresh online login remains possible");
+    jar.delete("pwa-utt-logout-blocked");
+    assert.equal((await request("/api/session", {}, jar)).status, 200);
     assert.equal((await request("/api/auth/logout", { method: "POST", headers: { Origin: base } }, jar)).status, 204);
     assert.equal((await request("/api/session", {}, jar)).status, 401);
     assert.equal((await request("/api/auth/logout", { method: "POST", headers: { Origin: base } }, jar)).status, 204);
+
+    const offlineJar = new Map();
+    assert.equal((await login("tech@example.invalid", "synthetic-password", offlineJar)).status, 200);
+    offlineJar.set("pwa-utt-logout-blocked", "1");
+    const reconciled = await request("/api/auth/logout", { method: "POST", headers: { Origin: base } }, offlineJar);
+    assert.equal(reconciled.status, 204);
+    assert.equal(reconciled.headers.getSetCookie().length, 0, "stale logout cannot clear a newer login cookie");
+    assert.equal((await login("refresh@example.invalid", "synthetic-password", offlineJar)).status, 200);
+    offlineJar.delete("pwa-utt-logout-blocked");
+    assert.equal((await request("/api/session", {}, offlineJar)).status, 200);
 
     const refreshJar = new Map();
     assert.equal((await login("refresh@example.invalid", "synthetic-password", refreshJar)).status, 200);

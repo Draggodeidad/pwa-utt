@@ -10,7 +10,7 @@
     "build": "next build",
     "postbuild": "node scripts/generate-offline-assets.mjs",
     "start": "next start",
-    "test": "node tests/starter.spec.mjs && node tests/manifest.spec.ts && node tests/service-worker.spec.ts && node tests/offline.spec.ts && node tests/offline-shell.spec.ts && node tests/rendering.spec.ts && node tests/supabase-config.spec.ts && node tests/domain-contracts.spec.ts && node tests/auth.spec.ts && node tests/inspection-api.spec.ts && node tests/finding-api.spec.ts && node tests/online-inspection-workflow.spec.ts && node tests/local-storage.spec.ts && node tests/local-capture.spec.ts && node tests/queue-transport.spec.ts && node tests/queue-recovery.spec.ts && node tests/conflict-resolution.spec.ts",
+    "test": "node tests/starter.spec.mjs && node tests/manifest.spec.ts && node tests/service-worker.spec.ts && node tests/offline.spec.ts && node tests/offline-shell.spec.ts && node tests/rendering.spec.ts && node tests/supabase-config.spec.ts && node tests/domain-contracts.spec.ts && node tests/auth.spec.ts && node tests/inspection-api.spec.ts && node tests/finding-api.spec.ts && node tests/online-inspection-workflow.spec.ts && node tests/local-storage.spec.ts && node tests/local-capture.spec.ts && node tests/queue-transport.spec.ts && node tests/queue-recovery.spec.ts && node tests/conflict-resolution.spec.ts && node tests/session-isolation.spec.ts",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "measure:rendering": "node scripts/measure-rendering.mjs"
