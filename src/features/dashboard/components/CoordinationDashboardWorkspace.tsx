@@ -49,7 +49,7 @@ function InspectionRow({ inspection, attention = false }: { inspection: Dashboar
     <article className={attention ? s.attentionRow : s.recentRow}>
       <div className={s.rowContent}>
         <h3 className={s.rowTitle}>{inspection.location}</h3>
-        <p className={s.rowMeta}>{dateFormatter.format(new Date(`${inspection.date}T12:00:00`))} · {inspection.inspector}</p>
+        <p className={s.rowMeta}>{inspection.date ? dateFormatter.format(new Date(`${inspection.date}T12:00:00`)) : "Sin fecha"} · {inspection.inspector}</p>
       </div>
       <div className={s.rowActions}>
         {attention ? <Badge className={s.attentionBadge}>{inspection.findingCount} hallazgo{inspection.findingCount === 1 ? "" : "s"}</Badge> : <Badge className={inspection.result === "requires_attention" ? s.attentionBadge : s.successBadge}>{inspection.result === "requires_attention" ? "Requiere atención" : "Sin incidencias"}</Badge>}

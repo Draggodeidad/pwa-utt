@@ -1,15 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { AppShell } from "@/components/app-shell";
 import { LoadingState } from "@/components/loading-state";
-import { navigationSectionsByRole } from "@/config/navigation";
-import { temporarySession } from "@/config/temporary-session";
-import { createProfileForSession } from "@/features/profile";
 
 export default function ErrorPage() {
-  const { user } = temporarySession;
-  return <AppShell navigationSections={navigationSectionsByRole[user.role]} profile={createProfileForSession(user)}><LoadingState state="error" action={<Link className={s.retryLink} href="/inspecciones">Volver a intentar</Link>} /></AppShell>;
+  return <LoadingState state="error" action={<Link className={s.retryLink} href="/inspecciones">Volver a intentar</Link>} />;
 }
 
 const s = {

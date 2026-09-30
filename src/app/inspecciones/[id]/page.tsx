@@ -4,10 +4,11 @@ import { AlertTriangle, ArrowLeft, CalendarDays, ClipboardCheck, MapPin, UserRou
 import { AppShell } from "@/components/app-shell";
 import { LoadingState } from "@/components/loading-state";
 import { navigationSectionsByRole } from "@/config/navigation";
-import { temporarySession } from "@/config/temporary-session";
-import { findInspectionDetail } from "@/features/inspections";
 import type { InspectionDetail } from "@/features/inspections";
 import { createProfileForSession } from "@/features/profile";
+import { requireRole } from "@/lib/auth/guards";
+import { findVisibleInspection } from "@/lib/repositories/inspections";
+import { createComponentSupabaseClient } from "@/lib/supabase/server";
 
 type InspectionDetailPageProps = {
   params: { id: string };
@@ -17,16 +18,17 @@ type InspectionDetailPageProps = {
 /** Resolve each request on the server; no static route snapshot is generated. */
 export const dynamic = "force-dynamic";
 
-export function generateMetadata({ params }: Pick<InspectionDetailPageProps, "params">) {
-  const inspection = findInspectionDetail(params.id);
+export async function generateMetadata({ params }: Pick<InspectionDetailPageProps, "params">) {
+  await requireRole(["technician", "coordinator"]);
+  const inspection = await findVisibleInspection(createComponentSupabaseClient(), params.id);
   if (!inspection) notFound();
   return { title: `${inspection.location} | Inspecciones` };
 }
 
-export default function InspeccionDetailPage({ params, searchParams }: InspectionDetailPageProps) {
-  const { user } = temporarySession;
+export default async function InspeccionDetailPage({ params, searchParams }: InspectionDetailPageProps) {
+  const { user } = await requireRole(["technician", "coordinator"]);
   const state = searchParams?.estado;
-  const inspection = findInspectionDetail(params.id);
+  const inspection = await findVisibleInspection(createComponentSupabaseClient(), params.id);
   if (!inspection) notFound();
 
   return (
@@ -81,6 +83,7 @@ function InspectionDetailContent({ inspection }: { inspection: InspectionDetail 
 }
 
 function formatDate(date: string) {
+  if (!date) return "Sin fecha";
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "long" }).format(new Date(`${date}T12:00:00`));
 }
 

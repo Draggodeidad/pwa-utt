@@ -1,29 +1,17 @@
 import { AppShell } from "@/components/app-shell";
-import { isRouteAllowedForRole, navigationSectionsByRole } from "@/config/navigation";
-import { requireServerSession } from "@/lib/auth/session-store";
-import { inspectionDetail, inspections, InspectionDetailWorkspace } from "@/features/inspections";
-import type { InspectionDetail } from "@/features/inspections";
+import { navigationSectionsByRole } from "@/config/navigation";
+import { requireRole } from "@/lib/auth/guards";
+import { InspectionDetailWorkspace } from "@/features/inspections";
 import { createProfileForSession } from "@/features/profile";
+import { findVisibleInspection } from "@/lib/repositories/inspections";
+import { createComponentSupabaseClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
 export default async function InspectionDetailPage({ params }: { params: { inspectionId: string } }) {
-  const { user } = await requireServerSession();
+  const { user } = await requireRole(["technician", "coordinator"]);
   const role = user.role;
-  if (!isRouteAllowedForRole(role, "/inspections")) notFound();
-  const listItem = inspections.find((item) => item.id === params.inspectionId);
-  if (!listItem) notFound();
-  const detail: InspectionDetail = params.inspectionId === inspectionDetail.id ? inspectionDetail : {
-    id: listItem.id,
-    folio: listItem.id.replace("inspection-", "INS-"),
-    location: listItem.location,
-    date: listItem.date,
-    technician: listItem.inspector,
-    workflowStatus: listItem.workflowStatus,
-    result: listItem.result,
-    syncStatus: listItem.syncStatus,
-    scope: listItem.summary,
-    findings: listItem.result === "requires_attention" ? [{ id: `${listItem.id}-finding`, title: "Hallazgo pendiente de seguimiento", description: "Observación registrada durante la inspección del laboratorio.", priority: "medium", status: "pending" }] : []
-  };
+  const detail = await findVisibleInspection(createComponentSupabaseClient(), params.inspectionId);
+  if (!detail) notFound();
 
   return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}><InspectionDetailWorkspace inspection={detail} /></AppShell>;
 }

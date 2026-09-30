@@ -77,7 +77,7 @@ export function InspectionDetailWorkspace({
             </h1>
             <p className={s.metadata}>
               <time dateTime={inspection.date}>
-                {dateFormatter.format(new Date(`${inspection.date}T12:00:00`))}
+                {inspection.date ? dateFormatter.format(new Date(`${inspection.date}T12:00:00`)) : "Sin fecha"}
               </time>{" "}
               · {inspection.technician}
             </p>
