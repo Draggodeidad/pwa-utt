@@ -14,7 +14,7 @@ import { createProfileForSession } from "@/features/profile";
 
 type ListPhase = "loading" | "ready" | "error";
 
-export function InspectionsClient({ user, records: initialRecords, demoState }: { user: SessionUser; records: readonly InspectionListItem[]; demoState?: string }) {
+export function InspectionsClient({ user, demoState }: { user: SessionUser; demoState?: string }) {
   const [phase, setPhase] = useState<ListPhase>(() => demoState === "error" ? "error" : demoState === "vacio" ? "ready" : "loading");
   const [records, setRecords] = useState<readonly InspectionListItem[]>([]);
   const { query, result, filteredInspections, hasActiveFilters, clearFilters, setQuery, setResult } = useInspectionFilters(records);
@@ -23,22 +23,26 @@ export function InspectionsClient({ user, records: initialRecords, demoState }: 
     if (demoState === "error") { setRecords([]); setPhase("error"); return; }
     if (demoState === "vacio") { setRecords([]); setPhase("ready"); return; }
     if (demoState === "cargando") { setRecords([]); setPhase("loading"); return; }
-    let active = true;
+    const controller = new AbortController();
     setPhase("loading");
-    // The in-memory adapter is asynchronous so the client route has an observable loading transition.
-    Promise.resolve(initialRecords).then((items) => {
-      if (!active) return;
+    fetch("/api/inspections", { cache: "no-store", signal: controller.signal }).then(async (response) => {
+      if (!response.ok) throw new Error("Inspection list unavailable");
+      return response.json() as Promise<InspectionListItem[]>;
+    }).then((items) => {
       setRecords(items);
       setPhase("ready");
     }).catch(() => {
-      if (active) setPhase("error");
+      if (!controller.signal.aborted) setPhase("error");
     });
-    return () => { active = false; };
-  }, [demoState, initialRecords]);
+    return () => controller.abort();
+  }, [demoState]);
 
   function retry() {
     setPhase("loading");
-    Promise.resolve(initialRecords).then((items) => {
+    fetch("/api/inspections", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("Inspection list unavailable");
+      return response.json() as Promise<InspectionListItem[]>;
+    }).then((items) => {
       setRecords(items);
       setPhase("ready");
     }).catch(() => setPhase("error"));

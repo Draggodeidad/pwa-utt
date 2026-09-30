@@ -66,6 +66,8 @@ async function main() {
       await new Promise((done) => setTimeout(done, 250));
     }
     assert.equal((await request("/inspecciones")).response.status, 307);
+    const anonymousListApi = await request("/api/inspections");
+    assert.equal(anonymousListApi.response.status, 401);
     const anonymousApi = await request(`/api/inspections/${ownId}`);
     assert.equal(anonymousApi.response.status, 401);
     assert.equal(JSON.parse(anonymousApi.body).code, "UNAUTHENTICATED");
@@ -86,7 +88,12 @@ async function main() {
     assert.equal(list.response.status, 200, output);
     assert.match(list.body, /Cargando inspecciones/);
     assert.match(list.body, /aria-busy="true"/);
+    assert.doesNotMatch(list.body, /Revisión propia autorizada/);
     assert.doesNotMatch(list.body, /Registro ajeno confidencial/);
+    const listApi = await request("/api/inspections", tech);
+    assert.equal(listApi.response.status, 200);
+    assert.equal(listApi.response.headers.get("cache-control"), "private, no-store");
+    assert.deepEqual(JSON.parse(listApi.body).map((item) => item.id), [ownId]);
     const listError = await request("/inspecciones?estado=error", tech);
     assert.equal(listError.response.status, 200);
     assert.match(listError.body, /No fue posible cargar la información/);
