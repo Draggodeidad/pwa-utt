@@ -10,6 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,11 +30,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
-import { laboratoryProfiles } from "../data/inspection-editor";
 import { useInspectionEditor } from "../hooks/use-inspection-editor";
-import type { InspectionEditorValues, InspectionFinding } from "../types";
+import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
 
-type Props = { mode: "create" | "edit"; initialValues: InspectionEditorValues };
+type Props = { mode: "create" | "edit"; initialValues: InspectionEditorValues; catalog: readonly LaboratoryOption[] };
 const maxSummary = 500;
 
 function FindingDialog({
@@ -56,7 +56,7 @@ function FindingDialog({
     if (!title.trim() || !description.trim()) return;
     onSave({
       ...finding,
-      id: finding?.id ?? `HAL-${String(Date.now()).slice(-4)}`,
+      id: finding?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim(),
       priority,
@@ -114,9 +114,11 @@ function FindingDialog({
   );
 }
 
-export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
-  const editor = useInspectionEditor(initialValues);
+export function InspectionEditorWorkspace({ mode, initialValues, catalog }: Props) {
+  const router = useRouter();
+  const editor = useInspectionEditor(initialValues, { mode, catalog });
   const {
+    inspectionId,
     values,
     state,
     errors,
@@ -128,7 +130,7 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
     updateFinding,
     removeFinding,
     finalizeInspection,
-    reset,
+    discard,
   } = editor;
   const [findingDialog, setFindingDialog] = useState<{
     open: boolean;
@@ -139,20 +141,19 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
   const [confirming, setConfirming] = useState(false);
   const firstInvalid = useRef<HTMLSelectElement>(null);
   const laboratory =
-    laboratoryProfiles.find((item) => item.code === values.laboratoryCode) ??
-    laboratoryProfiles[0];
+    catalog.find((item) => item.code === values.laboratoryCode) ?? null;
   const needsAttention = values.findings.length > 0;
   const editable = state !== "finalized" && state !== "finalizing";
   const saveLabel =
     state === "saving"
       ? "Guardando..."
-      : state === "offline-saved"
-        ? "Guardado localmente, pendiente de sincronización"
-        : state === "saved"
-          ? "Guardado localmente"
+      : state === "saved"
+        ? "Guardado en el servidor"
+        : state === "save-error"
+          ? "No se pudo guardar"
           : state === "dirty"
             ? "Cambios sin guardar"
-            : "Borrador local";
+            : "Borrador";
   const requestFinalization = () => {
     if (!validate()) {
       firstInvalid.current?.focus();
@@ -161,19 +162,25 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
     setConfirming(true);
   };
   const finalize = async () => {
-    await finalizeInspection();
+    const ok = await finalizeInspection();
     setConfirming(false);
+    if (ok) router.push(`/inspections/${inspectionId}`);
   };
-  const discard = () => {
-    reset();
+  const discardDraft = async () => {
     setDiscardOpen(false);
+    if (await discard()) router.push("/inspections");
   };
 
   return (
     <section className={s.page} aria-labelledby="editor-title">
       {toast ? (
         <div role="status" className={s.toast}>
-          Borrador guardado localmente.
+          Borrador guardado en el servidor.
+        </div>
+      ) : null}
+      {state === "save-error" && errors.form ? (
+        <div role="alert" className={s.formError}>
+          {errors.form}
         </div>
       ) : null}
       <header className={s.header}>
@@ -215,11 +222,14 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
                   disabled={!editable}
                   className={s.select}
                 >
-                  {laboratoryProfiles.map((item) => (
+                  {catalog.map((item) => (
                     <option key={item.code} value={item.code}>
-                      {item.label}
+                      {item.name}
                     </option>
                   ))}
+                  {catalog.length === 0 ? (
+                    <option value="">Sin laboratorios disponibles</option>
+                  ) : null}
                 </select>
                 {errors.laboratoryCode ? (
                   <span role="alert" className={s.fieldError}>
@@ -356,10 +366,7 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
         <aside>
           <Card className={s.laboratoryCard}>
             <h2 className={s.laboratoryTitle}>Laboratorio seleccionado</h2>
-            <p className={s.laboratoryName}>{laboratory.label}</p>
-            <p className={s.laboratoryLocation}>
-              {laboratory.building}, {laboratory.floor}
-            </p>
+            <p className={s.laboratoryName}>{laboratory ? laboratory.name : "Sin seleccionar"}</p>
             <p className={s.laboratoryHint}>
               El resultado se calcula a partir de los hallazgos registrados.
             </p>
@@ -447,16 +454,16 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
       </AlertDialog>
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <AlertDialogContent>
-          <AlertDialogTitle>Descartar cambios</AlertDialogTitle>
+          <AlertDialogTitle>Descartar borrador</AlertDialogTitle>
           <AlertDialogDescription>
-            Se restaurarán los valores con los que abriste este formulario.
+            El borrador se eliminará de forma definitiva. Esta acción no se puede deshacer.
           </AlertDialogDescription>
           <div className={s.dialogActions}>
             <AlertDialogCancel asChild>
               <Button variant="outline">Cancelar</Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
-              <Button className={s.destructiveButton} onClick={discard}>
+              <Button className={s.destructiveButton} onClick={() => void discardDraft()}>
                 Descartar
               </Button>
             </AlertDialogAction>
@@ -466,7 +473,7 @@ export function InspectionEditorWorkspace({ mode, initialValues }: Props) {
       <InspectionFinalizationDialog
         open={confirming}
         folio={values.folio}
-        laboratory={laboratory.label}
+        laboratory={laboratory?.name ?? "Sin seleccionar"}
         findings={values.findings}
         syncStatus={values.syncStatus}
         onOpenChange={setConfirming}
@@ -486,6 +493,8 @@ const s = {
   page: "mx-auto max-w-[1050px] pb-28",
   toast:
     "fixed right-4 top-20 z-40 rounded-sm bg-secondary px-4 py-2 text-sm shadow-lg",
+  formError:
+    "rounded-sm border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive",
   header:
     "flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between",
   title: "text-[32px] font-semibold tracking-tight",
@@ -527,7 +536,6 @@ const s = {
   laboratoryCard: "p-4 shadow-sm",
   laboratoryTitle: "font-semibold",
   laboratoryName: "mt-2 text-sm",
-  laboratoryLocation: "mt-1 text-sm text-muted-foreground",
   laboratoryHint: "mt-4 border-t pt-3 text-xs text-muted-foreground",
   actionBar:
     "sticky bottom-3 z-10 mt-6 flex flex-col gap-3 border-0 bg-card/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between",
