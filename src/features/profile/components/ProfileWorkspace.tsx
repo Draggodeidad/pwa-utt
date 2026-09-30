@@ -27,7 +27,7 @@ function ProfileSkeleton() {
 
 export function ProfileWorkspace({ profile }: { profile: ProfileView | undefined }) {
   const router = useRouter();
-  const { screenState, signOutState, retryLoading, signOut } = useProfileWorkspace(profile, () => router.push("/login"));
+  const { screenState, signOutState, retryLoading, signOut } = useProfileWorkspace(profile, () => { router.replace("/login"); router.refresh(); });
   const isOffline = screenState === "offline";
   const initials = profile?.displayName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() ?? "";
   const email = profile?.email ?? "No disponible";

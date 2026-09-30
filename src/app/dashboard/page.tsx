@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { navigationSectionsByRole } from "@/config/navigation";
-import { temporarySession } from "@/config/temporary-session";
+import { requireServerSession } from "@/lib/auth/session-store";
 import { CoordinationDashboardWorkspace, createCoordinationDashboard } from "@/features/dashboard";
 import { inspections } from "@/features/inspections";
 import { createProfileForSession } from "@/features/profile";
 
-export default function DashboardPage() {
-  const { user } = temporarySession;
+export default async function DashboardPage() {
+  const { user } = await requireServerSession();
   if (user.role !== "coordinator") notFound();
 
   return (

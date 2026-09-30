@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   CircleAlert,
   CloudOff,
@@ -30,8 +31,8 @@ type LoginFormValues = { identifier: string; password: string };
 
 const initialValues: LoginFormValues = { identifier: "", password: "" };
 
-/** Temporary client-side login boundary; no session or API is connected yet. */
 export function LoginScreen() {
+  const router = useRouter();
   const [values, setValues] = useState<LoginFormValues>(initialValues);
   const [status, setStatus] = useState<LoginStatus>("idle");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -41,10 +42,26 @@ export function LoginScreen() {
     if (status === "error") setStatus("idle");
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("loading");
-    window.setTimeout(() => setStatus("error"), 450);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ email: values.identifier, password: values.password }),
+      });
+      if (!response.ok) throw new Error("Acceso no concedido");
+      const session = await response.json() as { user: { role: "technician" | "coordinator" } };
+      setValues(initialValues);
+      router.replace(session.user.role === "coordinator" ? "/dashboard" : "/");
+      router.refresh();
+    } catch {
+      setValues((current) => ({ ...current, password: "" }));
+      setStatus("error");
+    }
   }
 
   const isLoading = status === "loading";

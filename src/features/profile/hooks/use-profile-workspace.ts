@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getConnectivityState } from "@/lib/pwa/connectivity";
 import type { ProfileScreenState, ProfileSignOutState, ProfileView } from "../types";
 
-/** Client-side profile state while the persistent session store is not implemented. */
+/** Profile view and online sign-out state. The server owns the auth session. */
 export function useProfileWorkspace(
   profile: ProfileView | undefined,
   onSignedOut: () => void,
@@ -47,7 +47,12 @@ export function useProfileWorkspace(
 
     setSignOutState("signing-out");
     try {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (response.status !== 204) throw new Error("No fue posible cerrar sesión");
       onSignedOut();
     } catch {
       setSignOutState("error");
