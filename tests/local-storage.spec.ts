@@ -85,13 +85,15 @@ async function main() {
       await storage.saveFinding(ownerA, makeFinding("fin-a", "ins-a", ownerA));
       await storage.enqueue(ownerA, makeIntent("op-a", ownerA, "ins-a"));
       await storage.saveCatalog(ownerA, [{ id: "lab-1", code: "LAB-01", name: "Lab 01" }]);
+      await storage.saveCatalog(ownerB, [{ id: "lab-2", code: "LAB-02", name: "Lab 02" }]);
 
       assert.equal(await storage.getInspection(ownerB, "ins-a"), null, "B no lee inspecciones de A");
       assert.equal((await storage.listInspections(ownerB)).length, 0, "B no lista inspecciones de A");
       assert.equal(await storage.getFinding(ownerB, "fin-a"), null, "B no lee hallazgos de A");
       assert.equal((await storage.listFindings(ownerB)).length, 0, "B no lista hallazgos de A");
       assert.equal((await storage.listQueue(ownerB)).length, 0, "B no lista la cola de A");
-      assert.equal((await storage.getCatalog(ownerB)).length, 0, "B no ve el catálogo de A");
+      assert.deepEqual((await storage.getCatalog(ownerA)).map((lab) => lab.code), ["LAB-01"], "A conserva su catálogo");
+      assert.deepEqual((await storage.getCatalog(ownerB)).map((lab) => lab.code), ["LAB-02"], "B conserva su catálogo independiente");
 
       await storage.removeInspection(ownerB, "ins-a");
       await storage.removeFinding(ownerB, "fin-a");
@@ -107,6 +109,10 @@ async function main() {
         PartitionRequiredError
       );
       storage.close();
+      const reopened = await LocalStorage.open("c2");
+      assert.deepEqual((await reopened.getCatalog(ownerA)).map((lab) => lab.code), ["LAB-01"], "el catálogo de A sobrevive a recarga");
+      assert.deepEqual((await reopened.getCatalog(ownerB)).map((lab) => lab.code), ["LAB-02"], "el catálogo de B sobrevive a recarga");
+      reopened.close();
     }
 
     // clientId: stable on reopen, different across independent installations.
