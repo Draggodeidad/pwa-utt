@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
-import { readLocalSession, type LocalSession } from "@/lib/pwa/offline-session";
+import { isSessionCurrent, readLocalSession, sessionEpoch, type LocalSession } from "@/lib/pwa/offline-session";
 import { loadLocalDraft, toEditorValues, toLocalInspectionListItem } from "@/features/inspections/services/local-capture";
 import { InspectionDetailWorkspace, InspectionEditorWorkspace } from "@/features/inspections";
 import { useOfflineReadiness } from "./use-offline-readiness";
@@ -60,6 +60,20 @@ export function OfflineShell() {
 
   useEffect(() => {
     let active = true;
+    const epoch = sessionEpoch();
+    const lock = () => {
+      if (!isSessionCurrent(epoch)) {
+        active = false;
+        setSession(null);
+        setCatalog([]);
+        setItems([]);
+        setDetail(null);
+        setEditorValues(null);
+        setPhase("no-session");
+      }
+    };
+    window.addEventListener("pwa-utt:session-changed", lock);
+    window.addEventListener("storage", lock);
     (async () => {
       const remembered = readLocalSession();
       if (!remembered) {
@@ -73,8 +87,9 @@ export function OfflineShell() {
         if (active) setPhase("no-session");
         return;
       }
+      try {
       const catalogList = await storage.getCatalog(remembered.userId);
-      if (!active) return;
+      if (!active || !isSessionCurrent(epoch, remembered.userId)) return;
       setSession(remembered);
       setCatalog(catalogList);
 
@@ -88,23 +103,25 @@ export function OfflineShell() {
         const listItems = locals
           .filter((local) => local.deletedAt === null)
           .map((local) => toLocalInspectionListItem(local, counts.get(local.id) ?? 0, remembered.displayName, catalogList));
-        if (active) setItems(listItems);
+        if (active && isSessionCurrent(epoch, remembered.userId)) setItems(listItems);
       } else if (view.kind === "detail") {
         const draft = await loadLocalDraft(remembered.userId, storage, view.id);
         if (draft) {
-          if (active) setDetail(toDetail(draft.inspection, draft.findings, catalogList, remembered.displayName));
+          if (active && isSessionCurrent(epoch, remembered.userId)) setDetail(toDetail(draft.inspection, draft.findings, catalogList, remembered.displayName));
         } else if (active) setPhase("missing");
       } else if (view.kind === "edit") {
         const draft = await loadLocalDraft(remembered.userId, storage, view.id);
         if (draft) {
-          if (active) setEditorValues(toEditorValues(draft.inspection, draft.findings, catalogList, remembered.displayName));
+          if (active && isSessionCurrent(epoch, remembered.userId)) setEditorValues(toEditorValues(draft.inspection, draft.findings, catalogList, remembered.displayName));
         } else if (active) setPhase("missing");
       } else {
-        if (active) setEditorValues(createValues(remembered.displayName));
+        if (active && isSessionCurrent(epoch, remembered.userId)) setEditorValues(createValues(remembered.displayName));
       }
-      if (active) setPhase("ready");
+      if (active && isSessionCurrent(epoch, remembered.userId)) setPhase("ready");
+      } catch { if (active) setPhase("no-session"); }
+      finally { storage.close(); }
     })();
-    return () => { active = false; };
+    return () => { active = false; window.removeEventListener("pwa-utt:session-changed", lock); window.removeEventListener("storage", lock); };
   }, [view]);
 
   return (

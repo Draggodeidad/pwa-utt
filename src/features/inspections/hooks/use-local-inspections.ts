@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
+import { isSessionCurrent, sessionEpoch } from "@/lib/pwa/offline-session";
 import { mergeRemoteRefresh, toLocalInspectionListItem } from "../services/local-capture";
 import type { InspectionListItem, LaboratoryOption } from "../types";
 import type { Uuid } from "@/types/entity";
@@ -14,8 +15,13 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
   const [items, setItems] = useState<readonly InspectionListItem[]>(remote);
   useEffect(() => {
     let active = true;
+    const epoch = sessionEpoch();
+    const lock = () => { if (!isSessionCurrent(epoch, owner)) { active = false; setItems([]); } };
+    window.addEventListener("pwa-utt:session-changed", lock);
+    window.addEventListener("storage", lock);
     LocalStorage.open().then(async (store) => {
       try {
+        if (!isSessionCurrent(epoch, owner)) return;
         if (catalog.length > 0) await store.saveCatalog(owner, catalog).catch(() => {});
         const locals = await store.listInspections(owner);
         const findings = await store.listFindings(owner);
@@ -27,14 +33,14 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
           .filter((local) => local.deletedAt === null)
           .map((local) => toLocalInspectionListItem(local, counts.get(local.id) ?? 0, technician, catalog));
         const tombstoned = new Set(locals.filter((local) => local.deletedAt !== null).map((local) => local.id));
-        if (active) setItems(mergeRemoteRefresh(localItems, [...remote], tombstoned));
+        if (active && isSessionCurrent(epoch, owner)) setItems(mergeRemoteRefresh(localItems, [...remote], tombstoned));
       } finally {
         store.close();
       }
     }).catch(() => {
-      if (active) setItems(remote);
+      if (active && isSessionCurrent(epoch, owner)) setItems(remote);
     });
-    return () => { active = false; };
+    return () => { active = false; window.removeEventListener("pwa-utt:session-changed", lock); window.removeEventListener("storage", lock); };
   }, [remote, catalog, owner, technician]);
   return { items };
 }

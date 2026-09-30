@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import type { Session, SessionUser, UserRole } from "@/features/auth";
 import { createComponentSupabaseClient } from "@/lib/supabase/server";
 
@@ -31,6 +32,7 @@ export async function readSession(client: SupabaseClient): Promise<Session | nul
 }
 
 export async function getServerSession() {
+  if (cookies().get("pwa-utt-logout-blocked")?.value === "1") return null;
   return readSession(createComponentSupabaseClient());
 }
 

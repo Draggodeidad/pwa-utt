@@ -6,17 +6,21 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { HttpClient } from "@/lib/api/http-client";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
+import { isSessionCurrent, sessionEpoch } from "@/lib/pwa/offline-session";
 import type { ConflictRecord } from "../types";
 import { resolveConflict } from "../services/resolve-conflict";
 
 type SessionUser = { id: string; role: "technician" | "coordinator" };
 
 async function sessionUser(): Promise<SessionUser | null> {
+  const epoch = sessionEpoch();
+  if (!isSessionCurrent(epoch)) return null;
   try {
     const response = await fetch("/api/session", { cache: "no-store", credentials: "same-origin" });
+    if (!isSessionCurrent(epoch)) return null;
     if (!response.ok) return null;
     const body = await response.json() as { user?: SessionUser };
-    return body.user?.id && body.user.role ? body.user : null;
+    return body.user?.id && body.user.role && isSessionCurrent(epoch, body.user.id) ? body.user : null;
   } catch { return null; }
 }
 
@@ -49,31 +53,42 @@ export function ConflictResolutionPanel() {
   const [message, setMessage] = useState("");
 
   const reload = useCallback(async () => {
+    const epoch = sessionEpoch();
     const session = await sessionUser();
+    if (sessionEpoch() !== epoch) return;
     setOwner(session);
     if (!session) { setConflicts([]); return; }
     const storage = await LocalStorage.open();
-    try { setConflicts((await storage.listConflicts(session.id)).filter((conflict) => !conflict.resolvedAt)); }
+    try {
+      const records = await storage.listConflicts(session.id);
+      if (isSessionCurrent(epoch, session.id)) setConflicts(records.filter((conflict) => !conflict.resolvedAt));
+    }
     finally { storage.close(); }
   }, []);
 
   useEffect(() => {
     void reload().catch(() => setMessage("No se pudieron leer los conflictos locales"));
     const listener = () => { void reload().catch(() => setMessage("No se pudieron leer los conflictos locales")); };
+    const lock = () => { if (!isSessionCurrent(sessionEpoch())) { setOwner(null); setConflicts([]); setSelected(null); setMessage(""); } };
     window.addEventListener("pwa-utt:queue-changed", listener);
-    return () => window.removeEventListener("pwa-utt:queue-changed", listener);
+    window.addEventListener("pwa-utt:session-changed", lock);
+    window.addEventListener("storage", lock);
+    return () => { window.removeEventListener("pwa-utt:queue-changed", listener); window.removeEventListener("pwa-utt:session-changed", lock); window.removeEventListener("storage", lock); };
   }, [reload]);
 
   const decide = async (decision: "mine" | "server") => {
     if (!selected || !owner || busy) return;
+    const epoch = sessionEpoch();
+    if (!isSessionCurrent(epoch, owner.id)) return;
     setBusy(true);
     setMessage("");
     const storage = await LocalStorage.open();
     try {
       const result = await resolveConflict({
         storage, client: new HttpClient(), owner: owner.id,
-        verifyOwner: async (expected) => { const current = await sessionUser(); return current?.id === expected ? current.role : null; },
+        verifyOwner: async (expected) => { const current = await sessionUser(); return isSessionCurrent(epoch, expected) && current?.id === expected ? current.role : null; },
       }, selected.operationId, decision);
+      if (!isSessionCurrent(epoch, owner.id)) return;
       setSelected(null);
       setMessage(result.newInspectionId ? "La captura se guardó en un borrador nuevo. La copia original sigue disponible." : "Resolución guardada; la captura original sigue recuperable.");
       await reload();

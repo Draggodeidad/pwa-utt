@@ -5,6 +5,7 @@ import type { ConflictRecord } from "@/features/sync/types";
 import type { DomainOperation, DomainOperationError, OperationAcknowledgement } from "@/features/sync/types";
 import type { Uuid } from "@/types/entity";
 import { openLocalDatabase, requestToPromise, runTransaction } from "./indexed-db.ts";
+import { isSessionBlocked, isSessionCurrent, readLocalSession, sessionEpoch } from "./offline-session.ts";
 
 /** Thrown when an operation would run without an active user partition. */
 export class PartitionRequiredError extends Error {
@@ -51,6 +52,7 @@ const ownerPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 function requireOwner(owner: Uuid): void {
   if (typeof owner !== "string" || !ownerPattern.test(owner)) throw new PartitionRequiredError();
+  if (typeof localStorage !== "undefined" && readLocalSession()?.userId !== owner) throw new PartitionRequiredError();
 }
 
 /**
@@ -60,13 +62,39 @@ function requireOwner(owner: Uuid): void {
  */
 export class LocalStorage {
   private readonly db: IDBDatabase;
+  private readonly epoch: string;
 
-  private constructor(db: IDBDatabase) {
+  private constructor(db: IDBDatabase, epoch: string) {
     this.db = db;
+    this.epoch = epoch;
   }
 
   static async open(databaseName?: string): Promise<LocalStorage> {
-    return new LocalStorage(await openLocalDatabase(databaseName));
+    const epoch = sessionEpoch();
+    if (!isSessionCurrent(epoch)) throw new PartitionRequiredError();
+    const db = await openLocalDatabase(databaseName);
+    if (!isSessionCurrent(epoch)) { db.close(); throw new PartitionRequiredError(); }
+    return new LocalStorage(db, epoch);
+  }
+
+  /** Invalidates an in-flight runner's lease without opening its locked partition. */
+  static async revokeLease(owner: Uuid, blockedEpoch: string, databaseName?: string): Promise<void> {
+    if (typeof owner !== "string" || !ownerPattern.test(owner)) return;
+    if (!isSessionBlocked() || sessionEpoch() !== blockedEpoch) return;
+    const db = await openLocalDatabase(databaseName);
+    try {
+      await runTransaction(db, ["metadata"], "readwrite", async (stores) => {
+        if (!isSessionBlocked() || sessionEpoch() !== blockedEpoch) return;
+        await requestToPromise(stores.metadata.delete(leaseName(owner)));
+      });
+    } finally { db.close(); }
+  }
+
+  private async runTransaction<T>(storeNames: readonly string[], mode: IDBTransactionMode, work: (stores: Record<string, IDBObjectStore>) => Promise<T> | T): Promise<T> {
+    if (!isSessionCurrent(this.epoch)) throw new PartitionRequiredError();
+    const result = await runTransaction(this.db, storeNames, mode, work);
+    if (!isSessionCurrent(this.epoch)) throw new PartitionRequiredError();
+    return result;
   }
 
   close(): void {
@@ -83,14 +111,14 @@ export class LocalStorage {
   }
 
   private readMetadata(name: string): Promise<string | null> {
-    return runTransaction(this.db, ["metadata"], "readonly", async (stores) => {
+    return this.runTransaction(["metadata"], "readonly", async (stores) => {
       const record = await requestToPromise<MetadataRecord | undefined>(stores.metadata.get(name));
       return record?.value ?? null;
     });
   }
 
   private writeMetadata(name: string, value: string): Promise<void> {
-    return runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
+    return this.runTransaction(["metadata"], "readwrite", async (stores) => {
       await requestToPromise(stores.metadata.put({ name, value }));
     });
   }
@@ -98,7 +126,7 @@ export class LocalStorage {
   /** A readwrite metadata transaction serializes contenders across tabs. */
   async acquireLease(owner: Uuid, now: number, durationMs: number): Promise<string | null> {
     requireOwner(owner);
-    return runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
+    return this.runTransaction(["metadata"], "readwrite", async (stores) => {
       const name = leaseName(owner);
       const record = await requestToPromise<MetadataRecord | undefined>(stores.metadata.get(name));
       const current = record ? JSON.parse(record.value) as LeaseRecord : null;
@@ -111,14 +139,14 @@ export class LocalStorage {
 
   async renewLease(owner: Uuid, token: string, now: number, durationMs: number): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
+    await this.runTransaction(["metadata"], "readwrite", async (stores) => {
       await assertLease(stores.metadata, owner, token, now);
       await requestToPromise(stores.metadata.put({ name: leaseName(owner), value: JSON.stringify({ token, expiresAt: now + durationMs }) }));
     });
   }
 
   async releaseLease(owner: Uuid, token: string): Promise<void> {
-    requireOwner(owner);
+    if (typeof owner !== "string" || !ownerPattern.test(owner)) throw new PartitionRequiredError();
     await runTransaction(this.db, ["metadata"], "readwrite", async (stores) => {
       const record = await requestToPromise<MetadataRecord | undefined>(stores.metadata.get(leaseName(owner)));
       if (record && (JSON.parse(record.value) as LeaseRecord).token === token) {
@@ -136,14 +164,14 @@ export class LocalStorage {
   async saveInspection(owner: Uuid, inspection: LocalInspection): Promise<void> {
     requireOwner(owner);
     if (inspection.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, ["inspection_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["inspection_local"], "readwrite", async (stores) => {
       await requestToPromise(stores.inspection_local.put(inspection));
     });
   }
 
   async getInspection(owner: Uuid, id: string): Promise<LocalInspection | null> {
     requireOwner(owner);
-    return runTransaction(this.db, ["inspection_local"], "readonly", async (stores) => {
+    return this.runTransaction(["inspection_local"], "readonly", async (stores) => {
       const record = await requestToPromise<LocalInspection | undefined>(stores.inspection_local.get(id));
       return record && record.ownerUserId === owner ? record : null;
     });
@@ -151,7 +179,7 @@ export class LocalStorage {
 
   async listInspections(owner: Uuid): Promise<LocalInspection[]> {
     requireOwner(owner);
-    return runTransaction(this.db, ["inspection_local"], "readonly", async (stores) => {
+    return this.runTransaction(["inspection_local"], "readonly", async (stores) => {
       const records = await requestToPromise<LocalInspection[]>(stores.inspection_local.index("owner").getAll(owner));
       return (records ?? []).filter((record) => record.ownerUserId === owner);
     });
@@ -159,7 +187,7 @@ export class LocalStorage {
 
   async removeInspection(owner: Uuid, id: string): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["inspection_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["inspection_local"], "readwrite", async (stores) => {
       const record = await requestToPromise<LocalInspection | undefined>(stores.inspection_local.get(id));
       if (record && record.ownerUserId === owner) await requestToPromise(stores.inspection_local.delete(id));
     });
@@ -168,14 +196,14 @@ export class LocalStorage {
   async saveFinding(owner: Uuid, finding: LocalFinding): Promise<void> {
     requireOwner(owner);
     if (finding.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, ["finding_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["finding_local"], "readwrite", async (stores) => {
       await requestToPromise(stores.finding_local.put(finding));
     });
   }
 
   async getFinding(owner: Uuid, id: string): Promise<LocalFinding | null> {
     requireOwner(owner);
-    return runTransaction(this.db, ["finding_local"], "readonly", async (stores) => {
+    return this.runTransaction(["finding_local"], "readonly", async (stores) => {
       const record = await requestToPromise<LocalFinding | undefined>(stores.finding_local.get(id));
       return record && record.ownerUserId === owner ? record : null;
     });
@@ -183,7 +211,7 @@ export class LocalStorage {
 
   async listFindings(owner: Uuid, inspectionId?: string): Promise<LocalFinding[]> {
     requireOwner(owner);
-    return runTransaction(this.db, ["finding_local"], "readonly", async (stores) => {
+    return this.runTransaction(["finding_local"], "readonly", async (stores) => {
       const records = inspectionId
         ? await requestToPromise<LocalFinding[]>(stores.finding_local.index("inspection").getAll(inspectionId))
         : await requestToPromise<LocalFinding[]>(stores.finding_local.index("owner").getAll(owner));
@@ -193,7 +221,7 @@ export class LocalStorage {
 
   async removeFinding(owner: Uuid, id: string): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["finding_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["finding_local"], "readwrite", async (stores) => {
       const record = await requestToPromise<LocalFinding | undefined>(stores.finding_local.get(id));
       if (record && record.ownerUserId === owner) await requestToPromise(stores.finding_local.delete(id));
     });
@@ -201,7 +229,7 @@ export class LocalStorage {
 
   async saveCatalog(owner: Uuid, laboratories: readonly LaboratoryOption[]): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["catalog_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["catalog_local"], "readwrite", async (stores) => {
       const record: CatalogRecord = { id: owner, ownerUserId: owner, laboratories: [...laboratories] };
       await requestToPromise(stores.catalog_local.put(record));
     });
@@ -209,7 +237,7 @@ export class LocalStorage {
 
   async getCatalog(owner: Uuid): Promise<LaboratoryOption[]> {
     requireOwner(owner);
-    return runTransaction(this.db, ["catalog_local"], "readonly", async (stores) => {
+    return this.runTransaction(["catalog_local"], "readonly", async (stores) => {
       const record = await requestToPromise<CatalogRecord | undefined>(stores.catalog_local.get(owner));
       return record && record.ownerUserId === owner ? record.laboratories : [];
     });
@@ -223,7 +251,7 @@ export class LocalStorage {
   async saveDraftWithIntent(owner: Uuid, record: LocalEntityRecord, intent: SyncQueueItem): Promise<void> {
     requireOwner(owner);
     if (record.value.ownerUserId !== owner || intent.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, [record.store, "sync_queue"], "readwrite", async (stores) => {
+    await this.runTransaction([record.store, "sync_queue"], "readwrite", async (stores) => {
       await requestToPromise(stores[record.store].put(record.value));
       await requestToPromise(stores.sync_queue.put(intent));
     });
@@ -233,7 +261,7 @@ export class LocalStorage {
   async enqueue(owner: Uuid, item: SyncQueueItem): Promise<void> {
     requireOwner(owner);
     if (item.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, ["sync_queue"], "readwrite", async (stores) => {
+    await this.runTransaction(["sync_queue"], "readwrite", async (stores) => {
       await requestToPromise(stores.sync_queue.put(item));
     });
     announceQueueChange();
@@ -241,7 +269,7 @@ export class LocalStorage {
 
   async listQueue(owner: Uuid): Promise<SyncQueueItem[]> {
     requireOwner(owner);
-    return runTransaction(this.db, ["sync_queue"], "readonly", async (stores) => {
+    return this.runTransaction(["sync_queue"], "readonly", async (stores) => {
       const records = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("owner").getAll(owner));
       return (records ?? [])
         .filter((item) => item.ownerUserId === owner)
@@ -251,7 +279,7 @@ export class LocalStorage {
 
   async listConflicts(owner: Uuid): Promise<ConflictRecord[]> {
     requireOwner(owner);
-    return runTransaction(this.db, ["conflict_local"], "readonly", async (stores) => {
+    return this.runTransaction(["conflict_local"], "readonly", async (stores) => {
       const records = await requestToPromise<ConflictRecord[]>(stores.conflict_local.index("owner").getAll(owner));
       return (records ?? []).filter((record) => record.ownerUserId === owner);
     });
@@ -259,7 +287,7 @@ export class LocalStorage {
 
   async getConflict(owner: Uuid, operationId: string): Promise<ConflictRecord | null> {
     requireOwner(owner);
-    return runTransaction(this.db, ["conflict_local"], "readonly", async (stores) => {
+    return this.runTransaction(["conflict_local"], "readonly", async (stores) => {
       const record = await requestToPromise<ConflictRecord | undefined>(stores.conflict_local.get(operationId));
       return record?.ownerUserId === owner ? record : null;
     });
@@ -267,7 +295,7 @@ export class LocalStorage {
 
   async updateConflictSnapshot(owner: Uuid, operationId: string, remoteSnapshot: unknown, remoteVersion: number, reason: ConflictRecord["reason"]): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["conflict_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["conflict_local"], "readwrite", async (stores) => {
       const current = await requestToPromise<ConflictRecord | undefined>(stores.conflict_local.get(operationId));
       if (!current || current.ownerUserId !== owner || current.resolvedAt) throw new PartitionRequiredError();
       await requestToPromise(stores.conflict_local.put({ ...current, remoteSnapshot, remoteVersion, reason }));
@@ -279,7 +307,7 @@ export class LocalStorage {
     requireOwner(owner);
     for (const record of write.records) if (record.value.ownerUserId !== owner) throw new PartitionRequiredError();
     for (const item of [...write.enqueue, ...write.update]) if (item.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, ["conflict_local", "sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+    await this.runTransaction(["conflict_local", "sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
       await assertLease(stores.metadata, owner, leaseToken, now);
       const conflict = await requestToPromise<ConflictRecord | undefined>(stores.conflict_local.get(operationId));
       const failed = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
@@ -310,14 +338,14 @@ export class LocalStorage {
   async updateQueueItem(owner: Uuid, item: SyncQueueItem): Promise<void> {
     requireOwner(owner);
     if (item.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, ["sync_queue"], "readwrite", async (stores) => {
+    await this.runTransaction(["sync_queue"], "readwrite", async (stores) => {
       await requestToPromise(stores.sync_queue.put(item));
     });
   }
 
   async markComplete(owner: Uuid, operationId: string): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["sync_queue"], "readwrite", async (stores) => {
+    await this.runTransaction(["sync_queue"], "readwrite", async (stores) => {
       const record = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
       if (record && record.ownerUserId === owner) await requestToPromise(stores.sync_queue.delete(operationId));
     });
@@ -329,7 +357,7 @@ export class LocalStorage {
     for (const record of records) if (record.value.ownerUserId !== owner) throw new PartitionRequiredError();
     for (const intent of intents) if (intent.ownerUserId !== owner) throw new PartitionRequiredError();
     const storeNames = Array.from(new Set([...records.map((record) => record.store), ...(removedFindings.length ? ["finding_local"] : []), "sync_queue"]));
-    await runTransaction(this.db, storeNames, "readwrite", async (stores) => {
+    await this.runTransaction(storeNames, "readwrite", async (stores) => {
       for (const removed of removedFindings) {
         const related = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("entity").getAll(removed.id));
         const owned = related.filter((item) => item.ownerUserId === owner);
@@ -357,7 +385,7 @@ export class LocalStorage {
    */
   async removeCapture(owner: Uuid, inspectionId: string): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["inspection_local", "finding_local", "sync_queue"], "readwrite", async (stores) => {
+    await this.runTransaction(["inspection_local", "finding_local", "sync_queue"], "readwrite", async (stores) => {
       const inspection = await requestToPromise<LocalInspection | undefined>(stores.inspection_local.get(inspectionId));
       if (!inspection || inspection.ownerUserId !== owner) return;
       const findings = await requestToPromise<LocalFinding[]>(stores.finding_local.index("inspection").getAll(inspectionId));
@@ -381,7 +409,7 @@ export class LocalStorage {
   async discardCapture(owner: Uuid, tombstone: LocalInspection, discardIntent: SyncQueueItem): Promise<void> {
     requireOwner(owner);
     if (tombstone.ownerUserId !== owner || discardIntent.ownerUserId !== owner) throw new PartitionRequiredError();
-    await runTransaction(this.db, ["inspection_local", "sync_queue"], "readwrite", async (stores) => {
+    await this.runTransaction(["inspection_local", "sync_queue"], "readwrite", async (stores) => {
       await requestToPromise(stores.inspection_local.put(tombstone));
       await requestToPromise(stores.sync_queue.put(discardIntent));
     });
@@ -391,7 +419,7 @@ export class LocalStorage {
   /** Freezes the complete request before HTTP; a later edit never changes its key or body. */
   async prepareSend(owner: Uuid, operationId: string, clientId: Uuid, leaseToken?: string, now = Date.now()): Promise<SyncQueueItem | null> {
     requireOwner(owner);
-    return runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+    return this.runTransaction(["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
       if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const item = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
       if (!item || item.ownerUserId !== owner) return null;
@@ -416,7 +444,7 @@ export class LocalStorage {
   async acknowledge(owner: Uuid, sent: SyncQueueItem, ack: OperationAcknowledgement, leaseToken?: string, now = Date.now()): Promise<void> {
     requireOwner(owner);
     if (sent.ownerUserId !== owner || ack.operationId !== sent.operationId || ack.entityId !== sent.entityId || ack.entityType !== sent.entity || !Number.isSafeInteger(ack.version) || ack.version < 1 || typeof ack.appliedAt !== "string") throw new Error("ACK incompatible");
-    await runTransaction(this.db, ["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+    await this.runTransaction(["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
       if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const queued = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
       if (!queued || queued.ownerUserId !== owner || !queued.frozenRequest || JSON.stringify(queued.frozenRequest) !== JSON.stringify(sent.frozenRequest)) throw new PartitionRequiredError();
@@ -451,7 +479,7 @@ export class LocalStorage {
 
   async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError, nextAttemptAt: string | null = null, leaseToken?: string, now = Date.now(), retryExhausted = false, conflict?: Pick<ConflictRecord, "reason" | "remoteSnapshot" | "remoteVersion">): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["sync_queue", "metadata", "inspection_local", "finding_local", "conflict_local"], "readwrite", async (stores) => {
+    await this.runTransaction(["sync_queue", "metadata", "inspection_local", "finding_local", "conflict_local"], "readwrite", async (stores) => {
       if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const current = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
       if (!current || current.ownerUserId !== owner) return;
