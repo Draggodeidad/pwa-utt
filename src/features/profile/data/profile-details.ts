@@ -27,7 +27,7 @@ export function createProfileForSession(user: SessionUser): ProfileView {
     displayName: user.displayName,
     role: user.role,
     roleLabel: roleLabels[user.role],
-    email: details?.email,
+    email: user.email ?? details?.email,
     institutionalId: details?.institutionalId,
     campusArea: details?.campusArea,
     avatarUrl: details?.avatarUrl,
