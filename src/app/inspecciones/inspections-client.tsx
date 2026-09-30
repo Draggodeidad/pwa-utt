@@ -27,8 +27,8 @@ export function InspectionsClient({ user, demoState }: { user: SessionUser; demo
     setPhase("loading");
     fetch("/api/inspections", { cache: "no-store", signal: controller.signal }).then(async (response) => {
       if (!response.ok) throw new Error("Inspection list unavailable");
-      return response.json() as Promise<InspectionListItem[]>;
-    }).then((items) => {
+      return response.json() as Promise<{ items: InspectionListItem[] }>;
+    }).then(({ items }) => {
       setRecords(items);
       setPhase("ready");
     }).catch(() => {
@@ -41,8 +41,8 @@ export function InspectionsClient({ user, demoState }: { user: SessionUser; demo
     setPhase("loading");
     fetch("/api/inspections", { cache: "no-store" }).then(async (response) => {
       if (!response.ok) throw new Error("Inspection list unavailable");
-      return response.json() as Promise<InspectionListItem[]>;
-    }).then((items) => {
+      return response.json() as Promise<{ items: InspectionListItem[] }>;
+    }).then(({ items }) => {
       setRecords(items);
       setPhase("ready");
     }).catch(() => setPhase("error"));

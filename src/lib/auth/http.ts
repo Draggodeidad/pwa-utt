@@ -4,20 +4,39 @@ export function privateJson(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
-export type ApiErrorCode = "AUTH_DENIED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "INVALID_REQUEST" | "RATE_LIMITED" | "UNAVAILABLE";
+export type ApiErrorCode = "AUTH_DENIED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "INVALID_REQUEST" | "RATE_LIMITED" | "UNAVAILABLE";
 const errors: Record<ApiErrorCode, { status: number; message: string }> = {
   AUTH_DENIED: { status: 401, message: "Acceso no concedido" },
   UNAUTHENTICATED: { status: 401, message: "Sesión no disponible" },
   FORBIDDEN: { status: 403, message: "Acceso no permitido" },
   NOT_FOUND: { status: 404, message: "Recurso no disponible" },
+  CONFLICT: { status: 409, message: "Conflicto de versión o estado" },
   INVALID_REQUEST: { status: 422, message: "Solicitud no válida" },
   RATE_LIMITED: { status: 429, message: "Intenta más tarde" },
   UNAVAILABLE: { status: 503, message: "Servicio no disponible" },
 };
 
-export function apiError(code: ApiErrorCode) {
+/** A transport error keeps the HTTP status of its code while preserving domain details. */
+export type ApiErrorDetails = {
+  code?: string;
+  message?: string;
+  fieldErrors?: Record<string, string>;
+};
+
+export function apiError(code: ApiErrorCode, details?: ApiErrorDetails) {
   const { status, message } = errors[code];
-  return privateJson({ code, error: message }, status);
+  return privateJson({
+    code: details?.code ?? code,
+    error: details?.message ?? message,
+    ...(details?.fieldErrors ? { fieldErrors: details.fieldErrors } : {}),
+  }, status);
+}
+
+/** Flattens validation issues into the fieldErrors contract without exposing internals. */
+export function toFieldErrors(error: { issues: readonly { path: string; message: string }[] }): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of error.issues) fieldErrors[issue.path] = issue.message;
+  return fieldErrors;
 }
 
 /** Reject cross-origin and oversized JSON before parsing a cookie-authenticated mutation. */

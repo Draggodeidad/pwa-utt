@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { InspectionDetail, InspectionEditorValues, InspectionListItem } from "@/features/inspections";
+import type { InspectionDetail, InspectionEditorValues, InspectionListItem, InspectionWorkflowStatus } from "@/features/inspections";
+import { DomainValidationError } from "@/types/entity";
 
 type InspectionRow = {
   id: string; folio_number: number; laboratory_id: string | null; inspector_id: string;
@@ -15,6 +16,46 @@ export class InspectionReadError extends Error {
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function isInspectionId(value: string) { return uuid.test(value); }
+
+export type InspectionListQuery = {
+  limit?: number;
+  cursor?: string;
+  search?: string;
+  status?: InspectionWorkflowStatus;
+};
+
+export type InspectionListPage = {
+  items: InspectionListItem[];
+  nextCursor: string | null;
+};
+
+/** Cursor payload for stable (inspection_date DESC NULLS LAST, id DESC) ordering. */
+type InspectionCursor = { d: string | null; i: string };
+
+export function parseInspectionCursor(value: string): InspectionCursor {
+  let decoded: string;
+  try { decoded = Buffer.from(value, "base64url").toString("utf8"); } catch { throw new DomainValidationError([{ path: "cursor", message: "is invalid" }]); }
+  const separator = decoded.lastIndexOf("\u0000");
+  if (separator < 0) throw new DomainValidationError([{ path: "cursor", message: "is invalid" }]);
+  const rawDate = decoded.slice(0, separator);
+  const i = decoded.slice(separator + 1);
+  const d = rawDate === "null" ? null : rawDate;
+  if ((d !== null && !/^\d{4}-\d{2}-\d{2}$/.test(d)) || !uuid.test(i)) {
+    throw new DomainValidationError([{ path: "cursor", message: "is invalid" }]);
+  }
+  return { d, i };
+}
+
+function encodeInspectionCursor(cursor: InspectionCursor): string {
+  return Buffer.from(`${cursor.d ?? "null"}\u0000${cursor.i}`, "utf8").toString("base64url");
+}
+
+export async function listActiveLaboratories(client: SupabaseClient) {
+  const { data, error } = await client.from("laboratories")
+    .select("id, code, name").eq("active", true).order("code");
+  if (error) throw new InspectionReadError();
+  return (data ?? []) as LaboratoryRow[];
+}
 
 export async function hasVisibleInspection(client: SupabaseClient, id: string): Promise<boolean> {
   if (!isInspectionId(id)) return false;
@@ -80,12 +121,7 @@ export async function findEditableInspection(client: SupabaseClient, id: string,
   };
 }
 
-export async function listVisibleInspections(client: SupabaseClient): Promise<InspectionListItem[]> {
-  const { data, error } = await client.from("inspections")
-    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status")
-    .is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
-  if (error) throw new InspectionReadError();
-  const rows = (data ?? []) as InspectionRow[];
+async function hydrateInspectionItems(client: SupabaseClient, rows: InspectionRow[]): Promise<InspectionListItem[]> {
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const labIds = Array.from(new Set(rows.map((row) => row.laboratory_id).filter((id): id is string => !!id)));
@@ -110,4 +146,41 @@ export async function listVisibleInspections(client: SupabaseClient): Promise<In
       workflowStatus: row.workflow_status, summary: row.summary,
     };
   });
+}
+
+export async function listVisibleInspections(client: SupabaseClient): Promise<InspectionListItem[]> {
+  const { data, error } = await client.from("inspections")
+    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status")
+    .is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
+  if (error) throw new InspectionReadError();
+  return hydrateInspectionItems(client, (data ?? []) as InspectionRow[]);
+}
+
+export async function listVisibleInspectionsPage(client: SupabaseClient, query: InspectionListQuery): Promise<InspectionListPage> {
+  const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
+  let builder = client.from("inspections")
+    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status")
+    .is("deleted_at", null);
+  if (query.status) builder = builder.eq("workflow_status", query.status);
+  if (query.search?.trim()) {
+    const escaped = query.search.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+    builder = builder.ilike("summary", `%${escaped}%`);
+  }
+  if (query.cursor) {
+    const { d, i } = parseInspectionCursor(query.cursor);
+    builder = d === null
+      ? builder.or(`and(inspection_date.is.null,id.lt.${i})`)
+      : builder.or(`inspection_date.lt."${d}",and(inspection_date.eq."${d}",id.lt.${i}),inspection_date.is.null`);
+  }
+  builder = builder.order("inspection_date", { ascending: false, nullsFirst: false }).order("id", { ascending: false }).limit(limit + 1);
+  const { data, error } = await builder;
+  if (error) throw new InspectionReadError();
+  const rows = (data ?? []) as InspectionRow[];
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const items = await hydrateInspectionItems(client, page);
+  const nextCursor = hasMore && page.length > 0
+    ? encodeInspectionCursor({ d: page[page.length - 1].inspection_date, i: page[page.length - 1].id })
+    : null;
+  return { items, nextCursor };
 }

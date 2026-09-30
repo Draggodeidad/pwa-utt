@@ -93,7 +93,7 @@ async function main() {
     const listApi = await request("/api/inspections", tech);
     assert.equal(listApi.response.status, 200);
     assert.equal(listApi.response.headers.get("cache-control"), "private, no-store");
-    assert.deepEqual(JSON.parse(listApi.body).map((item) => item.id), [ownId]);
+    assert.deepEqual(JSON.parse(listApi.body).items.map((item) => item.id), [ownId]);
     const listError = await request("/inspecciones?estado=error", tech);
     assert.equal(listError.response.status, 200);
     assert.match(listError.body, /No fue posible cargar la información/);

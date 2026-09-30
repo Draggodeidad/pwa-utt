@@ -51,7 +51,8 @@ export type DomainErrorCode =
   | "VERSION_CONFLICT"
   | "FINDING_SET_CONFLICT"
   | "IDEMPOTENCY_KEY_REUSED"
-  | "VALIDATION_ERROR";
+  | "VALIDATION_ERROR"
+  | "UNAVAILABLE";
 
 export type DomainOperationError = {
   code: DomainErrorCode;
