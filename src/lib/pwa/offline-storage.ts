@@ -201,4 +201,52 @@ export class LocalStorage {
       if (record && record.ownerUserId === owner) await requestToPromise(stores.sync_queue.delete(operationId));
     });
   }
+
+  /** Writes all records and their intents in one transaction (atomic capture). */
+  async saveCapture(owner: Uuid, records: readonly LocalEntityRecord[], intents: readonly SyncQueueItem[]): Promise<void> {
+    requireOwner(owner);
+    for (const record of records) if (record.value.ownerUserId !== owner) throw new PartitionRequiredError();
+    for (const intent of intents) if (intent.ownerUserId !== owner) throw new PartitionRequiredError();
+    const storeNames = Array.from(new Set([...records.map((record) => record.store), "sync_queue"]));
+    await runTransaction(this.db, storeNames, "readwrite", async (stores) => {
+      for (const record of records) await requestToPromise(stores[record.store].put(record.value));
+      for (const intent of intents) await requestToPromise(stores.sync_queue.put(intent));
+    });
+  }
+
+  /**
+   * Atomically removes an inspection, its findings and every related intent.
+   * Used by the not-sent discard path so no entity/intent is left orphaned.
+   */
+  async removeCapture(owner: Uuid, inspectionId: string): Promise<void> {
+    requireOwner(owner);
+    await runTransaction(this.db, ["inspection_local", "finding_local", "sync_queue"], "readwrite", async (stores) => {
+      const inspection = await requestToPromise<LocalInspection | undefined>(stores.inspection_local.get(inspectionId));
+      if (!inspection || inspection.ownerUserId !== owner) return;
+      const findings = await requestToPromise<LocalFinding[]>(stores.finding_local.index("inspection").getAll(inspectionId));
+      const operationIds = new Set<string>();
+      const inspectionIntents = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("entity").getAll(inspectionId));
+      for (const item of inspectionIntents) operationIds.add(item.operationId);
+      for (const finding of findings) {
+        const findingIntents = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("entity").getAll(finding.id));
+        for (const item of findingIntents) operationIds.add(item.operationId);
+      }
+      await requestToPromise(stores.inspection_local.delete(inspectionId));
+      for (const finding of findings) await requestToPromise(stores.finding_local.delete(finding.id));
+      operationIds.forEach((operationId) => void requestToPromise(stores.sync_queue.delete(operationId)));
+    });
+  }
+
+  /**
+   * Persists a tombstoned inspection together with its ordered discard intent,
+   * keeping the identity and prior intents for a future remote discard.
+   */
+  async discardCapture(owner: Uuid, tombstone: LocalInspection, discardIntent: SyncQueueItem): Promise<void> {
+    requireOwner(owner);
+    if (tombstone.ownerUserId !== owner || discardIntent.ownerUserId !== owner) throw new PartitionRequiredError();
+    await runTransaction(this.db, ["inspection_local", "sync_queue"], "readwrite", async (stores) => {
+      await requestToPromise(stores.inspection_local.put(tombstone));
+      await requestToPromise(stores.sync_queue.put(discardIntent));
+    });
+  }
 }

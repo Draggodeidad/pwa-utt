@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionFinalization } from "../hooks/use-inspection-finalization";
 import type { InspectionDetail } from "../types";
+import type { Uuid } from "@/types/entity";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -39,17 +40,20 @@ const statusLabel = {
 
 export function InspectionDetailWorkspace({
   inspection: initialInspection,
+  owner,
 }: {
   inspection: InspectionDetail;
+  owner: Uuid;
 }) {
-  const { inspection, findings, state, openConfirmation, closeConfirmation, removeFinding, finalize } =
-    useInspectionFinalization(initialInspection);
+  const { inspection, findings, state, finalizationPending, openConfirmation, closeConfirmation, removeFinding, finalize } =
+    useInspectionFinalization(initialInspection, owner);
   const [deleteId, setDeleteId] = useState<string>();
   const [deleteError, setDeleteError] = useState(false);
   const editable =
-    state === "draft" || state === "confirming" || state === "error";
-  const completed = state === "finalized";
-  const pendingSync = inspection.syncStatus === "pending";
+    !finalizationPending && (state === "draft" || state === "confirming" || state === "error");
+  const completed = inspection.workflowStatus === "completed";
+  const pendingFinalization = finalizationPending;
+  const pendingSync = inspection.syncStatus === "pending" || inspection.syncStatus === "local" || inspection.syncStatus === "error";
   return (
     <section
       className={s.page}
@@ -86,7 +90,7 @@ export function InspectionDetailWorkspace({
               {findings.length ? "Requiere atención" : "Sin incidencias"}
             </span>
             <span className={s.workflowStatus}>
-              {completed ? "Finalizada" : "Borrador"}
+              {pendingFinalization ? "Finalización pendiente" : completed ? "Finalizada" : "Borrador"}
             </span>
             {pendingSync ? (
               <span className={s.syncStatus}>
@@ -205,7 +209,7 @@ export function InspectionDetailWorkspace({
       ) : (
         <p className={s.completedNotice}>
           <CheckCircle2 className={s.icon} />
-          Inspección finalizada en modo solo lectura.
+          {pendingFinalization ? "Finalización pendiente de sincronizar." : "Inspección finalizada en modo solo lectura."}
         </p>
       )}
       <AlertDialog

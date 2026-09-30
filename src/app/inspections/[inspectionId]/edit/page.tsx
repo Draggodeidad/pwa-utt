@@ -17,7 +17,7 @@ export default async function EditInspectionPage({ params }: { params: { inspect
 
   return (
     <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}>
-      <InspectionEditorWorkspace mode="edit" initialValues={values} catalog={catalog} />
+      <InspectionEditorWorkspace mode="edit" initialValues={values} catalog={catalog} owner={user.id} />
     </AppShell>
   );
 }

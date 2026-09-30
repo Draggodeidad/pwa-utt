@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { HttpClient } from "@/lib/api/http-client";
-import { RemoteInspectionRepository } from "../services/remote-inspection.repository";
-import { RemoteFindingRepository } from "../../findings/services/remote-finding.repository";
-import { finalizeInspection as runFinalize, type FinalizeFinding } from "../services/finalize-inspection";
+import { useCallback, useEffect, useState } from "react";
+import { LocalStorage } from "@/lib/pwa/offline-storage";
+import {
+  enqueueFinalizeIntent,
+  hasPendingFinalization,
+  loadLocalDraft,
+  saveFindings,
+  toLocalFinding,
+  type RemovedFindingRef,
+} from "../services/local-capture";
 import type { InspectionDetail, InspectionFinding } from "../types";
+import type { Uuid } from "@/types/entity";
 
 export type InspectionFinalizationState = "draft" | "confirming" | "submitting" | "finalized" | "error";
-
-type RemovedFinding = { id: string; version: number | null };
 
 function readErrorMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "payload" in error) {
@@ -19,73 +23,89 @@ function readErrorMessage(error: unknown): string {
   return "No se pudo completar la operación. Intenta de nuevo.";
 }
 
-export function useInspectionFinalization(initialInspection: InspectionDetail) {
-  const repositories = useMemo(() => {
-    const client = new HttpClient();
-    return { inspections: new RemoteInspectionRepository(client), findings: new RemoteFindingRepository(client) };
-  }, []);
+export function useInspectionFinalization(initialInspection: InspectionDetail, owner: Uuid) {
+  const [storage, setStorage] = useState<LocalStorage | null>(null);
   const [inspection, setInspection] = useState(initialInspection);
   const [findings, setFindings] = useState<readonly InspectionFinding[]>(() => [...initialInspection.findings]);
-  const [removed, setRemoved] = useState<readonly RemovedFinding[]>([]);
+  const [removed, setRemoved] = useState<readonly RemovedFindingRef[]>([]);
   const [state, setState] = useState<InspectionFinalizationState>(initialInspection.workflowStatus === "completed" ? "finalized" : "draft");
   const [error, setError] = useState<string | null>(null);
+  const [finalizationPending, setFinalizationPending] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    LocalStorage.open().then((store) => {
+      if (active) setStorage(store);
+    }).catch(() => { /* local finalization unavailable */ });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!storage) return;
+    let active = true;
+    (async () => {
+      const draft = await loadLocalDraft(owner, storage, initialInspection.id);
+      if (!active || !draft) return;
+      setInspection((current) => ({ ...current, syncStatus: draft.inspection.syncStatus, workflowStatus: draft.inspection.workflowStatus }));
+      setFindings(draft.findings.map((finding) => ({
+        id: finding.id, priority: finding.priority, status: finding.status,
+        title: finding.title, description: finding.description, version: finding.baseVersion,
+      })));
+      setFinalizationPending(await hasPendingFinalization(owner, storage, initialInspection.id));
+    })();
+    return () => { active = false; };
+  }, [storage, owner, initialInspection.id]);
 
   const openConfirmation = useCallback(() => setState("confirming"), []);
   const closeConfirmation = useCallback(() => {
-    setState(inspection.workflowStatus === "completed" ? "finalized" : "draft");
+    setState(finalizationPending || inspection.workflowStatus === "completed" ? "finalized" : "draft");
     setError(null);
-  }, [inspection.workflowStatus]);
+  }, [finalizationPending, inspection.workflowStatus]);
 
   const removeFinding = useCallback(async (id: string) => {
     const finding = findings.find((item) => item.id === id);
     if (!finding) return;
-    if (finding.version != null) {
-      await repositories.findings.delete(id, finding.version);
+    const remaining = findings.filter((item) => item.id !== id);
+    if (storage) {
+      const findingsLocal = remaining.map((item) => toLocalFinding(item.id, inspection.id, item, owner, item.version ?? null, null));
+      await saveFindings(owner, storage, {
+        owner,
+        findings: findingsLocal,
+        removedFindings: [{ id, baseVersion: finding.version ?? null }],
+      });
     }
-    setFindings((current) => current.filter((item) => item.id !== id));
-    setRemoved((current) => [...current, { id, version: finding.version ?? null }]);
+    setFindings(remaining);
+    setRemoved((current) => [...current, { id, baseVersion: finding.version ?? null }]);
     setError(null);
-  }, [findings, repositories]);
+  }, [findings, inspection.id, owner, storage]);
 
   const finalize = useCallback(async () => {
     setState("submitting");
     try {
-      const detailFindings: FinalizeFinding[] = [
-        ...findings.map((finding) => ({
-          id: finding.id,
-          version: finding.version ?? null,
-          title: finding.title,
-          description: finding.description,
-          priority: finding.priority,
-          status: finding.status,
-        })),
-        ...removed.map(({ id, version }) => ({
-          id,
-          version,
-          title: "",
-          description: "",
-          priority: "medium" as const,
-          status: "pending" as const,
-          removed: true,
-        })),
-      ];
-      const result = await runFinalize({
+      if (!storage) throw new Error("storage unavailable");
+      if (removed.length) {
+        const findingsLocal = findings.map((item) => toLocalFinding(item.id, inspection.id, item, owner, item.version ?? null, null));
+        await saveFindings(owner, storage, {
+          owner,
+          findings: findingsLocal,
+          removedFindings: removed,
+        });
+      }
+      const existing = await storage.getInspection(owner, inspection.id);
+      await enqueueFinalizeIntent(owner, storage, {
         inspectionId: inspection.id,
-        inspectionVersion: inspection.version,
-        inspectionDraft: { summary: inspection.scope },
-        inspectionDirty: false,
-        findings: detailFindings,
-        inspectionRepository: repositories.inspections,
-        findingRepository: repositories.findings,
+        baseVersion: existing?.baseVersion ?? inspection.version,
+        expectedFindingIds: findings.map((item) => item.id),
       });
-      setInspection((current) => ({ ...current, workflowStatus: "completed", syncStatus: result.syncStatus }));
+      setInspection((current) => ({ ...current, syncStatus: "pending" }));
+      setFinalizationPending(true);
       setState("finalized");
       setError(null);
     } catch (failure) {
       setError(readErrorMessage(failure));
       setState("error");
     }
-  }, [findings, removed, inspection.id, inspection.version, inspection.scope, repositories]);
+  }, [findings, removed, inspection.id, inspection.version, owner, storage]);
 
-  return { inspection, findings, state, error, openConfirmation, closeConfirmation, removeFinding, finalize };
+  return { inspection, findings, state, error, finalizationPending, openConfirmation, closeConfirmation, removeFinding, finalize };
 }
