@@ -1,13 +1,11 @@
-const CACHE_VERSION = "w03-v1";
+const CACHE_VERSION = "phase-08-v1";
 const APP_SHELL_CACHE = `inspecciones-shell-${CACHE_VERSION}`;
-const NAVIGATION_CACHE = `inspecciones-navigation-${CACHE_VERSION}`;
 const STATIC_ASSET_CACHE = `inspecciones-static-${CACHE_VERSION}`;
-const MAX_NAVIGATION_RESPONSES = 20;
 const MAX_STATIC_ASSETS = 50;
 
-// Every resource here is present in public/ and can safely be used offline.
+// Only this public page and these public files may be stored during install.
 const APP_SHELL_URLS = [
-  "/",
+  "/offline",
   "/manifest.webmanifest",
   "/icons/icon.svg",
   "/icons/icon-192.png",
@@ -17,10 +15,11 @@ const APP_SHELL_URLS = [
   "/apple-touch-icon.png"
 ];
 
-const SENSITIVE_PATHS = ["/api", "/api/", "/login", "/sync", "/auth/", "/_next/webpack-hmr"];
+const PUBLIC_ASSET_URLS = new Set(APP_SHELL_URLS.filter(path => path !== "/offline"));
+const SENSITIVE_PATHS = ["/api", "/login", "/sync", "/auth", "/_next/webpack-hmr"];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(APP_SHELL_CACHE).then(cache => cache.addAll(APP_SHELL_URLS)));
+  event.waitUntil(precachePublicShell());
 });
 
 self.addEventListener("activate", event => {
@@ -33,7 +32,7 @@ self.addEventListener("activate", event => {
             .filter(
               cacheName =>
                 cacheName.startsWith("inspecciones-") &&
-                ![APP_SHELL_CACHE, NAVIGATION_CACHE, STATIC_ASSET_CACHE].includes(cacheName)
+                ![APP_SHELL_CACHE, STATIC_ASSET_CACHE].includes(cacheName)
             )
             .map(cacheName => caches.delete(cacheName))
         )
@@ -54,56 +53,81 @@ self.addEventListener("fetch", event => {
   if (url.origin !== self.location.origin || isSensitiveRequest(url)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirstNavigation(request));
+    event.respondWith(navigateWithPublicFallback(request));
     return;
   }
 
-  if (isStaticAsset(request, url)) event.respondWith(cacheFirstStaticAsset(request));
+  // RSC, API, and other requests are never stored, regardless of destination.
+  if (isPublicStaticAsset(url)) event.respondWith(cacheFirstPublicAsset(request));
 });
 
-function isSensitiveRequest(url) {
-  return SENSITIVE_PATHS.some(path => url.pathname === path || url.pathname.startsWith(path));
-}
-
-function isStaticAsset(request, url) {
-  return (
-    url.pathname.startsWith("/_next/static/") ||
-    ["style", "script", "image", "font"].includes(request.destination)
-  );
-}
-
-async function networkFirstNavigation(request) {
-  const cache = await caches.open(NAVIGATION_CACHE);
-  const shellCache = await caches.open(APP_SHELL_CACHE);
-
-  try {
+async function precachePublicShell() {
+  const cache = await caches.open(APP_SHELL_CACHE);
+  for (const path of APP_SHELL_URLS) {
+    const request = new Request(new URL(path, self.location.origin).toString(), { credentials: "omit" });
     const response = await fetch(request);
-    if (isCacheable(response)) {
-      await cache.put(request, response.clone());
-      await trimCache(cache, MAX_NAVIGATION_RESPONSES);
+    if (!isCacheable(response, path === "/offline") || (path === "/offline" && isRscResponse(response))) {
+      throw new Error(`Public shell resource is not cacheable: ${path}`);
     }
-    return response;
-  } catch {
-    return (await cache.match(request)) || (await shellCache.match("/")) || Response.error();
+    await cache.put(request, response);
   }
 }
 
-async function cacheFirstStaticAsset(request) {
+function isSensitiveRequest(url) {
+  return SENSITIVE_PATHS.some(path => url.pathname === path || url.pathname.startsWith(`${path}/`));
+}
+
+function isPublicStaticAsset(url) {
+  return !url.search && (url.pathname.startsWith("/_next/static/") || PUBLIC_ASSET_URLS.has(url.pathname));
+}
+
+async function navigateWithPublicFallback(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    const shellCache = await caches.open(APP_SHELL_CACHE);
+    return (await shellCache.match("/offline")) || Response.error();
+  }
+}
+
+async function cacheFirstPublicAsset(request) {
+  const url = new URL(request.url);
+  if (PUBLIC_ASSET_URLS.has(url.pathname)) {
+    const shellCache = await caches.open(APP_SHELL_CACHE);
+    const precachedResponse = await shellCache.match(request);
+    if (precachedResponse) return precachedResponse;
+  }
+
   const cache = await caches.open(STATIC_ASSET_CACHE);
   const cachedResponse = await cache.match(request);
   if (cachedResponse) return cachedResponse;
 
   const response = await fetch(request);
-  if (isCacheable(response)) {
+  if (isCacheable(response) && !isHtmlOrRsc(response)) {
     await cache.put(request, response.clone());
     await trimCache(cache, MAX_STATIC_ASSETS);
   }
   return response;
 }
 
-function isCacheable(response) {
+function isCacheable(response, allowRscVary = false) {
   const cacheControl = response.headers.get("Cache-Control") || "";
-  return response.ok && !cacheControl.includes("no-store") && !cacheControl.includes("private");
+  const vary = response.headers.get("Vary") || "";
+  const sensitiveVary = allowRscVary ? /(?:^|,)\s*(?:cookie|authorization)\s*(?:,|$)/i : /(?:^|,)\s*(?:cookie|authorization|rsc)\s*(?:,|$)/i;
+  return response.ok &&
+    !/(?:^|,)\s*(?:no-store|private)\b/i.test(cacheControl) &&
+    !sensitiveVary.test(vary) &&
+    !response.headers.has("Set-Cookie");
+}
+
+function isHtmlOrRsc(response) {
+  const contentType = response.headers.get("Content-Type") || "";
+  return /(?:text\/html|text\/x-component)/i.test(contentType);
+}
+
+function isRscResponse(response) {
+  const contentType = response.headers.get("Content-Type") || "";
+  return /text\/x-component/i.test(contentType);
 }
 
 async function trimCache(cache, maximumEntries) {
