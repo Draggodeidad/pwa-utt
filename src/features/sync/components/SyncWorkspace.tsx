@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   CheckCircle2,
   CircleAlert,
@@ -26,6 +27,28 @@ const timeFormatter = new Intl.DateTimeFormat("es-MX", {
   minute: "2-digit",
 });
 
+function formatSafeDate(dateString: string | undefined): string {
+  if (!dateString) return "—";
+  try {
+    const d = new Date(dateString.includes("T") ? dateString : `${dateString}T12:00:00`);
+    if (isNaN(d.getTime())) return dateString;
+    return dateFormatter.format(d);
+  } catch {
+    return dateString;
+  }
+}
+
+function formatSafeLastSync(lastSyncAt: string): string {
+  if (!lastSyncAt) return "Sin sincronizaciones previas";
+  try {
+    const d = new Date(lastSyncAt);
+    if (isNaN(d.getTime())) return "Sin sincronizaciones previas";
+    return `${timeFormatter.format(d)} hrs (${dateFormatter.format(d)})`;
+  } catch {
+    return "Sin sincronizaciones previas";
+  }
+}
+
 function SyncQueueItem({
   record,
   onRetry,
@@ -35,28 +58,72 @@ function SyncQueueItem({
 }) {
   const isError = record.status === "error";
   const isSyncing = record.status === "syncing";
-  const StatusIcon = isError ? CircleAlert : isSyncing ? RefreshCw : FileText;
+  const hasConflict = Boolean(record.hasConflict);
+  const isBlocked = Boolean(record.blockedByDependency);
+  const isAuthError = record.lastError?.code === "UNAUTHENTICATED";
+  const StatusIcon = hasConflict || isError ? CircleAlert : isSyncing ? RefreshCw : FileText;
+
+  let badgeLabel = "Pendiente";
+  let badgeStyle = s.statusPending;
+  if (hasConflict) {
+    badgeLabel = "Conflicto";
+    badgeStyle = s.statusConflict;
+  } else if (isError) {
+    badgeLabel = "Error";
+    badgeStyle = s.statusError;
+  } else if (isSyncing) {
+    badgeLabel = "Sincronizando";
+    badgeStyle = s.statusSyncing;
+  } else if (isBlocked) {
+    badgeLabel = "En espera";
+    badgeStyle = s.statusBlocked;
+  }
 
   return (
-    <article className={isError ? s.queueItemError : s.queueItem}>
-      <div className={isError ? s.recordIconError : isSyncing ? s.recordIconSyncing : s.recordIcon}>
+    <article className={hasConflict || isError ? s.queueItemError : s.queueItem}>
+      <div className={hasConflict || isError ? s.recordIconError : isSyncing ? s.recordIconSyncing : s.recordIcon}>
         <StatusIcon className={isSyncing ? s.recordIconSpinning : s.recordIconGlyph} aria-hidden="true" />
       </div>
       <div className={s.recordDetails}>
-        <p className={isError ? s.recordTitleError : s.recordTitle}>
+        <p className={hasConflict || isError ? s.recordTitleError : s.recordTitle}>
           <span className={s.folio}>#{record.folio}</span>
           <span aria-hidden="true"> · </span>
           {record.laboratory}
         </p>
-        <time className={s.recordDate} dateTime={record.date}>
-          {dateFormatter.format(new Date(`${record.date}T12:00:00`))}
+        <time className={s.recordDate} dateTime={record.date || undefined}>
+          {formatSafeDate(record.date)}
         </time>
+        {isAuthError ? (
+          <p className={s.itemErrorMessage} role="alert">
+            Sesión expirada o no autenticada. Inicia sesión en línea.
+          </p>
+        ) : hasConflict ? (
+          <p className={s.itemErrorMessage} role="alert">
+            Conflicto de concurrencia: la versión remota ha cambiado. Requiere resolución.
+          </p>
+        ) : isBlocked ? (
+          <p className={s.itemBlockedMessage}>
+            En espera de la confirmación de la operación previa.
+          </p>
+        ) : isError && record.lastError?.message ? (
+          <p className={s.itemErrorMessage} role="alert">
+            {record.lastError.message}
+          </p>
+        ) : null}
       </div>
       <div className={s.recordActions}>
-        <Badge className={isError ? s.statusError : isSyncing ? s.statusSyncing : s.statusPending}>
-          {isError ? "Error" : isSyncing ? "Sincronizando" : "Pendiente"}
+        <Badge className={badgeStyle}>
+          {badgeLabel}
         </Badge>
-        {isError ? (
+        {isAuthError ? (
+          <Link href="/login" className={s.actionLink}>
+            Iniciar sesión
+          </Link>
+        ) : hasConflict ? (
+          <a href="#conflict-panel" className={s.actionLink}>
+            Resolver
+          </a>
+        ) : isError && !isBlocked ? (
           <Button className={s.retryButton} type="button" variant="ghost" onClick={() => onRetry(record.id)}>
             <RefreshCw className={s.retryIcon} aria-hidden="true" />
             Reintentar
@@ -71,18 +138,21 @@ export function SyncWorkspace() {
   const { state, queue, lastSyncAt, progress, retry, syncNow } = useSyncWorkspace();
   const isOffline = state === "offline";
   const isSyncing = state === "syncing";
-  const completedCount = Math.min(queue.length, Math.max(1, Math.ceil((queue.length * progress) / 100)));
-  const lastSyncLabel = `${timeFormatter.format(new Date(lastSyncAt))} hrs`;
+  const isErrorState = state === "error" || queue.some((r) => r.status === "error" || r.hasConflict);
+  const completedCount = Math.min(queue.length, Math.max(0, Math.round((queue.length * progress) / 100)));
+  const lastSyncLabel = formatSafeLastSync(lastSyncAt);
 
   return (
     <section className={s.page} aria-labelledby="sync-title">
       <header className={s.header}>
         <h1 id="sync-title" className={s.title}>Sincronización</h1>
-        <p className={s.subtitle}>Gestión de inspecciones guardadas localmente en este dispositivo.</p>
+        <p className={s.subtitle}>Gestión de operaciones e inspecciones guardadas localmente en este dispositivo.</p>
       </header>
 
       <div className={s.content} aria-live="polite">
-        <ConflictResolutionPanel />
+        <div id="conflict-panel">
+          <ConflictResolutionPanel />
+        </div>
         <Card className={s.summaryCard}>
           {state === "loading" ? (
             <div className={s.summarySkeleton} aria-label="Cargando estado de sincronización">
@@ -101,15 +171,15 @@ export function SyncWorkspace() {
               </div>
               <div className={s.summaryContent}>
                 <div>
-                  <h2 className={s.pendingCount}>{queue.length} inspecciones pendientes de envío</h2>
+                  <h2 className={s.pendingCount}>{queue.length} {queue.length === 1 ? "inspección pendiente" : "inspecciones pendientes"} de envío</h2>
                   <p className={s.summaryDescription}>Los datos registrados se sincronizan con la base central del campus.</p>
                 </div>
-                <Button type="button" className={s.syncButton} disabled={isOffline || isSyncing || queue.length === 0} onClick={syncNow}>
+                <Button type="button" className={s.syncButton} disabled={isOffline || isSyncing || queue.length === 0} onClick={() => void syncNow()}>
                   <Cloud className={s.syncIcon} aria-hidden="true" />
                   Sincronizar ahora
                 </Button>
               </div>
-              {isSyncing ? (
+              {isSyncing || (progress > 0 && progress < 100) ? (
                 <div className={s.progressArea}>
                   <div className={s.progressHeader}>
                     <p className={s.progressLabel}><RefreshCw className={s.progressIcon} aria-hidden="true" />Sincronizando {completedCount} de {queue.length}...</p>
@@ -120,7 +190,8 @@ export function SyncWorkspace() {
                   </div>
                 </div>
               ) : null}
-              {state === "success" ? <p className={s.successNotice}><CheckCircle2 className={s.noticeIcon} aria-hidden="true" />Las inspecciones se sincronizaron correctamente.</p> : null}
+              {state === "success" && queue.length === 0 ? <p className={s.successNotice}><CheckCircle2 className={s.noticeIcon} aria-hidden="true" />Las inspecciones se sincronizaron correctamente.</p> : null}
+              {isErrorState && !isSyncing ? <p className={s.errorNotice} role="alert"><CircleAlert className={s.noticeIcon} aria-hidden="true" />Algunas operaciones no pudieron sincronizarse. Revisa los detalles debajo.</p> : null}
               {isOffline ? <p className={s.offlineNotice}><CloudOff className={s.noticeIcon} aria-hidden="true" />Conéctate a una red para enviar las inspecciones pendientes.</p> : null}
             </>
           )}
@@ -138,7 +209,7 @@ export function SyncWorkspace() {
             <p className={s.emptyState}>No hay inspecciones pendientes de sincronización.</p>
           ) : (
             <div className={s.queueList}>
-              {queue.map((record) => <SyncQueueItem key={record.id} record={record} onRetry={retry} />)}
+              {queue.map((record) => <SyncQueueItem key={record.id} record={record} onRetry={(id) => void retry(id)} />)}
             </div>
           )}
         </Card>
@@ -176,6 +247,7 @@ const s = {
   progressTrack: "h-2 overflow-hidden rounded-sm bg-border",
   progressFill: "h-full rounded-sm bg-[#4f625b] transition-[width] duration-200",
   successNotice: "flex items-center gap-2 rounded-sm bg-emerald-50 px-3 py-2 text-sm text-emerald-900",
+  errorNotice: "flex items-center gap-2 rounded-sm bg-destructive/10 px-3 py-2 text-sm text-destructive",
   offlineNotice: "flex items-center gap-2 rounded-sm bg-secondary px-3 py-2 text-sm text-secondary-foreground",
   noticeIcon: "size-4 shrink-0",
   queueCard: "space-y-3 border-border/80 p-6 shadow-sm",
@@ -196,10 +268,15 @@ const s = {
   recordTitleError: "truncate text-sm font-medium text-destructive",
   folio: "font-mono text-xs font-semibold tracking-[.025em]",
   recordDate: "mt-0.5 block text-[13px] text-secondary-foreground",
+  itemErrorMessage: "mt-1 text-xs text-destructive",
+  itemBlockedMessage: "mt-1 text-xs text-muted-foreground",
   recordActions: "col-span-2 flex items-center justify-end gap-2 sm:col-span-1",
   statusPending: "rounded-sm border-0 bg-border px-2 py-0.5 font-mono text-[11px] font-medium tracking-[.05em] text-secondary-foreground",
   statusSyncing: "rounded-sm border-0 bg-[#cfe4db] px-2 py-0.5 font-mono text-[11px] font-medium tracking-[.05em] text-[#53675f]",
   statusError: "rounded-sm border-0 bg-destructive px-2 py-0.5 font-mono text-[11px] font-medium tracking-[.05em] text-destructive-foreground",
+  statusConflict: "rounded-sm border-0 bg-amber-500/15 px-2 py-0.5 font-mono text-[11px] font-medium tracking-[.05em] text-amber-700 dark:text-amber-400",
+  statusBlocked: "rounded-sm border-0 bg-secondary px-2 py-0.5 font-mono text-[11px] font-medium tracking-[.05em] text-muted-foreground",
+  actionLink: "inline-flex items-center rounded-sm px-2 py-1 font-mono text-xs text-primary underline hover:text-primary/80",
   retryButton: "h-auto rounded-sm px-2 py-1 font-mono text-xs text-destructive hover:bg-destructive/10 hover:text-destructive",
   retryIcon: "mr-1 size-3",
 };
