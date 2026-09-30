@@ -81,6 +81,8 @@ export type SyncQueueItem = {
   attempts: number;
   nextAttemptAt: string | null;
   lastError: DomainOperationError | null;
+  /** Terminal retry budget reached; dependents stay queued for intervention. */
+  retryExhausted?: boolean;
   createdAt: string;
   status: Extract<SyncStatus, "pending" | "syncing" | "error">;
   /** Persisted before HTTP: retries must use these exact bytes and identity. */

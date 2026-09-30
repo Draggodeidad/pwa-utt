@@ -15,17 +15,22 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
   useEffect(() => {
     let active = true;
     LocalStorage.open().then(async (store) => {
-      const locals = await store.listInspections(owner);
-      const findings = await store.listFindings(owner);
-      const counts = new Map<string, number>();
-      for (const finding of findings) {
-        if (finding.deletedAt === null) counts.set(finding.inspectionId, (counts.get(finding.inspectionId) ?? 0) + 1);
+      try {
+        if (catalog.length > 0) await store.saveCatalog(owner, catalog).catch(() => {});
+        const locals = await store.listInspections(owner);
+        const findings = await store.listFindings(owner);
+        const counts = new Map<string, number>();
+        for (const finding of findings) {
+          if (finding.deletedAt === null) counts.set(finding.inspectionId, (counts.get(finding.inspectionId) ?? 0) + 1);
+        }
+        const localItems = locals
+          .filter((local) => local.deletedAt === null)
+          .map((local) => toLocalInspectionListItem(local, counts.get(local.id) ?? 0, technician, catalog));
+        const tombstoned = new Set(locals.filter((local) => local.deletedAt !== null).map((local) => local.id));
+        if (active) setItems(mergeRemoteRefresh(localItems, [...remote], tombstoned));
+      } finally {
+        store.close();
       }
-      const localItems = locals
-        .filter((local) => local.deletedAt === null)
-        .map((local) => toLocalInspectionListItem(local, counts.get(local.id) ?? 0, technician, catalog));
-      const tombstoned = new Set(locals.filter((local) => local.deletedAt !== null).map((local) => local.id));
-      if (active) setItems(mergeRemoteRefresh(localItems, [...remote], tombstoned));
     }).catch(() => {
       if (active) setItems(remote);
     });

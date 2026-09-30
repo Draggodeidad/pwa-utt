@@ -107,8 +107,8 @@ export function runTransaction<T>(
     Promise.resolve(work(stores)).then(
       (value) => { result = value; },
       (error) => {
-        try { tx.abort(); } catch { /* transaction already aborted */ }
         reject(error);
+        try { tx.abort(); } catch { /* transaction already aborted */ }
       }
     );
   });

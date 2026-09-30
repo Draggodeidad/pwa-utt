@@ -1,10 +1,11 @@
-import { ApiClientError } from "./client";
-import type { ApiClient } from "./client";
+import { ApiClientError } from "./client.ts";
+import type { ApiClient } from "./client.ts";
 import type { DomainOperationError } from "@/features/sync";
 
 export type HttpClientOptions = {
   fetch?: typeof globalThis.fetch;
   headers?: Record<string, string>;
+  timeoutMs?: number;
 };
 
 type WireError = {
@@ -31,10 +32,12 @@ function toDomainError(body: unknown): DomainOperationError {
 export class HttpClient implements ApiClient {
   private readonly fetchImpl: typeof fetch;
   private readonly baseHeaders: Record<string, string>;
+  private readonly timeoutMs: number;
 
   constructor(options: HttpClientOptions = {}) {
     this.fetchImpl = options.fetch ?? ((...args) => globalThis.fetch(...args));
     this.baseHeaders = { "content-type": "application/json", ...options.headers };
+    this.timeoutMs = options.timeoutMs ?? 15_000;
   }
 
   async get<T>(path: string): Promise<T> {
@@ -67,15 +70,20 @@ export class HttpClient implements ApiClient {
     if (options?.operationId) headers["idempotency-key"] = options.operationId;
 
     let response: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       response = await this.fetchImpl(path, {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         credentials: "same-origin",
+        signal: controller.signal,
       });
     } catch {
       throw new ApiClientError(503, { code: "UNAVAILABLE", message: "Servicio no disponible" });
+    } finally {
+      clearTimeout(timeout);
     }
 
     let payload: unknown = null;
@@ -83,7 +91,10 @@ export class HttpClient implements ApiClient {
       try { payload = await response.json(); } catch { payload = null; }
     }
     if (!response.ok) {
-      throw new ApiClientError(response.status, toDomainError(payload));
+      const retryAfter = response.headers.get("Retry-After");
+      const seconds = retryAfter === null ? NaN : Number(retryAfter);
+      const delay = Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : NaN;
+      throw new ApiClientError(response.status, toDomainError(payload), Number.isFinite(delay) ? Math.max(0, delay) : null);
     }
     return payload as TResponse;
   }

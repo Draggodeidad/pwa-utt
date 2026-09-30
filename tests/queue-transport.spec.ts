@@ -81,11 +81,14 @@ async function main() {
       });
       assert.deepEqual(await runQueue(storage, ownerB, { client, verifyOwner: async () => false }), { acknowledged: 0, failed: 0, paused: true });
       assert.equal(calls.length, 0, "B cannot send A's pending operation");
-      const transport = { client, verifyOwner: async (owner) => owner === ownerA };
+      let time = Date.now();
+      const transport = { client, verifyOwner: async (owner) => owner === ownerA, now: () => time };
       assert.equal((await runQueue(storage, ownerA, transport)).failed, 1);
       const afterLost = (await storage.listQueue(ownerA))[0];
       assert.equal(afterLost.status, "error");
       assert.ok(afterLost.frozenRequest, "request survives lost ACK");
+      assert.equal((await runQueue(storage, ownerA, transport)).acknowledged, 0, "retry waits for its scheduled time");
+      time = Date.parse(afterLost.nextAttemptAt);
       assert.equal((await runQueue(storage, ownerA, transport)).acknowledged, 1);
       assert.equal(seen.size, 1, "receipt replay does not duplicate entity");
       assert.deepEqual(calls[0], calls[1], "key, clientId, payload and baseVersion are identical");

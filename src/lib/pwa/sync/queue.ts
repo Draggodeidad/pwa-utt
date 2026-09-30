@@ -30,3 +30,14 @@ export class LocalStorageSyncQueue implements SyncQueue {
     return this.storage.markComplete(this.owner, id);
   }
 }
+
+export type RecoveryState = "ready" | "waiting" | "blocked_dependency" | "retry_exhausted" | "intervention";
+
+/** Separates an operation's own terminal error from a dependent waiting on it. */
+export function recoveryState(item: SyncQueueItem, queue: readonly SyncQueueItem[], now: number): RecoveryState {
+  if (item.retryExhausted) return "retry_exhausted";
+  if (item.status === "error" && !item.nextAttemptAt) return "intervention";
+  if (item.dependsOn.some((id) => queue.some((other) => other.operationId === id))) return "blocked_dependency";
+  if (item.nextAttemptAt && Date.parse(item.nextAttemptAt) > now) return "waiting";
+  return "ready";
+}

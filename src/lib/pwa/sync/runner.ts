@@ -2,13 +2,32 @@ import { ApiClientError } from "../../api/client.ts";
 import type { ApiClient } from "../../api/client.ts";
 import type { DomainOperation, DomainOperationError, OperationAcknowledgement, SyncQueueItem } from "../../../features/sync/types.ts";
 import type { Uuid } from "../../../types/entity.ts";
+import { LeaseLostError } from "../offline-storage.ts";
 import type { LocalStorage } from "../offline-storage.ts";
 
 export type QueueTransport = {
   client: ApiClient;
   /** Must verify the server session, not only the remembered offline identity. */
   verifyOwner(owner: Uuid): Promise<boolean>;
+  now?: () => number;
 };
+
+const MAX_ATTEMPTS = 5;
+const LEASE_MS = 30_000;
+const MAX_BACKOFF_MS = 30_000;
+const MAX_RETRY_AFTER_MS = 86_400_000;
+
+function isTransient(error: unknown): boolean {
+  return !(error instanceof ApiClientError) || [408, 429].includes(error.status) || error.status >= 500;
+}
+
+function retryDelay(error: unknown, attempt: number): number | null {
+  if (!isTransient(error)) return null;
+  if (attempt >= MAX_ATTEMPTS) return null;
+  const backoff = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (attempt - 1));
+  const requested = error instanceof ApiClientError ? error.retryAfterMs ?? 0 : 0;
+  return Math.min(MAX_RETRY_AFTER_MS, Math.max(backoff, requested));
+}
 
 export function operationRoute(kind: DomainOperation["kind"], entityId: Uuid): { method: "post" | "put" | "patch" | "delete"; path: string } {
   const inspection = `/api/inspections/${entityId}`;
@@ -45,6 +64,11 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
   let failed = 0;
   const attempted = new Set<string>();
   if (!await transport.verifyOwner(owner)) return { acknowledged, failed, paused: true };
+  const now = transport.now ?? Date.now;
+  const token = await storage.acquireLease(owner, now(), LEASE_MS);
+  if (!token) return { acknowledged, failed, paused: true };
+  const heartbeat = setInterval(() => { void storage.renewLease(owner, token, now(), LEASE_MS).catch(() => {}); }, LEASE_MS / 3);
+  try {
   const clientId = await storage.getClientId();
 
   while (true) {
@@ -53,6 +77,8 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
     let ready: SyncQueueItem | undefined;
     for (const item of queue) {
       if (attempted.has(item.operationId) || item.ownerUserId !== owner || item.dependsOn.some((id) => live.has(id))) continue;
+      if (item.status === "error" && !item.nextAttemptAt) continue;
+      if (item.nextAttemptAt && Date.parse(item.nextAttemptAt) > now()) continue;
       if (queue.some((other) => other.entityId === item.entityId && other.localOrder < item.localOrder)) continue;
       if (item.entity === "finding") {
         const finding = await storage.getFinding(owner, item.entityId);
@@ -73,17 +99,30 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
     if (!ready) break;
     attempted.add(ready.operationId);
     if (!await transport.verifyOwner(owner)) return { acknowledged, failed, paused: true };
-    const sent = await storage.prepareSend(owner, ready.operationId, clientId);
+    await storage.renewLease(owner, token, now(), LEASE_MS);
+    const sent = await storage.prepareSend(owner, ready.operationId, clientId, token, now());
     if (!sent) continue;
     try {
       const ack = await sendOperation(transport.client, sent);
       if (!await transport.verifyOwner(owner)) return { acknowledged, failed, paused: true };
-      await storage.acknowledge(owner, sent, ack);
+      await storage.renewLease(owner, token, now(), LEASE_MS);
+      await storage.acknowledge(owner, sent, ack, token, now());
       acknowledged++;
     } catch (error) {
-      await storage.failSend(owner, sent, transportError(error));
+      if (error instanceof LeaseLostError) return { acknowledged, failed, paused: true };
+      const delay = retryDelay(error, sent.attempts);
+      const nextAttemptAt = delay === null ? null : new Date(now() + delay).toISOString();
+      await storage.failSend(owner, sent, transportError(error), nextAttemptAt, token, now(), isTransient(error) && sent.attempts >= MAX_ATTEMPTS);
       failed++;
+      if (error instanceof ApiClientError && error.status === 401) return { acknowledged, failed, paused: true };
     }
   }
   return { acknowledged, failed, paused: false };
+  } catch (error) {
+    if (error instanceof LeaseLostError) return { acknowledged, failed, paused: true };
+    throw error;
+  } finally {
+    clearInterval(heartbeat);
+    await storage.releaseLease(owner, token);
+  }
 }
