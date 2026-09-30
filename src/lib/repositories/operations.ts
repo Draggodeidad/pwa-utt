@@ -22,12 +22,14 @@ function mapRpcFailure(code: string | undefined, message: string): { domain: Dom
     case "FORBIDDEN_OR_INVALID_INPUT": return { domain: "FORBIDDEN", http: 403 };
     case "NOT_FOUND":
     case "NOT_EDITABLE": return { domain: "NOT_FOUND", http: 404 };
-    case "VERSION_OR_STATE_CONFLICT": return { domain: "VERSION_CONFLICT", http: 409 };
+    case "VERSION_OR_STATE_CONFLICT":
+    case "VERSION_CONFLICT": return { domain: "VERSION_CONFLICT", http: 409 };
     case "IDEMPOTENCY_KEY_REUSED": return { domain: "IDEMPOTENCY_KEY_REUSED", http: 409 };
     case "FINDING_SET_CONFLICT": return { domain: "FINDING_SET_CONFLICT", http: 409 };
     case "INVALID_INPUT":
     case "INVALID_OPERATION":
     case "INVALID_LABORATORY":
+    case "INVALID_TRANSITION":
     case "FINALIZATION_INVALID": return { domain: "VALIDATION_ERROR", http: 422 };
     default: return { domain: "UNAVAILABLE", http: 503 };
   }
