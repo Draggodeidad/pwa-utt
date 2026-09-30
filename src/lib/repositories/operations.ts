@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DomainErrorCode, DomainOperation, OperationAcknowledgement } from "@/features/sync";
+import type { DomainErrorCode, DomainOperation, OperationAcknowledgement, SyncEntityKind } from "@/features/sync";
 import type { Uuid } from "@/types/entity";
 
 /** A domain error raised by `apply_operation`, already translated to HTTP. */
@@ -35,22 +35,18 @@ function mapRpcFailure(code: string | undefined, message: string): { domain: Dom
   }
 }
 
-type InspectionRow = {
-  id: string;
-  version: number;
-  updated_at: string;
-  workflow_status: "draft" | "completed";
-};
+type OperationRow = { version: number; updated_at: string };
 
 /**
- * Remote repository for inspection mutations. `apply_operation` is the only
- * write entry point and runs with the caller's identity; every branch of the
- * RPC validates actor, role, ownership, state and version.
+ * Shared remote write path. `apply_operation` is the only write entry point and
+ * runs with the caller's identity; every branch of the RPC validates actor,
+ * role, ownership, state and version.
  */
-export async function applyInspectionOperation(
+async function applyOperation(
   client: SupabaseClient,
   operationId: Uuid,
-  operation: DomainOperation
+  operation: DomainOperation,
+  entityType: SyncEntityKind
 ): Promise<OperationAcknowledgement> {
   const { data, error } = await client.rpc("apply_operation", {
     p_operation_id: operationId,
@@ -65,17 +61,33 @@ export async function applyInspectionOperation(
     const mapped = mapRpcFailure(error.code, error.message ?? "");
     throw new ApplyOperationError(mapped.domain, error.message ?? mapped.domain, mapped.http);
   }
-  if (!data || typeof data !== "object" || typeof (data as InspectionRow).version !== "number") {
+  if (!data || typeof data !== "object" || typeof (data as OperationRow).version !== "number") {
     throw new ApplyOperationError("UNAVAILABLE", "apply_operation did not return an entity", 503);
   }
 
-  const row = data as InspectionRow;
+  const row = data as OperationRow;
   return {
     operationId,
     entityId: operation.entityId,
-    entityType: "inspection",
+    entityType,
     version: row.version,
     appliedAt: row.updated_at,
     replayed: false,
   };
+}
+
+export async function applyInspectionOperation(
+  client: SupabaseClient,
+  operationId: Uuid,
+  operation: DomainOperation
+): Promise<OperationAcknowledgement> {
+  return applyOperation(client, operationId, operation, "inspection");
+}
+
+export async function applyFindingOperation(
+  client: SupabaseClient,
+  operationId: Uuid,
+  operation: DomainOperation
+): Promise<OperationAcknowledgement> {
+  return applyOperation(client, operationId, operation, "finding");
 }
