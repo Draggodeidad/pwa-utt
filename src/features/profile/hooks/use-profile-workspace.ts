@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getConnectivityState } from "@/lib/pwa/connectivity";
 import { blockLocalSession, completeRemoteLogout, sessionEpoch } from "@/lib/pwa/offline-session";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
@@ -12,37 +12,32 @@ export function useProfileWorkspace(
   profile: ProfileView | undefined,
   onSignedOut: () => void,
 ) {
-  const [screenState, setScreenState] = useState<ProfileScreenState>("loading");
+  const [screenState, setScreenState] = useState<ProfileScreenState>(() => {
+    if (!profile) return "error";
+    return getConnectivityState() === "offline" ? "offline" : "ready";
+  });
   const [signOutState, setSignOutState] = useState<ProfileSignOutState>("idle");
 
-  useEffect(() => {
-    const updateConnectivity = () => {
-      if (!profile) {
-        setScreenState("error");
-        return;
-      }
-      setScreenState(getConnectivityState() === "offline" ? "offline" : "ready");
-    };
-    const initialize = window.setTimeout(updateConnectivity, 300);
+  const updateConnectivity = useCallback(() => {
+    if (!profile) {
+      setScreenState("error");
+      return;
+    }
+    setScreenState(getConnectivityState() === "offline" ? "offline" : "ready");
+  }, [profile]);
 
+  useEffect(() => {
+    updateConnectivity();
     window.addEventListener("online", updateConnectivity);
     window.addEventListener("offline", updateConnectivity);
     return () => {
-      window.clearTimeout(initialize);
       window.removeEventListener("online", updateConnectivity);
       window.removeEventListener("offline", updateConnectivity);
     };
-  }, [profile]);
+  }, [updateConnectivity]);
 
   const retryLoading = () => {
-    setScreenState("loading");
-    window.setTimeout(() => {
-      if (!profile) {
-        setScreenState("error");
-        return;
-      }
-      setScreenState(getConnectivityState() === "offline" ? "offline" : "ready");
-    }, 250);
+    updateConnectivity();
   };
 
   const signOut = async () => {
