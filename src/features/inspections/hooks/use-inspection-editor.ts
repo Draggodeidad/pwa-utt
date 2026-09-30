@@ -52,6 +52,13 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   }, []);
 
   useEffect(() => {
+    if (!storage || catalog.length === 0) return;
+    void storage.saveCatalog(owner, catalog).catch(() => {
+      setErrors((current) => ({ ...current, form: "No se pudo preparar el catálogo para uso sin conexión." }));
+    });
+  }, [storage, catalog, owner]);
+
+  useEffect(() => {
     if (mode !== "edit" || !storage) return;
     let active = true;
     loadLocalDraft(owner, storage, initial.id).then((draft) => {

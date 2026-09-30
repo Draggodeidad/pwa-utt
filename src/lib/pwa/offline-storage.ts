@@ -18,7 +18,7 @@ export type LocalEntityRecord =
   | { store: "inspection_local"; value: LocalInspection }
   | { store: "finding_local"; value: LocalFinding };
 
-type CatalogRecord = { id: "catalog"; ownerUserId: Uuid; laboratories: LaboratoryOption[] };
+type CatalogRecord = { id: Uuid; ownerUserId: Uuid; laboratories: LaboratoryOption[] };
 type MetadataRecord = { name: string; value: string };
 type LeaseRecord = { token: string; expiresAt: number };
 
@@ -193,7 +193,7 @@ export class LocalStorage {
   async saveCatalog(owner: Uuid, laboratories: readonly LaboratoryOption[]): Promise<void> {
     requireOwner(owner);
     await runTransaction(this.db, ["catalog_local"], "readwrite", async (stores) => {
-      const record: CatalogRecord = { id: "catalog", ownerUserId: owner, laboratories: [...laboratories] };
+      const record: CatalogRecord = { id: owner, ownerUserId: owner, laboratories: [...laboratories] };
       await requestToPromise(stores.catalog_local.put(record));
     });
   }
@@ -201,7 +201,7 @@ export class LocalStorage {
   async getCatalog(owner: Uuid): Promise<LaboratoryOption[]> {
     requireOwner(owner);
     return runTransaction(this.db, ["catalog_local"], "readonly", async (stores) => {
-      const record = await requestToPromise<CatalogRecord | undefined>(stores.catalog_local.get("catalog"));
+      const record = await requestToPromise<CatalogRecord | undefined>(stores.catalog_local.get(owner));
       return record && record.ownerUserId === owner ? record.laboratories : [];
     });
   }
