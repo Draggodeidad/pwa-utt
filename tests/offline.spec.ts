@@ -92,22 +92,114 @@ async function runTests() {
   privateShell.setFetchHandler(async request => new MockResponse(request.url, {
     headers: { "Cache-Control": request.url.endsWith("/offline") ? "private, no-store" : "public" }
   }));
-  await assert.rejects(privateShell.triggerInstall(), /not cacheable: \/offline/);
+  await assert.rejects(privateShell.triggerInstall(), /Failed to precache \/offline:.*cache-control=private, no-store/);
   assert.equal(await (await privateShell.caches.open(privateShell.constants.APP_SHELL_CACHE)).match("/offline"), undefined);
 
   // Next.js añade Vary: RSC al HTML estático. Solo /offline puede aceptarlo en el precache.
   const nextShell = createSWHarness();
   nextShell.setFetchHandler(async request => new MockResponse(request.url, {
-    headers: { "Cache-Control": "public", "Vary": request.url.endsWith("/offline") ? "RSC, Next-Router-State-Tree" : "", "Content-Type": "text/html" }
+    headers: { "Cache-Control": "public", "Vary": request.url.endsWith("/offline") ? "RSC, Next-Router-State-Tree" : "", "Content-Type": request.url.endsWith("/offline") ? "text/html" : "image/png" }
   }));
   await nextShell.triggerInstall();
   assert.ok(await (await nextShell.caches.open(nextShell.constants.APP_SHELL_CACHE)).match("/offline"));
 
   const rscShell = createSWHarness();
   rscShell.setFetchHandler(async request => new MockResponse(request.url, {
-    headers: { "Cache-Control": "public", "Content-Type": request.url.endsWith("/offline") ? "text/x-component" : "text/html" }
+    headers: { "Cache-Control": "public", "Content-Type": request.url.endsWith("/offline") ? "text/x-component" : "image/png" }
   }));
-  await assert.rejects(rscShell.triggerInstall(), /not cacheable: \/offline/);
+  await assert.rejects(rscShell.triggerInstall(), /Failed to precache \/offline:.*content-type=text\/x-component/);
+
+  for (const [path, contentType] of [["/apple-touch-icon.png", "text/html"], ["/icons/icon.svg", "text/x-component"], ["/manifest.webmanifest", "text/html"]]) {
+    const wrongAsset = createSWHarness();
+    wrongAsset.setFetchHandler(async request => new MockResponse(request.url, {
+      headers: { "Cache-Control": "public", "Content-Type": request.url.endsWith(path) ? contentType : "image/png" }
+    }));
+    await assert.rejects(wrongAsset.triggerInstall(), new RegExp(`Failed to precache ${path.replaceAll(".", "\\.")}`));
+    assert.equal(await (await wrongAsset.caches.open(wrongAsset.constants.APP_SHELL_CACHE)).match(path), undefined);
+  }
+
+  const redirectedIcon = createSWHarness();
+  redirectedIcon.setFetchHandler(async request => new MockResponse("<html>login</html>", {
+    redirected: request.url.endsWith("/apple-touch-icon.png"), url: "https://example.com/login",
+    headers: { "Cache-Control": "public", "Content-Type": "image/png" }
+  }));
+  await assert.rejects(redirectedIcon.triggerInstall(), /Failed to precache \/apple-touch-icon\.png:.*redirected=true.*url=\/login/);
+
+  const redirectedRuntime = createSWHarness();
+  const redirectedRequest = new MockRequest("/_next/static/chunks/redirected.js", { destination: "script" });
+  redirectedRuntime.setFetchHandler(async () => new MockResponse("asset", { redirected: true, url: "https://example.com/login", headers: { "Cache-Control": "public", "Content-Type": "text/javascript" } }));
+  await redirectedRuntime.triggerFetch(redirectedRequest);
+  assert.equal(await (await redirectedRuntime.caches.open(redirectedRuntime.constants.STATIC_ASSET_CACHE)).match(redirectedRequest), undefined);
+
+  // Los assets esenciales del manifest se precachean y no se someten a la poda runtime.
+  const essentialAssets = ["/_next/static/chunks/app.js", "/_next/static/css/app.css"];
+  const essential = createSWHarness();
+  essential.setFetchHandler(async request => new MockResponse(`asset: ${request.url}`, {
+    headers: { "Cache-Control": "public, max-age=3600", "Content-Type": "text/javascript" }
+  }));
+  essential.setOfflineAssets(essentialAssets);
+  await essential.triggerInstall();
+
+  const shellCache = await essential.caches.open(essential.constants.APP_SHELL_CACHE);
+  for (const url of essentialAssets) assert.ok(await shellCache.match(url), `${url} debe precachearse como esencial`);
+  assert.equal(essential.constants.ESSENTIAL_ASSET_URLS, undefined, "el worker no depende de estado global volátil");
+  assert.deepEqual((await (await shellCache.match("/offline-assets.json")).json()).assets, essentialAssets);
+
+  // Un asset esencial se sirve cache-first sin red y no entra en la poda de 50.
+  const essentialStaticCache = await essential.caches.open(essential.constants.STATIC_ASSET_CACHE);
+  for (let index = 0; index < essential.constants.MAX_STATIC_ASSETS; index++) {
+    await essentialStaticCache.put(new MockRequest(`/_next/static/chunks/runtime-${index}.js`), new MockResponse(`runtime-${index}`));
+  }
+  essential.setFetchHandler(async () => { throw new TypeError("offline"); });
+  const essentialFetch = await essential.triggerFetch(new MockRequest(essentialAssets[0], { destination: "script" }));
+  assert.equal(essentialFetch.response.body, `asset: https://example.com${essentialAssets[0]}`, "el asset esencial sale del precache sin red");
+  assert.equal((await essential.caches.open(essential.constants.APP_SHELL_CACHE)).entries.size, essential.constants.APP_SHELL_URLS.length + essentialAssets.length + 1, "los esenciales y el manifest sobreviven sin poda");
+
+  // READY_QUERY responde preparación solo cuando shell + esenciales están cacheados.
+  const readyReplies = [];
+  const readySource = { postMessage: (payload) => readyReplies.push(payload) };
+  await essential.triggerMessage({ type: "READY_QUERY" }, readySource);
+  assert.equal(readyReplies.length, 1);
+  assert.equal(readyReplies[0].type, "OFFLINE_READY_STATE");
+  assert.equal(readyReplies[0].ready, true, "con shell y esenciales cacheados el worker se declara listo");
+
+  // Un nuevo contexto de SW usa Cache Storage, sin memoria del install anterior.
+  const restarted = createSWHarness({ caches: essential.caches });
+  restarted.setFetchHandler(async () => { throw new TypeError("offline"); });
+  const restartedReplies = [];
+  await restarted.triggerMessage({ type: "READY_QUERY" }, { postMessage: payload => restartedReplies.push(payload) });
+  assert.equal(restartedReplies[0].ready, true);
+  assert.equal((await restarted.triggerFetch(new MockRequest(essentialAssets[0], { destination: "script" }))).response.body, `asset: https://example.com${essentialAssets[0]}`);
+  assert.equal(await essentialStaticCache.match(essentialAssets[0]), undefined, "el asset precacheado no se duplica en runtime");
+  await shellCache.delete(essentialAssets[0]);
+  const missingReplies = [];
+  await restarted.triggerMessage({ type: "READY_QUERY" }, { postMessage: payload => missingReplies.push(payload) });
+  assert.equal(missingReplies[0].ready, false, "un esencial ausente impide declarar offline-ready");
+
+  // Un manifest inválido/ausente hace fallar la instalación (primera visita offline no es "lista").
+  const broken = createSWHarness();
+  broken.setManifestHandler(() => new MockResponse("no-json", { headers: { "Cache-Control": "public" } }));
+  await assert.rejects(broken.triggerInstall(), /manifest is not valid JSON/);
+
+  const invalidPath = createSWHarness();
+  invalidPath.setOfflineAssets(["/login", "/_next/static/chunks/app.js"]);
+  await assert.rejects(invalidPath.triggerInstall(), /Invalid \/offline-assets\.json asset: \/login/);
+
+  const badEssential = createSWHarness();
+  badEssential.setOfflineAssets(["/_next/static/chunks/app.js"]);
+  badEssential.setFetchHandler(async request => new MockResponse("<html>login</html>", {
+    redirected: request.url.includes("/_next/static/"), url: "https://example.com/login",
+    headers: { "Cache-Control": "public", "Content-Type": request.url.includes("/_next/static/") ? "text/html" : "image/png" }
+  }));
+  await assert.rejects(badEssential.triggerInstall(), /Failed to precache \/_next\/static\/chunks\/app\.js:.*redirected=true.*content-type=text\/html/);
+
+  const missingEssential = createSWHarness();
+  missingEssential.setOfflineAssets(["/_next/static/chunks/missing.js"]);
+  missingEssential.setFetchHandler(async request => {
+    if (request.url.endsWith("/missing.js")) throw new TypeError("network error");
+    return new MockResponse("public asset", { headers: { "Cache-Control": "public" } });
+  });
+  await assert.rejects(missingEssential.triggerInstall(), /Failed to precache \/_next\/static\/chunks\/missing\.js: network error/);
 
   console.log("offline.spec.ts: PASS");
 }

@@ -67,6 +67,8 @@ class MockResponse {
     this.statusText = init.statusText || (this.status >= 200 && this.status < 300 ? "OK" : "");
     this.ok = this.status >= 200 && this.status < 300;
     this.headers = new MockHeaders(init.headers);
+    this.redirected = Boolean(init.redirected);
+    this.url = init.url || "";
     this.type = init.type || "basic";
     this.isErrorResponse = Boolean(init.isErrorResponse);
   }
@@ -76,10 +78,17 @@ class MockResponse {
       status: this.status,
       statusText: this.statusText,
       headers: this.headers._map,
+      redirected: this.redirected,
+      url: this.url,
       type: this.type,
       isErrorResponse: this.isErrorResponse
     });
     return copy;
+  }
+
+  async json() {
+    if (typeof this.body === "string") return JSON.parse(this.body);
+    return this.body;
   }
 
   static error() {
@@ -218,7 +227,12 @@ function createSWHarness(options = {}) {
     });
   };
 
-  const caches = new MockCacheStorage();
+  const caches = options.caches || new MockCacheStorage();
+  let offlineAssets = [];
+  let manifestHandler = () => new MockResponse(JSON.stringify({ version: 1, assets: offlineAssets }), {
+    status: 200,
+    headers: { "Cache-Control": "public, max-age=3600" }
+  });
 
   const harness = {
     origin,
@@ -234,10 +248,19 @@ function createSWHarness(options = {}) {
     setFetchHandler(fn) {
       fetchHandler = fn;
     },
+    setOfflineAssets(list) {
+      offlineAssets = [...list];
+    },
+    setManifestHandler(fn) {
+      manifestHandler = fn;
+    },
     fetch: async (request) => {
       const req = typeof request === "string" ? new MockRequest(request) : request;
       networkCalls.push({ url: req.url, method: req.method, request: req });
-      return await fetchHandler(req);
+      const url = new URL(req.url, origin);
+      const response = url.pathname === "/offline-assets.json" ? manifestHandler() : await fetchHandler(req);
+      if (!response.url) response.url = req.url;
+      return response;
     }
   };
   caches.harness = harness;
@@ -251,7 +274,8 @@ function createSWHarness(options = {}) {
       claim: async () => {
         clientsClaimCalled = true;
         return undefined;
-      }
+      },
+      matchAll: async () => []
     },
     skipWaiting: () => {
       skipWaitingCalled = true;
@@ -323,11 +347,10 @@ function createSWHarness(options = {}) {
     await Promise.all(promises);
   };
 
-  harness.triggerMessage = (data) => {
-    const event = { data };
-    for (const handler of listeners.message) {
-      handler(event);
-    }
+  harness.triggerMessage = async (data, source) => {
+    const event = { data, source: source ?? null };
+    const results = listeners.message.map((handler) => handler(event));
+    await Promise.all(results);
   };
 
   harness.triggerFetch = async (request) => {
