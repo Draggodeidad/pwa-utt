@@ -13,5 +13,5 @@ export default async function InspectionDetailPage({ params }: { params: { inspe
   const detail = await findVisibleInspection(createComponentSupabaseClient(), params.inspectionId);
   if (!detail) notFound();
 
-  return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}><InspectionDetailWorkspace inspection={detail} /></AppShell>;
+  return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}><InspectionDetailWorkspace inspection={detail} owner={user.id} /></AppShell>;
 }
