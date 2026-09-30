@@ -5,6 +5,7 @@ coverage/
 *.log
 .env*
 !.env.example
+.vercel/
 reports/verification.json
 reports/rendering-metrics.json
 /PWA-w02-kit-estudiante.zip
