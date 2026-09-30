@@ -1,6 +1,7 @@
 import type { LocalInspection, LaboratoryOption } from "@/features/inspections";
 import type { LocalFinding } from "@/features/findings";
 import type { SyncQueueItem } from "@/features/sync";
+import type { ConflictRecord } from "@/features/sync/types";
 import type { DomainOperation, DomainOperationError, OperationAcknowledgement } from "@/features/sync/types";
 import type { Uuid } from "@/types/entity";
 import { openLocalDatabase, requestToPromise, runTransaction } from "./indexed-db.ts";
@@ -17,6 +18,14 @@ export class PartitionRequiredError extends Error {
 export type LocalEntityRecord =
   | { store: "inspection_local"; value: LocalInspection }
   | { store: "finding_local"; value: LocalFinding };
+
+export type ConflictResolutionWrite = {
+  records: readonly LocalEntityRecord[];
+  enqueue: readonly SyncQueueItem[];
+  update: readonly SyncQueueItem[];
+  remove: readonly string[];
+  resolution: NonNullable<ConflictRecord["resolution"]>;
+};
 
 type CatalogRecord = { id: Uuid; ownerUserId: Uuid; laboratories: LaboratoryOption[] };
 type MetadataRecord = { name: string; value: string };
@@ -240,6 +249,60 @@ export class LocalStorage {
     });
   }
 
+  async listConflicts(owner: Uuid): Promise<ConflictRecord[]> {
+    requireOwner(owner);
+    return runTransaction(this.db, ["conflict_local"], "readonly", async (stores) => {
+      const records = await requestToPromise<ConflictRecord[]>(stores.conflict_local.index("owner").getAll(owner));
+      return (records ?? []).filter((record) => record.ownerUserId === owner);
+    });
+  }
+
+  async getConflict(owner: Uuid, operationId: string): Promise<ConflictRecord | null> {
+    requireOwner(owner);
+    return runTransaction(this.db, ["conflict_local"], "readonly", async (stores) => {
+      const record = await requestToPromise<ConflictRecord | undefined>(stores.conflict_local.get(operationId));
+      return record?.ownerUserId === owner ? record : null;
+    });
+  }
+
+  async updateConflictSnapshot(owner: Uuid, operationId: string, remoteSnapshot: unknown, remoteVersion: number, reason: ConflictRecord["reason"]): Promise<void> {
+    requireOwner(owner);
+    await runTransaction(this.db, ["conflict_local"], "readwrite", async (stores) => {
+      const current = await requestToPromise<ConflictRecord | undefined>(stores.conflict_local.get(operationId));
+      if (!current || current.ownerUserId !== owner || current.resolvedAt) throw new PartitionRequiredError();
+      await requestToPromise(stores.conflict_local.put({ ...current, remoteSnapshot, remoteVersion, reason }));
+    });
+  }
+
+  /** Changes queue, entities and conflict status together; frozen dependent requests cannot be rewritten. */
+  async resolveConflict(owner: Uuid, operationId: string, write: ConflictResolutionWrite, leaseToken: string, now = Date.now()): Promise<void> {
+    requireOwner(owner);
+    for (const record of write.records) if (record.value.ownerUserId !== owner) throw new PartitionRequiredError();
+    for (const item of [...write.enqueue, ...write.update]) if (item.ownerUserId !== owner) throw new PartitionRequiredError();
+    await runTransaction(this.db, ["conflict_local", "sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+      await assertLease(stores.metadata, owner, leaseToken, now);
+      const conflict = await requestToPromise<ConflictRecord | undefined>(stores.conflict_local.get(operationId));
+      const failed = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
+      if (!conflict || conflict.ownerUserId !== owner || conflict.resolvedAt || !failed || failed.ownerUserId !== owner || JSON.stringify(failed.frozenRequest) !== JSON.stringify(conflict.failedOperation.frozenRequest)) throw new PartitionRequiredError();
+      const allQueue = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("owner").getAll(owner));
+      const handled = new Set([...write.remove, ...write.update.map((item) => item.operationId)]);
+      if (allQueue.some((item) => item.ownerUserId === owner && item.dependsOn.includes(operationId) && !handled.has(item.operationId))) throw new Error("La cola cambió durante la resolución; vuelve a intentarlo");
+      for (const id of write.remove) {
+        const item = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(id));
+        if (!item || item.ownerUserId !== owner || (id !== operationId && item.frozenRequest)) throw new PartitionRequiredError();
+      }
+      for (const item of write.update) {
+        const old = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(item.operationId));
+        if (!old || old.ownerUserId !== owner || old.frozenRequest) throw new PartitionRequiredError();
+      }
+      for (const record of write.records) await requestToPromise(stores[record.store].put(record.value));
+      for (const id of write.remove) await requestToPromise(stores.sync_queue.delete(id));
+      for (const item of [...write.update, ...write.enqueue]) await requestToPromise(stores.sync_queue.put(item));
+      await requestToPromise(stores.conflict_local.put({ ...conflict, resolution: write.resolution, resolvedAt: new Date(now).toISOString() }));
+    });
+    announceQueueChange();
+  }
+
   async listPending(owner: Uuid): Promise<SyncQueueItem[]> {
     return this.listQueue(owner);
   }
@@ -386,13 +449,32 @@ export class LocalStorage {
     });
   }
 
-  async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError, nextAttemptAt: string | null = null, leaseToken?: string, now = Date.now(), retryExhausted = false): Promise<void> {
+  async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError, nextAttemptAt: string | null = null, leaseToken?: string, now = Date.now(), retryExhausted = false, conflict?: Pick<ConflictRecord, "reason" | "remoteSnapshot" | "remoteVersion">): Promise<void> {
     requireOwner(owner);
-    await runTransaction(this.db, ["sync_queue", "metadata"], "readwrite", async (stores) => {
+    await runTransaction(this.db, ["sync_queue", "metadata", "inspection_local", "finding_local", "conflict_local"], "readwrite", async (stores) => {
       if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const current = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(sent.operationId));
       if (!current || current.ownerUserId !== owner) return;
-      await requestToPromise(stores.sync_queue.put({ ...current, status: "error", nextAttemptAt, lastError: error, retryExhausted }));
+      const failed: SyncQueueItem = { ...current, status: "error", nextAttemptAt, lastError: error, retryExhausted };
+      await requestToPromise(stores.sync_queue.put(failed));
+      if (conflict) {
+        const entityStore = sent.entity === "inspection" ? stores.inspection_local : stores.finding_local;
+        const local = await requestToPromise<LocalInspection | LocalFinding | undefined>(entityStore.get(sent.entityId));
+        if (local && local.ownerUserId !== owner) throw new PartitionRequiredError();
+        const inspectionId = sent.entity === "inspection" ? sent.entityId : (local as LocalFinding | undefined)?.inspectionId ?? sent.parentEntityId;
+        const parent = inspectionId ? await requestToPromise<LocalInspection | undefined>(stores.inspection_local.get(inspectionId)) : undefined;
+        const findings = inspectionId ? await requestToPromise<LocalFinding[]>(stores.finding_local.index("inspection").getAll(inspectionId)) : [];
+        if (parent && parent.ownerUserId !== owner || findings.some((finding) => finding.ownerUserId !== owner)) throw new PartitionRequiredError();
+        const record: ConflictRecord = {
+          operationId: sent.operationId, ownerUserId: owner, entity: sent.entity, entityId: sent.entityId,
+          ...(sent.parentEntityId ? { parentEntityId: sent.parentEntityId } : {}),
+          reason: conflict.reason, error, failedOperation: failed, localSnapshot: { entity: local ?? null, inspection: parent ?? null, findings },
+          remoteSnapshot: conflict.remoteSnapshot, localVersion: sent.frozenRequest?.baseVersion ?? sent.baseVersion,
+          remoteVersion: conflict.remoteVersion, createdAt: new Date(now).toISOString(), resolvedAt: null, resolution: null,
+        };
+        await requestToPromise(stores.conflict_local.put(record));
+      }
     });
+    announceQueueChange();
   }
 }

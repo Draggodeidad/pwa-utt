@@ -94,7 +94,8 @@ export async function findVisibleInspection(client: SupabaseClient, id: string):
   const profile = (profiles.data as ProfileRow[] | null)?.[0];
   const visibleFindings = (findings.data ?? []) as FindingRow[];
   return {
-    id: row.id, folio: `INS-${row.folio_number}`, location: lab?.name ?? "Laboratorio no asignado",
+    id: row.id, folio: `INS-${row.folio_number}`, folioNumber: row.folio_number, location: lab?.name ?? "Laboratorio no asignado",
+    laboratoryId: row.laboratory_id, laboratoryCode: lab?.code ?? "—", inspectionDate: row.inspection_date,
     date: row.inspection_date ?? "", technician: profile?.display_name ?? "Responsable no disponible",
     workflowStatus: row.workflow_status, result: visibleFindings.length ? "requires_attention" : "without_findings",
     syncStatus: "synced", scope: row.summary, version: row.version,

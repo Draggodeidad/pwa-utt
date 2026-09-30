@@ -90,6 +90,27 @@ export type SyncQueueItem = {
   sentRevision?: number | null;
 };
 
+export type ConflictReason = "version" | "state" | "finding_set" | "key_reused" | "inaccessible" | "unknown";
+
+/** Immutable evidence is retained after a resolution for local recovery. */
+export type ConflictRecord = {
+  operationId: Uuid;
+  ownerUserId: Uuid;
+  entity: SyncEntityKind;
+  entityId: Uuid;
+  parentEntityId?: Uuid;
+  reason: ConflictReason;
+  error: DomainOperationError;
+  failedOperation: SyncQueueItem;
+  localSnapshot: unknown;
+  remoteSnapshot: unknown | null;
+  localVersion: number | null;
+  remoteVersion: number | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolution: "mine" | "server" | "copied" | null;
+};
+
 /** Read model for the technician's local inspection queue. */
 export type SyncQueueRecord = {
   id: string;
