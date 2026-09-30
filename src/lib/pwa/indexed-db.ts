@@ -1,5 +1,5 @@
 export const LOCAL_DB_NAME = "pwa-utt-local";
-export const LOCAL_DB_VERSION = 1;
+export const LOCAL_DB_VERSION = 2;
 
 export type IndexedDbStoreSpec = {
   name: string;
@@ -13,6 +13,7 @@ export const localStoreSpecs: readonly IndexedDbStoreSpec[] = [
   { name: "finding_local", keyPath: "id", indexes: [{ name: "owner", keyPath: "ownerUserId" }, { name: "inspection", keyPath: "inspectionId" }] },
   { name: "sync_queue", keyPath: "operationId", indexes: [{ name: "owner", keyPath: "ownerUserId" }, { name: "entity", keyPath: "entityId" }] },
   { name: "catalog_local", keyPath: "id", indexes: [{ name: "owner", keyPath: "ownerUserId" }] },
+  { name: "conflict_local", keyPath: "operationId", indexes: [{ name: "owner", keyPath: "ownerUserId" }] },
   { name: "metadata", keyPath: "name" },
 ];
 

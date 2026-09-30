@@ -4,6 +4,7 @@ import type { DomainOperation, DomainOperationError, OperationAcknowledgement, S
 import type { Uuid } from "../../../types/entity.ts";
 import { LeaseLostError } from "../offline-storage.ts";
 import type { LocalStorage } from "../offline-storage.ts";
+import { inspectConflict } from "../../../features/sync/services/conflict-detection.ts";
 
 export type QueueTransport = {
   client: ApiClient;
@@ -54,7 +55,7 @@ export async function sendOperation(client: ApiClient, item: SyncQueueItem): Pro
 
 function transportError(error: unknown): DomainOperationError {
   return error instanceof ApiClientError
-    ? error.payload
+    ? { code: error.payload.code, message: error.payload.message, ...(error.payload.fieldErrors ? { fieldErrors: error.payload.fieldErrors } : {}) }
     : { code: "UNAVAILABLE", message: "Servicio no disponible" };
 }
 
@@ -110,9 +111,11 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
       acknowledged++;
     } catch (error) {
       if (error instanceof LeaseLostError) return { acknowledged, failed, paused: true };
+      const conflict = await inspectConflict(transport.client, sent, error);
+      if (!await transport.verifyOwner(owner)) return { acknowledged, failed, paused: true };
       const delay = retryDelay(error, sent.attempts);
       const nextAttemptAt = delay === null ? null : new Date(now() + delay).toISOString();
-      await storage.failSend(owner, sent, transportError(error), nextAttemptAt, token, now(), isTransient(error) && sent.attempts >= MAX_ATTEMPTS);
+      await storage.failSend(owner, sent, transportError(error), nextAttemptAt, token, now(), isTransient(error) && sent.attempts >= MAX_ATTEMPTS, conflict ?? undefined);
       failed++;
       if (error instanceof ApiClientError && error.status === 401) return { acknowledged, failed, paused: true };
     }

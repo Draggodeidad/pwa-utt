@@ -78,6 +78,7 @@ export class HttpClient implements ApiClient {
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         credentials: "same-origin",
+        ...(method === "GET" ? { cache: "no-store" as const } : {}),
         signal: controller.signal,
       });
     } catch {

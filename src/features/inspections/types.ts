@@ -150,7 +150,7 @@ export type InspectionDetailDto = {
 };
 
 /** Temporary UI-compatible detail shape. New data enters through InspectionDetailDto. */
-export type InspectionDetail = Pick<InspectionDetailDto, "id" | "folio" | "location" | "date" | "technician" | "workflowStatus" | "result" | "syncStatus" | "scope" | "findings" | "version">;
+export type InspectionDetail = Pick<InspectionDetailDto, "id" | "folio" | "location" | "date" | "technician" | "workflowStatus" | "result" | "syncStatus" | "scope" | "findings" | "version"> & Partial<Pick<InspectionDetailDto, "folioNumber" | "laboratoryId" | "laboratoryCode" | "inspectionDate">>;
 
 export type LaboratoryProfile = {
   code: string;

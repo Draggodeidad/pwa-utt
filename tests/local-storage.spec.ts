@@ -134,7 +134,7 @@ async function main() {
     // Incompatible open surfaces an explicit error and never deletes data.
     {
       const future = await new Promise((resolve, reject) => {
-        const request = harness.indexedDB.open("incompat", 2);
+        const request = harness.indexedDB.open("incompat", 3);
         request.onupgradeneeded = () => {
           const store = request.result.createObjectStore("future", { keyPath: "id" });
           store.put({ id: "keep", value: 1 });
@@ -147,7 +147,7 @@ async function main() {
       await assert.rejects(() => LocalStorage.open("incompat"), /version/i, "apertura incompatible es error explícito");
 
       const check = await new Promise((resolve, reject) => {
-        const request = harness.indexedDB.open("incompat", 2);
+        const request = harness.indexedDB.open("incompat", 3);
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });

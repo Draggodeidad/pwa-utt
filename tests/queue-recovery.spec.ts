@@ -95,7 +95,7 @@ async function main() {
       assert.equal(item.nextAttemptAt, null);
       assert.equal(item.retryExhausted, false);
       assert.ok(item.frozenRequest);
-      assert.deepEqual(item.lastError.remoteSnapshot, { version: 2 });
+      assert.equal(item.lastError.remoteSnapshot, undefined, "unverified error bodies cannot become remote evidence");
       assert.equal(recoveryState(item, [item], Date.now()), "intervention");
       await runQueue(storage, owner, transport);
       assert.equal(calls, 1);
