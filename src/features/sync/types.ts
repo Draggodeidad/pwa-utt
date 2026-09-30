@@ -118,6 +118,14 @@ export type SyncQueueRecord = {
   laboratory: string;
   date: string;
   status: SyncQueueRecordStatus;
+  entity?: SyncEntityKind;
+  operation?: DomainOperationKind;
+  attempts?: number;
+  nextAttemptAt?: string | null;
+  lastError?: DomainOperationError | null;
+  retryExhausted?: boolean;
+  blockedByDependency?: boolean;
+  hasConflict?: boolean;
 };
 
 const operationKinds: readonly DomainOperationKind[] = [
