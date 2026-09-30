@@ -5,6 +5,8 @@ import { getSupabaseServerConfig } from "./config";
 
 type CookieWrite = { name: string; value: string; options: CookieOptions };
 
+export type RequestSupabaseClient = ReturnType<typeof createRequestSupabaseClient>;
+
 function secureCookies(request?: NextRequest) {
   return process.env.NODE_ENV === "production" || request?.nextUrl.protocol === "https:";
 }

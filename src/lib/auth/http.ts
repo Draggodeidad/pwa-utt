@@ -4,12 +4,13 @@ export function privateJson(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
-export type ApiErrorCode = "AUTH_DENIED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "INVALID_REQUEST" | "RATE_LIMITED" | "UNAVAILABLE";
+export type ApiErrorCode = "AUTH_DENIED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "INVALID_REQUEST" | "RATE_LIMITED" | "UNAVAILABLE";
 const errors: Record<ApiErrorCode, { status: number; message: string }> = {
   AUTH_DENIED: { status: 401, message: "Acceso no concedido" },
   UNAUTHENTICATED: { status: 401, message: "Sesión no disponible" },
   FORBIDDEN: { status: 403, message: "Acceso no permitido" },
   NOT_FOUND: { status: 404, message: "Recurso no disponible" },
+  CONFLICT: { status: 409, message: "Conflicto de versión o estado" },
   INVALID_REQUEST: { status: 422, message: "Solicitud no válida" },
   RATE_LIMITED: { status: 429, message: "Intenta más tarde" },
   UNAVAILABLE: { status: 503, message: "Servicio no disponible" },
