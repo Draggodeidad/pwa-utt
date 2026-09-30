@@ -1,5 +1,6 @@
 export { InspectionList } from "./components/InspectionList";
 export { InspectionsWorkspace } from "./components/InspectionsWorkspace";
+export { LocalInspectionsWorkspace } from "./components/LocalInspectionsWorkspace";
 export { CoordinationInspectionsWorkspace } from "./components/CoordinationInspectionsWorkspace";
 export { InspectionLedger } from "./components/InspectionLedger";
 export { TechnicianHomeWorkspace } from "./components/TechnicianHomeWorkspace";

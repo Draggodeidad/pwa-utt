@@ -1,19 +1,24 @@
 import { AppShell } from "@/components/app-shell";
 import { navigationSectionsByRole } from "@/config/navigation";
 import { requireRole } from "@/lib/auth/guards";
-import { CoordinationInspectionsWorkspace, InspectionsWorkspace } from "@/features/inspections";
+import { CoordinationInspectionsWorkspace, LocalInspectionsWorkspace } from "@/features/inspections";
 import { createProfileForSession } from "@/features/profile";
-import { listVisibleInspections } from "@/lib/repositories/inspections";
+import { listActiveLaboratories, listVisibleInspections } from "@/lib/repositories/inspections";
 import { createComponentSupabaseClient } from "@/lib/supabase/server";
 
 export default async function InspectionsPage() {
   const { user } = await requireRole(["technician", "coordinator"]);
   const role = user.role;
-  const inspections = await listVisibleInspections(createComponentSupabaseClient());
+  const client = createComponentSupabaseClient();
+  const inspections = await listVisibleInspections(client);
 
   return (
     <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}>
-      {role === "coordinator" ? <CoordinationInspectionsWorkspace inspections={inspections} /> : <InspectionsWorkspace inspections={inspections} />}
+      {role === "coordinator" ? (
+        <CoordinationInspectionsWorkspace inspections={inspections} />
+      ) : (
+        <LocalInspectionsWorkspace remote={inspections} catalog={await listActiveLaboratories(client)} owner={user.id} technician={user.displayName} />
+      )}
     </AppShell>
   );
 }
