@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useSyncWorkspace } from "../hooks/use-sync-workspace";
+import { ConflictResolutionPanel } from "./ConflictResolutionDialog";
 import type { SyncQueueRecord } from "../types";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
@@ -81,6 +82,7 @@ export function SyncWorkspace() {
       </header>
 
       <div className={s.content} aria-live="polite">
+        <ConflictResolutionPanel />
         <Card className={s.summaryCard}>
           {state === "loading" ? (
             <div className={s.summarySkeleton} aria-label="Cargando estado de sincronización">
