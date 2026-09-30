@@ -42,15 +42,14 @@ export function InspectionDetailWorkspace({
 }: {
   inspection: InspectionDetail;
 }) {
-  const { inspection, state, openConfirmation, closeConfirmation, finalize } =
+  const { inspection, findings, state, openConfirmation, closeConfirmation, removeFinding, finalize } =
     useInspectionFinalization(initialInspection);
-  const [findings, setFindings] = useState([...inspection.findings]);
   const [deleteId, setDeleteId] = useState<string>();
+  const [deleteError, setDeleteError] = useState(false);
   const editable =
     state === "draft" || state === "confirming" || state === "error";
-  const completed = state === "finalized" || state === "offline-pending";
-  const pendingSync =
-    state === "offline-pending" || inspection.syncStatus === "pending";
+  const completed = state === "finalized";
+  const pendingSync = inspection.syncStatus === "pending";
   return (
     <section
       className={s.page}
@@ -122,6 +121,11 @@ export function InspectionDetailWorkspace({
           </span>
         </div>
         <div className={s.findingsList}>
+          {deleteError ? (
+            <p role="alert" className={s.deleteError}>
+              No se pudo eliminar el hallazgo. Intenta de nuevo.
+            </p>
+          ) : null}
           {findings.length === 0 ? (
             <Card className={s.emptyFindings}>
               No hay hallazgos registrados.
@@ -221,9 +225,8 @@ export function InspectionDetailWorkspace({
               <Button
                 className={s.destructiveButton}
                 onClick={() => {
-                  setFindings((current) =>
-                    current.filter((item) => item.id !== deleteId),
-                  );
+                  setDeleteError(false);
+                  void removeFinding(deleteId as string).catch(() => setDeleteError(true));
                   setDeleteId(undefined);
                 }}
               >
@@ -274,6 +277,8 @@ const s = {
   findingsTitle: "text-xl font-semibold",
   findingsCount: "text-sm text-muted-foreground",
   findingsList: "mt-3 space-y-3",
+  deleteError:
+    "rounded-sm border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive",
   emptyFindings: "border-dashed p-8 text-center text-sm text-muted-foreground",
   findingCard: "p-5 shadow-sm",
   findingLayout: "flex gap-3",

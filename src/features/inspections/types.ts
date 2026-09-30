@@ -79,6 +79,7 @@ export type InspectionFinding = {
   status: FindingStatus;
   title: string;
   description: string;
+  version?: number | null;
   evidenceLabel?: string;
   evidenceImage?: string;
   evidenceCount?: number;
@@ -125,7 +126,7 @@ export type InspectionEditorDto = {
 };
 
 /** Existing editor props remain stable while fixtures are migrated through explicit adapters. */
-export type InspectionEditorValues = Omit<InspectionEditorDto, "folioNumber" | "laboratoryId" | "inspectionDate" | "inspectorId" | "workflowStatus" | "version">;
+export type InspectionEditorValues = Omit<InspectionEditorDto, "folioNumber" | "laboratoryId" | "inspectionDate" | "inspectorId" | "workflowStatus" | "version"> & { version: number | null };
 
 export type InspectionDetailDto = {
   id: string;
@@ -149,13 +150,20 @@ export type InspectionDetailDto = {
 };
 
 /** Temporary UI-compatible detail shape. New data enters through InspectionDetailDto. */
-export type InspectionDetail = Pick<InspectionDetailDto, "id" | "folio" | "location" | "date" | "technician" | "workflowStatus" | "result" | "syncStatus" | "scope" | "findings">;
+export type InspectionDetail = Pick<InspectionDetailDto, "id" | "folio" | "location" | "date" | "technician" | "workflowStatus" | "result" | "syncStatus" | "scope" | "findings" | "version">;
 
 export type LaboratoryProfile = {
   code: string;
   label: string;
   building: string;
   floor: string;
+};
+
+/** Authorized catalog entry served by GET /api/laboratories. */
+export type LaboratoryOption = {
+  id: string;
+  code: string;
+  name: string;
 };
 
 export type InspectionAggregate = {

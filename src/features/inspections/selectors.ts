@@ -20,6 +20,7 @@ function toInspectionFinding(finding: Finding): InspectionFinding {
     description: finding.description,
     priority: finding.priority,
     status: finding.status,
+    version: finding.version,
   };
 }
 
