@@ -1,4 +1,4 @@
-const CACHE_VERSION = "phase-17-v1";
+const CACHE_VERSION = "phase-17-v2";
 const APP_SHELL_CACHE = `inspecciones-shell-${CACHE_VERSION}`;
 const STATIC_ASSET_CACHE = `inspecciones-static-${CACHE_VERSION}`;
 const MAX_STATIC_ASSETS = 50;
@@ -18,9 +18,8 @@ const APP_SHELL_URLS = [
 // Build-time manifest of essential JS/CSS for the offline shell. These assets
 // are precached into the shell cache and never subject to the runtime trim.
 const OFFLINE_ASSETS_MANIFEST = "/offline-assets.json";
-const ESSENTIAL_ASSET_URLS = new Set();
 
-const PUBLIC_ASSET_URLS = new Set(APP_SHELL_URLS.filter(path => path !== "/offline"));
+const PUBLIC_ASSET_URLS = new Set([...APP_SHELL_URLS.filter(path => path !== "/offline"), OFFLINE_ASSETS_MANIFEST]);
 const SENSITIVE_PATHS = ["/api", "/login", "/sync", "/auth", "/_next/webpack-hmr"];
 
 self.addEventListener("install", event => {
@@ -76,36 +75,34 @@ self.addEventListener("fetch", event => {
 async function precachePublicShell() {
   const cache = await caches.open(APP_SHELL_CACHE);
   for (const path of APP_SHELL_URLS) {
-    const request = new Request(new URL(path, self.location.origin).toString(), { credentials: "omit" });
-    const response = await fetch(request);
-    if (!isCacheable(response, path === "/offline") || (path === "/offline" && isRscResponse(response))) {
-      throw new Error(`Public shell resource is not cacheable: ${path}`);
+    const { request, response } = await fetchPrecache(path);
+    if (!isCacheable(response, path === "/offline") || (path === "/offline" ? isRscResponse(response) : isHtmlOrRsc(response))) {
+      throw precacheError(path, response);
     }
-    await cache.put(request, response);
+    await putPrecache(cache, request, response, path);
   }
 
-  const manifestResponse = await fetch(new Request(new URL(OFFLINE_ASSETS_MANIFEST, self.location.origin).toString(), { credentials: "omit" }));
-  if (!manifestResponse.ok || !isCacheable(manifestResponse)) {
-    throw new Error("Offline asset manifest is not available");
+  const { request: manifestRequest, response: manifestResponse } = await fetchPrecache(OFFLINE_ASSETS_MANIFEST);
+  if (!isCacheable(manifestResponse) || isHtmlOrRsc(manifestResponse)) {
+    throw precacheError(OFFLINE_ASSETS_MANIFEST, manifestResponse);
   }
   let manifest;
   try {
-    manifest = await manifestResponse.json();
+    manifest = await manifestResponse.clone().json();
   } catch {
     throw new Error("Offline asset manifest is not valid JSON");
   }
-  if (!Array.isArray(manifest?.assets)) throw new Error("Offline asset manifest is invalid");
+  if (!Array.isArray(manifest?.assets)) throw new Error(`Invalid ${OFFLINE_ASSETS_MANIFEST}: assets must be an array`);
 
   for (const path of manifest.assets) {
-    if (typeof path !== "string" || !path.startsWith("/_next/static/")) continue;
-    const request = new Request(new URL(path, self.location.origin).toString(), { credentials: "omit" });
-    const response = await fetch(request);
+    if (!isEssentialAssetPath(path)) throw new Error(`Invalid ${OFFLINE_ASSETS_MANIFEST} asset: ${String(path)}`);
+    const { request, response } = await fetchPrecache(path);
     if (!isCacheable(response) || isHtmlOrRsc(response)) {
-      throw new Error(`Essential asset is not cacheable: ${path}`);
+      throw precacheError(path, response);
     }
-    await cache.put(request, response);
-    ESSENTIAL_ASSET_URLS.add(new URL(path, self.location.origin).pathname);
+    await putPrecache(cache, request, response, path);
   }
+  await putPrecache(cache, manifestRequest, manifestResponse, OFFLINE_ASSETS_MANIFEST);
 }
 
 function notifyReady() {
@@ -117,8 +114,15 @@ function notifyReady() {
 async function isOfflineReady() {
   try {
     const cache = await caches.open(APP_SHELL_CACHE);
-    if (!(await cache.match("/offline"))) return false;
-    for (const url of ESSENTIAL_ASSET_URLS) {
+    for (const url of APP_SHELL_URLS) {
+      if (!(await cache.match(url))) return false;
+    }
+    const manifestResponse = await cache.match(OFFLINE_ASSETS_MANIFEST);
+    if (!manifestResponse) return false;
+    const manifest = await manifestResponse.json();
+    if (!Array.isArray(manifest?.assets)) return false;
+    for (const url of manifest.assets) {
+      if (!isEssentialAssetPath(url)) return false;
       if (!(await cache.match(url))) return false;
     }
     return true;
@@ -146,11 +150,9 @@ async function navigateWithPublicFallback(request) {
 
 async function cacheFirstPublicAsset(request) {
   const url = new URL(request.url);
-  if (PUBLIC_ASSET_URLS.has(url.pathname) || ESSENTIAL_ASSET_URLS.has(url.pathname)) {
-    const shellCache = await caches.open(APP_SHELL_CACHE);
-    const precachedResponse = await shellCache.match(request);
-    if (precachedResponse) return precachedResponse;
-  }
+  const shellCache = await caches.open(APP_SHELL_CACHE);
+  const precachedResponse = await shellCache.match(request);
+  if (precachedResponse) return precachedResponse;
 
   const cache = await caches.open(STATIC_ASSET_CACHE);
   const cachedResponse = await cache.match(request);
@@ -168,7 +170,7 @@ function isCacheable(response, allowRscVary = false) {
   const cacheControl = response.headers.get("Cache-Control") || "";
   const vary = response.headers.get("Vary") || "";
   const sensitiveVary = allowRscVary ? /(?:^|,)\s*(?:cookie|authorization)\s*(?:,|$)/i : /(?:^|,)\s*(?:cookie|authorization|rsc)\s*(?:,|$)/i;
-  return response.ok &&
+  return response.ok && !response.redirected &&
     !/(?:^|,)\s*(?:no-store|private)\b/i.test(cacheControl) &&
     !sensitiveVary.test(vary) &&
     !response.headers.has("Set-Cookie");
@@ -182,6 +184,34 @@ function isHtmlOrRsc(response) {
 function isRscResponse(response) {
   const contentType = response.headers.get("Content-Type") || "";
   return /text\/x-component/i.test(contentType);
+}
+
+function isEssentialAssetPath(path) {
+  if (typeof path !== "string" || !path.startsWith("/_next/static/") || !/\.(?:js|css)$/.test(path)) return false;
+  const url = new URL(path, self.location.origin);
+  return url.pathname === path && !url.search && !url.hash && !path.split("/").includes("..");
+}
+
+async function fetchPrecache(path) {
+  const request = new Request(new URL(path, self.location.origin).toString(), { credentials: "omit" });
+  try {
+    return { request, response: await fetch(request) };
+  } catch {
+    throw new Error(`Failed to precache ${path}: network error`);
+  }
+}
+
+async function putPrecache(cache, request, response, path) {
+  try {
+    await cache.put(request, response);
+  } catch {
+    throw new Error(`Failed to precache ${path}: Cache Storage error`);
+  }
+}
+
+function precacheError(path, response) {
+  const finalPath = response.url ? new URL(response.url, self.location.origin).pathname : "unknown";
+  return new Error(`Failed to precache ${path}: status=${response.status}, redirected=${Boolean(response.redirected)}, url=${finalPath}, content-type=${response.headers.get("Content-Type") || "none"}, cache-control=${response.headers.get("Cache-Control") || "none"}, vary=${response.headers.get("Vary") || "none"}`);
 }
 
 async function trimCache(cache, maximumEntries) {

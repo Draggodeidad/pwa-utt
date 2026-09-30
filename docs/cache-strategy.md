@@ -1,5 +1,7 @@
 # Estrategia de caché de la PWA
 
+> **Estado vigente (phase-17-v2):** La sección histórica que sigue describe la estrategia `w03-v1`; sus afirmaciones sobre precache de `/`, caché de navegación y contenido de `APP_SHELL_URLS` ya no representan la implementación actual. La política vigente está en `public/sw.js`: el precache incluye `/offline`, manifest, iconos, `offline-assets.json` y los JS/CSS declarados por el manifest generado tras el build. Las navegaciones usan red y, si falla, reciben únicamente `/offline`; no se guardan páginas autenticadas. `isOfflineReady()` reconstruye los assets esenciales desde el manifest en Cache Storage después de reiniciar el worker. El middleware deja públicos esos recursos PWA y mantiene las rutas privadas bajo autenticación.
+
 ## 1. Objetivo
 
 Como integrante responsable de las decisiones técnicas, documento la estrategia de caché observable en la PWA de inspecciones para que el equipo pueda revisarla, mantenerla y verificarla sin confundir disponibilidad de recursos web con persistencia de inspecciones.

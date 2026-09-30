@@ -67,6 +67,8 @@ class MockResponse {
     this.statusText = init.statusText || (this.status >= 200 && this.status < 300 ? "OK" : "");
     this.ok = this.status >= 200 && this.status < 300;
     this.headers = new MockHeaders(init.headers);
+    this.redirected = Boolean(init.redirected);
+    this.url = init.url || "";
     this.type = init.type || "basic";
     this.isErrorResponse = Boolean(init.isErrorResponse);
   }
@@ -76,6 +78,8 @@ class MockResponse {
       status: this.status,
       statusText: this.statusText,
       headers: this.headers._map,
+      redirected: this.redirected,
+      url: this.url,
       type: this.type,
       isErrorResponse: this.isErrorResponse
     });
@@ -223,7 +227,7 @@ function createSWHarness(options = {}) {
     });
   };
 
-  const caches = new MockCacheStorage();
+  const caches = options.caches || new MockCacheStorage();
   let offlineAssets = [];
   let manifestHandler = () => new MockResponse(JSON.stringify({ version: 1, assets: offlineAssets }), {
     status: 200,
@@ -254,8 +258,9 @@ function createSWHarness(options = {}) {
       const req = typeof request === "string" ? new MockRequest(request) : request;
       networkCalls.push({ url: req.url, method: req.method, request: req });
       const url = new URL(req.url, origin);
-      if (url.pathname === "/offline-assets.json") return manifestHandler();
-      return await fetchHandler(req);
+      const response = url.pathname === "/offline-assets.json" ? manifestHandler() : await fetchHandler(req);
+      if (!response.url) response.url = req.url;
+      return response;
     }
   };
   caches.harness = harness;
@@ -317,7 +322,6 @@ function createSWHarness(options = {}) {
     MAX_NAVIGATION_RESPONSES: getVar("MAX_NAVIGATION_RESPONSES"),
     MAX_STATIC_ASSETS: getVar("MAX_STATIC_ASSETS"),
     APP_SHELL_URLS: getVar("APP_SHELL_URLS"),
-    ESSENTIAL_ASSET_URLS: getVar("ESSENTIAL_ASSET_URLS"),
     SENSITIVE_PATHS: getVar("SENSITIVE_PATHS")
   };
 

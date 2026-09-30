@@ -8,6 +8,7 @@ const { createSWHarness, MockRequest, MockResponse } = require("./helpers/sw-har
 async function runTests() {
   const harness = createSWHarness();
   const { APP_SHELL_CACHE, STATIC_ASSET_CACHE, APP_SHELL_URLS } = harness.constants;
+  assert.equal(harness.constants.CACHE_VERSION, "phase-17-v2");
 
   assert.equal(harness.listeners.install.length, 1);
   assert.equal(harness.listeners.activate.length, 1);
@@ -27,26 +28,39 @@ async function runTests() {
 
   await harness.triggerInstall();
   const shell = await harness.caches.open(APP_SHELL_CACHE);
-  assert.equal((await shell.keys()).length, APP_SHELL_URLS.length);
+  assert.equal((await shell.keys()).length, APP_SHELL_URLS.length + 1);
   for (const url of APP_SHELL_URLS) assert.ok(await shell.match(url), `${url} debe estar precacheado`);
+  assert.ok(await shell.match("/offline-assets.json"));
   assert.ok(harness.networkCalls.every(call => call.request.credentials === "omit"), "El precache no debe enviar cookies");
   assert.equal(await shell.match("/"), undefined);
 
   // Las versiones previas guardaban HTML tanto en shell como en navegación.
-  for (const name of ["inspecciones-shell-w03-v1", "inspecciones-navigation-w03-v1", "inspecciones-static-w03-v1"]) {
+  for (const name of ["inspecciones-shell-w03-v1", "inspecciones-navigation-w03-v1", "inspecciones-static-w03-v1", "inspecciones-shell-phase-17-v1", "inspecciones-static-phase-17-v1"]) {
     const oldCache = await harness.caches.open(name);
     await oldCache.put(new MockRequest("/inspections/1", { mode: "navigate" }), new MockResponse("HTML privado"));
   }
   await harness.caches.open(STATIC_ASSET_CACHE);
   await harness.caches.open("other-app-cache");
   await harness.triggerActivate();
-  for (const name of ["inspecciones-shell-w03-v1", "inspecciones-navigation-w03-v1", "inspecciones-static-w03-v1"]) {
+  for (const name of ["inspecciones-shell-w03-v1", "inspecciones-navigation-w03-v1", "inspecciones-static-w03-v1", "inspecciones-shell-phase-17-v1", "inspecciones-static-phase-17-v1"]) {
     assert.equal(await harness.caches.has(name), false, `${name} debe eliminarse`);
   }
   assert.equal(await harness.caches.has(APP_SHELL_CACHE), true);
   assert.equal(await harness.caches.has(STATIC_ASSET_CACHE), true);
   assert.equal(await harness.caches.has("other-app-cache"), true);
   assert.equal(harness.clientsClaimCalled, true);
+
+  // El matcher solo deja pasar recursos públicos exactos; las rutas privadas siguen en middleware.
+  const middlewareSource = fs.readFileSync(path.resolve(__dirname, "../src/middleware.ts"), "utf8");
+  const matcherSource = /matcher:\s*\["([^\"]+)"\]/.exec(middlewareSource)?.[1];
+  assert.ok(matcherSource, "el middleware debe declarar un matcher");
+  const matcher = new RegExp(`^${JSON.parse(`"${matcherSource}"`)}$`);
+  for (const url of ["/offline", "/sw.js", "/manifest.webmanifest", "/offline-assets.json", "/apple-touch-icon.png", "/icons/icon.svg", "/_next/static/chunks/app.js", "/inspection-assets/finding-evidence.png", "/screenshots/mobile-home.png"]) {
+    assert.equal(matcher.test(url), false, `${url} debe ser público`);
+  }
+  for (const url of ["/", "/dashboard", "/profile", "/sync", "/login", "/auth/callback", "/offline-private", "/apple-touch-icon.png/private", "/icons-private/icon.svg"]) {
+    assert.equal(matcher.test(url), true, `${url} debe pasar por middleware`);
+  }
 
   harness.triggerMessage({ type: "OTHER" });
   assert.equal(harness.skipWaitingCalled, false);
