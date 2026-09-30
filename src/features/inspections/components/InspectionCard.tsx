@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { formatDateOnly } from "@/lib/format-date";
 import { AlertTriangle, Check, CloudOff, RefreshCw } from "lucide-react";
 import type { InspectionListItem } from "../types";
 
@@ -7,6 +8,8 @@ const resultLabels = {
   without_findings: "Sin incidencias",
   requires_attention: "Requiere atención"
 } as const;
+
+const dateFormatter = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
 
 export function InspectionCard({ inspection }: { inspection: InspectionListItem }) {
   const tone = inspection.result === "without_findings" ? "success" : "warning";
@@ -31,7 +34,7 @@ export function InspectionCard({ inspection }: { inspection: InspectionListItem 
           <h3 className={s.title}>{inspection.location}</h3>
           <p className={s.description}>{inspection.summary}</p>
         </div>
-        <time dateTime={inspection.date} className={s.date}>{new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" }).format(new Date(`${inspection.date}T12:00:00`))}</time>
+        <time dateTime={inspection.date} className={s.date}>{formatDateOnly(inspection.date, dateFormatter)}</time>
       </div>
       <dl className={s.details}>
         <div className={s.detail}><dt className={s.detailLabel}>Técnico responsable</dt><dd className={s.detailValue}>{inspection.inspector}</dd></div>
