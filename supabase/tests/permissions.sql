@@ -100,17 +100,20 @@ begin
     raise exception 'B reached A receipts';
   end if;
 
-  -- Coordinator: only completed inspections and their findings; all profiles.
+  -- Coordinator: only completed inspections and their findings; the minimum
+  -- responsible profiles it needs (the four synthetic ones, whatever other
+  -- accounts the project has).
   perform set_config('request.jwt.claims',
     jsonb_build_object('sub', v_coord::text, 'role', 'authenticated')::text, true);
   select count(*) into v_cnt from public.inspections;
   if v_cnt <> 1 then raise exception 'Coordinator sees % inspections (expected 1)', v_cnt; end if;
   select count(*) into v_cnt from public.findings;
   if v_cnt <> 1 then raise exception 'Coordinator sees % findings (expected 1)', v_cnt; end if;
-  select count(*) into v_cnt from public.profiles;
-  if v_cnt <> 4 then raise exception 'Coordinator sees % profiles (expected 4)', v_cnt; end if;
   select count(*) into v_cnt from public.operation_receipts;
   if v_cnt <> 0 then raise exception 'Coordinator sees % receipts (expected 0)', v_cnt; end if;
+  if not exists (select 1 from public.profiles where id in (v_tec_a, v_tec_b, v_coord, v_inact)) then
+    raise exception 'Coordinator cannot read the responsible profiles';
+  end if;
   if exists (select 1 from public.inspections where id in (v_insp_a, v_insp_b))
     or exists (select 1 from public.findings where id in (v_fa1, v_fb1)) then
     raise exception 'Coordinator reached drafts';
