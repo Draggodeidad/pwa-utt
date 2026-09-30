@@ -44,8 +44,8 @@ export function createRequestSupabaseClient(request: NextRequest) {
 
 /** Server Components read the refreshed request cookies supplied by middleware. */
 export function createComponentSupabaseClient() {
-  const config = getSupabaseServerConfig();
   const cookieStore = cookies();
+  const config = getSupabaseServerConfig();
   return createServerClient(config.url, config.anonKey, {
     cookieOptions: cookieOptions({}),
     cookies: {
