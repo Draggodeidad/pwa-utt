@@ -277,13 +277,13 @@ const backend = createServer(async (req, res) => {
     const existing = receipts.get(requestKey);
     if (existing) {
       if (JSON.stringify(existing.request) !== JSON.stringify(normalized)) return send(res, 400, { code: "P0001", message: "IDEMPOTENCY_KEY_REUSED" });
-      return send(res, 200, existing.result);
+      return send(res, 200, { ...existing.result, __replayed: true });
     }
     let result;
     try { result = applyFindingKind(account.id, account.role, normalized); }
     catch (error) { return send(res, 400, { code: "P0001", message: error.message }); }
     receipts.set(requestKey, { request: normalized, result });
-    return send(res, 200, result);
+    return send(res, 200, { ...result, __replayed: false });
   }
   return send(res, 404, { message: "Not found" });
 });
@@ -369,6 +369,7 @@ async function main() {
     assert.equal(createdAck.entityId, newFindingId);
     assert.equal(createdAck.version, 1);
     assert.equal(createdAck.entityType, "finding");
+    assert.equal(createdAck.replayed, false);
 
     const createdDetail = await (await request(`/api/findings/${newFindingId}`, {}, tech)).json();
     assert.equal(createdDetail.id, newFindingId, "GET tras la petición recupera el mismo UUID");
@@ -378,8 +379,10 @@ async function main() {
 
     const beforeReplay = (await (await request(`/api/findings?inspectionId=${techDraftId}`, {}, tech)).json()).items.length;
     const replayed = await mutation("PUT", `/api/findings/${newFindingId}`, tech, createBody, op(1));
-    assert.equal(replayed.status, 201, "misma key+payload devuelve ACK anterior");
-    assert.equal((await replayed.json()).version, 1, "el replay no re-aplica la creación");
+    assert.equal(replayed.status, 200, "misma key+payload devuelve ACK anterior");
+    const replayedAck = await replayed.json();
+    assert.equal(replayedAck.version, 1, "el replay no re-aplica la creación");
+    assert.equal(replayedAck.replayed, true);
     const afterReplay = (await (await request(`/api/findings?inspectionId=${techDraftId}`, {}, tech)).json()).items.length;
     assert.equal(afterReplay, beforeReplay, "el doble envío no duplica");
 
@@ -413,7 +416,7 @@ async function main() {
     assert.equal((await request(`/api/findings/${newFindingId}`, {}, tech)).status, 404, "el borrado elimina el hallazgo");
 
     const deleteRetry = await mutation("DELETE", `/api/findings/${newFindingId}`, tech, { clientId, kind: "finding.delete", entityId: newFindingId, baseVersion: 2, payload: {} }, op(10));
-    assert.equal(deleteRetry.status, 201, "el retry devuelve el ACK anterior");
+    assert.equal(deleteRetry.status, 200, "el retry devuelve el ACK anterior");
     assert.equal((await deleteRetry.json()).version, 3);
     assert.equal((await request(`/api/findings/${newFindingId}`, {}, tech)).status, 404, "el retry no resucita la entidad");
 

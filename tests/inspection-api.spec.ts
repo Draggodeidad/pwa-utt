@@ -235,13 +235,13 @@ const backend = createServer(async (req, res) => {
     const existing = receipts.get(requestKey);
     if (existing) {
       if (JSON.stringify(existing.request) !== JSON.stringify(normalized)) return send(res, 400, { code: "P0001", message: "IDEMPOTENCY_KEY_REUSED" });
-      return send(res, 200, existing.result);
+      return send(res, 200, { ...existing.result, __replayed: true });
     }
     let result;
     try { result = applyInspectionKind(account.id, normalized); }
     catch (error) { return send(res, 400, { code: "P0001", message: error.message }); }
     receipts.set(requestKey, { request: normalized, result });
-    return send(res, 200, result);
+    return send(res, 200, { ...result, __replayed: false });
   }
   return send(res, 404, { message: "Not found" });
 });
@@ -317,6 +317,7 @@ async function main() {
     assert.equal(createdAck.entityId, newId);
     assert.equal(createdAck.version, 1);
     assert.equal(createdAck.entityType, "inspection");
+    assert.equal(createdAck.replayed, false);
 
     const detail = await (await request(`/api/inspections/${newId}`, {}, tech)).json();
     assert.equal(detail.id, newId, "GET tras la petición recupera el mismo UUID");
@@ -324,8 +325,10 @@ async function main() {
     assert.ok(afterList.items.some((item) => item.id === newId), "el listado incluye la nueva inspección");
 
     const replayed = await mutation("PUT", `/api/inspections/${newId}`, tech, createBody, op(1));
-    assert.equal(replayed.status, 201, "misma key+payload devuelve ACK anterior");
-    assert.equal((await replayed.json()).version, 1, "el replay no re-aplica la creación");
+    assert.equal(replayed.status, 200, "misma key+payload devuelve ACK anterior");
+    const replayedAck = await replayed.json();
+    assert.equal(replayedAck.version, 1, "el replay no re-aplica la creación");
+    assert.equal(replayedAck.replayed, true);
 
     const reused = await mutation("PUT", `/api/inspections/${newId}`, tech, { ...createBody, payload: { ...createBody.payload, summary: "Contenido distinto" } }, op(1));
     assert.equal(reused.status, 409, "misma key con distinto contenido es 409");
@@ -349,7 +352,7 @@ async function main() {
     assert.equal((await request(`/api/inspections/${newId}`, {}, tech)).status, 404, "el descarte elimina la inspección");
 
     const discardRetry = await mutation("DELETE", `/api/inspections/${newId}`, tech, { clientId, kind: "inspection.discard", entityId: newId, baseVersion: 2, payload: {} }, op(5));
-    assert.equal(discardRetry.status, 201, "el retry devuelve el ACK anterior");
+    assert.equal(discardRetry.status, 200, "el retry devuelve el ACK anterior");
     assert.equal((await discardRetry.json()).version, 3);
     assert.equal((await request(`/api/inspections/${newId}`, {}, tech)).status, 404, "el retry no resucita la entidad");
 
