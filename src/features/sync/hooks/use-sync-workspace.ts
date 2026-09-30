@@ -59,6 +59,7 @@ export function useSyncWorkspace() {
   const syncNow = () => {
     if (state === "offline" || state === "syncing" || queue.length === 0) return;
 
+    window.dispatchEvent(new Event("pwa-utt:sync-now"));
     setState("syncing");
     setProgress(0);
     setQueue((current) => current.map((record) => ({ ...record, status: "syncing" })));
