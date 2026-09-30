@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.19.6'
+          node-version: '22.22.3'
           cache: npm
       - name: Instalación reproducible
         run: npm ci --ignore-scripts --no-audit --no-fund
