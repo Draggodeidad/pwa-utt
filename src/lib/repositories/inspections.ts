@@ -5,8 +5,9 @@ import { DomainValidationError } from "@/types/entity";
 type InspectionRow = {
   id: string; folio_number: number; laboratory_id: string | null; inspector_id: string;
   inspection_date: string | null; summary: string; workflow_status: "draft" | "completed";
+  version: number;
 };
-type FindingRow = { id: string; inspection_id: string; title: string; description: string; priority: "low" | "medium" | "high"; status: "pending" | "in_review" | "resolved" };
+type FindingRow = { id: string; inspection_id: string; title: string; description: string; priority: "low" | "medium" | "high"; status: "pending" | "in_review" | "resolved"; version: number };
 type LaboratoryRow = { id: string; code: string; name: string };
 type ProfileRow = { id: string; display_name: string };
 
@@ -78,7 +79,7 @@ export async function hasEditableInspection(client: SupabaseClient, id: string, 
 export async function findVisibleInspection(client: SupabaseClient, id: string): Promise<InspectionDetail | null> {
   if (!isInspectionId(id)) return null;
   const { data, error } = await client.from("inspections")
-    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status")
+    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status, version")
     .eq("id", id).is("deleted_at", null).maybeSingle();
   if (error) throw new InspectionReadError();
   if (!data) return null;
@@ -86,7 +87,7 @@ export async function findVisibleInspection(client: SupabaseClient, id: string):
   const [labs, profiles, findings] = await Promise.all([
     row.laboratory_id ? client.from("laboratories").select("id, code, name").eq("id", row.laboratory_id) : Promise.resolve({ data: [], error: null }),
     client.from("profiles").select("id, display_name").eq("id", row.inspector_id),
-    client.from("findings").select("id, inspection_id, title, description, priority, status").eq("inspection_id", id).is("deleted_at", null),
+    client.from("findings").select("id, inspection_id, title, description, priority, status, version").eq("inspection_id", id).is("deleted_at", null),
   ]);
   if (labs.error || profiles.error || findings.error) throw new InspectionReadError();
   const lab = (labs.data as LaboratoryRow[] | null)?.[0];
@@ -96,8 +97,8 @@ export async function findVisibleInspection(client: SupabaseClient, id: string):
     id: row.id, folio: `INS-${row.folio_number}`, location: lab?.name ?? "Laboratorio no asignado",
     date: row.inspection_date ?? "", technician: profile?.display_name ?? "Responsable no disponible",
     workflowStatus: row.workflow_status, result: visibleFindings.length ? "requires_attention" : "without_findings",
-    syncStatus: "synced", scope: row.summary,
-    findings: visibleFindings.map(({ id: findingId, title, description, priority, status }) => ({ id: findingId, title, description, priority, status })),
+    syncStatus: "synced", scope: row.summary, version: row.version,
+    findings: visibleFindings.map(({ id: findingId, title, description, priority, status, version }) => ({ id: findingId, title, description, priority, status, version })),
   };
 }
 
@@ -117,7 +118,7 @@ export async function findEditableInspection(client: SupabaseClient, id: string,
   return {
     id: detail.id, folio: detail.folio, laboratoryCode: laboratory.data?.code ?? "",
     date: detail.date, technician: detail.technician, summary: detail.scope,
-    findings: detail.findings, syncStatus: detail.syncStatus,
+    findings: detail.findings, syncStatus: detail.syncStatus, version: detail.version,
   };
 }
 
@@ -129,7 +130,7 @@ async function hydrateInspectionItems(client: SupabaseClient, rows: InspectionRo
   const [labs, profiles, findings] = await Promise.all([
     labIds.length ? client.from("laboratories").select("id, code, name").in("id", labIds) : Promise.resolve({ data: [], error: null }),
     client.from("profiles").select("id, display_name").in("id", profileIds),
-    client.from("findings").select("id, inspection_id, title, description, priority, status").in("inspection_id", ids).is("deleted_at", null),
+    client.from("findings").select("id, inspection_id, title, description, priority, status, version").in("inspection_id", ids).is("deleted_at", null),
   ]);
   if (labs.error || profiles.error || findings.error) throw new InspectionReadError();
   const labById = new Map(((labs.data ?? []) as LaboratoryRow[]).map((lab) => [lab.id, lab]));
@@ -150,7 +151,7 @@ async function hydrateInspectionItems(client: SupabaseClient, rows: InspectionRo
 
 export async function listVisibleInspections(client: SupabaseClient): Promise<InspectionListItem[]> {
   const { data, error } = await client.from("inspections")
-    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status")
+    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status, version")
     .is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
   if (error) throw new InspectionReadError();
   return hydrateInspectionItems(client, (data ?? []) as InspectionRow[]);
@@ -159,7 +160,7 @@ export async function listVisibleInspections(client: SupabaseClient): Promise<In
 export async function listVisibleInspectionsPage(client: SupabaseClient, query: InspectionListQuery): Promise<InspectionListPage> {
   const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
   let builder = client.from("inspections")
-    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status")
+    .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status, version")
     .is("deleted_at", null);
   if (query.status) builder = builder.eq("workflow_status", query.status);
   if (query.search?.trim()) {

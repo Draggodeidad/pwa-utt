@@ -11,6 +11,7 @@ export const inspectionDetail: InspectionDetail = {
   workflowStatus: "draft",
   result: "requires_attention",
   syncStatus: "pending",
+  version: 1,
   scope: "Inspección periódica de 35 estaciones de trabajo, cableado de red Cat6, proyectores audiovisuales y software académico instalado.",
   findings: [
     { id: "H-01", priority: "high", status: "pending", title: "Cableado expuesto en estación PC-17", description: "El aislamiento técnico del conductor principal presenta fisura longitudinal de 35 mm con cobre a la vista cerca de la pinza de tierra. Se desenergizó el equipo y se solicitó reemplazo preventivo.", evidenceLabel: "Evidencia fotográfica de cableado", evidenceImage: "/inspection-assets/laboratory-evidence-1.jpeg" },
@@ -33,6 +34,7 @@ export function findInspectionDetail(id: string): InspectionDetail | undefined {
     workflowStatus: listItem.workflowStatus,
     result: listItem.result,
     syncStatus: listItem.syncStatus,
+    version: 1,
     scope: listItem.summary,
     findings: Array.from({ length: listItem.findingCount }, (_, index) => ({ id: `${listItem.id}-finding-${index + 1}`, title: `Hallazgo sintético ${index + 1}`, description: "Observación registrada durante la inspección del laboratorio para seguimiento.", priority: "medium" as const, status: "pending" as const })),
   };
