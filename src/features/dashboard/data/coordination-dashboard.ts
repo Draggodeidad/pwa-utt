@@ -1,4 +1,5 @@
-import type { InspectionListItem } from "@/features/inspections";
+import type { InspectionListItem } from "../../inspections/types.ts";
+import { sortOperationalInspections, summarizeOperationalInspections } from "../../inspections/operational-summaries.ts";
 import type { CoordinationDashboard, DashboardInspection } from "../types";
 
 function toDashboardInspection(inspection: InspectionListItem): DashboardInspection {
@@ -12,22 +13,24 @@ function toDashboardInspection(inspection: InspectionListItem): DashboardInspect
   };
 }
 
-/** Coordination read model derived from the inspection fixtures until repositories are connected. */
+/** Coordination read model derived from the complete authorized read result. */
 export function createCoordinationDashboard(
   inspections: readonly InspectionListItem[],
 ): CoordinationDashboard {
-  const attentionInspections = inspections
+  const completed = sortOperationalInspections(inspections.filter((inspection) => inspection.workflowStatus === "completed"));
+  const totals = summarizeOperationalInspections(completed);
+  const attentionInspections = completed
     .filter((inspection) => inspection.result === "requires_attention")
-    .map(toDashboardInspection);
+    .slice(0, 3).map(toDashboardInspection);
 
   return {
     summary: {
-      inspectionCount: inspections.length,
-      inspectionCountRequiringAttention: attentionInspections.length,
-      findingCount: inspections.reduce((total, inspection) => total + inspection.findingCount, 0),
-      pendingFindingCount: attentionInspections.reduce((total, inspection) => total + inspection.findingCount, 0),
+      inspectionCount: totals.completedCount,
+      inspectionCountRequiringAttention: totals.attentionCount,
+      findingCount: totals.findingCount,
+      pendingFindingCount: totals.pendingFindingCount,
     },
     attentionInspections,
-    recentInspections: inspections.slice(0, 3).map(toDashboardInspection),
+    recentInspections: completed.slice(0, 3).map(toDashboardInspection),
   };
 }

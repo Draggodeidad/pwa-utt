@@ -264,7 +264,7 @@ export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote:
 }
 
 /** Converts a local inspection into the shared list shape for the same-source view. */
-export function toLocalInspectionListItem(local: LocalInspection, findingCount: number, technician: string, catalog: readonly LaboratoryOption[]): InspectionListItem {
+export function toLocalInspectionListItem(local: LocalInspection, findingCount: number, technician: string, catalog: readonly LaboratoryOption[], pendingFindingCount = findingCount): InspectionListItem {
   const laboratory = local.laboratoryId ? catalog.find((option) => option.id === local.laboratoryId) : undefined;
   return {
     id: local.id,
@@ -276,6 +276,7 @@ export function toLocalInspectionListItem(local: LocalInspection, findingCount: 
     inspector: technician,
     workflowStatus: local.workflowStatus,
     findingCount,
+    pendingFindingCount,
     result: findingCount ? "requires_attention" : "without_findings",
   };
 }

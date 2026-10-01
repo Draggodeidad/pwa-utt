@@ -10,9 +10,9 @@ import { useInspectionFilters } from "../hooks/use-inspection-filters";
 import { useInspectionListState } from "../hooks/use-inspection-list-state";
 import type { InspectionListItem } from "../types";
 
-export function InspectionsWorkspace({ inspections }: { inspections: readonly InspectionListItem[] }) {
+export function InspectionsWorkspace({ inspections, error = null }: { inspections: readonly InspectionListItem[]; error?: Error | null }) {
   const { query, result, status, filteredInspections, hasActiveFilters, clearFilters, setQuery, setResult, setStatus } = useInspectionFilters(inspections);
-  const { state } = useInspectionListState({ records: filteredInspections, hasActiveFilters });
+  const { state } = useInspectionListState({ records: filteredInspections, hasActiveFilters, error });
   return <section className={s.page} aria-labelledby="inspections-title">
     <header><h1 id="inspections-title" className={s.title}>Inspecciones</h1><p className={s.resultCount}>{filteredInspections.length} de {inspections.length} resultados</p></header>
     <Card className={s.filters}><label className={s.searchField}><span className={s.visuallyHidden}>Buscar inspecciones</span><Search className={s.searchIcon} /><Input className={s.searchInput} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por laboratorio" /></label><label className={s.resultFilter}><span>Resultado</span><select className={s.select} value={result} onChange={(event) => setResult(event.target.value as typeof result)}><option value="all">Todos</option><option value="without_findings">Sin incidencias</option><option value="requires_attention">Requiere atención</option></select></label><label className={s.statusFilter}><span>Estado</span><select className={s.select} value={status} onChange={(event) => setStatus(event.target.value as typeof status)}><option value="all">Todos</option><option value="draft">Borrador</option><option value="completed">Finalizada</option></select></label></Card>

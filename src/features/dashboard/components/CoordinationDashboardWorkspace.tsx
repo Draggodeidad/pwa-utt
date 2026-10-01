@@ -77,13 +77,12 @@ export function CoordinationDashboardWorkspace({ dashboard }: { dashboard: Coord
     <section className={s.page} aria-labelledby="dashboard-title">
       <header className={s.header}>
         <h1 id="dashboard-title" className={s.title}>Resumen de Coordinación</h1>
-        <p className={s.subtitle}>Estado general de las inspecciones de laboratorios de cómputo.</p>
+        <p className={s.subtitle}>Todas las páginas de inspecciones finalizadas visibles para coordinación.</p>
       </header>
 
       {state === "loading" ? <DashboardSkeleton /> : null}
       {state === "error" ? <Card className={s.errorState} role="alert"><CircleAlert className={s.errorIcon} aria-hidden="true" /><div><h2 className={s.errorTitle}>No fue posible cargar el resumen</h2><p className={s.errorDescription}>Intenta de nuevo para consultar las inspecciones.</p></div><Button className={s.retryButton} type="button" variant="outline" onClick={retry}>Reintentar</Button></Card> : null}
-      {state === "empty" ? <Card className={s.emptyState}><ClipboardCheck className={s.emptyIcon} aria-hidden="true" /><h2 className={s.emptyTitle}>No hay inspecciones registradas</h2><p className={s.emptyDescription}>El resumen estará disponible cuando existan inspecciones para supervisar.</p></Card> : null}
-      {state === "ready" && dashboard ? (
+      {(state === "ready" || state === "empty") && dashboard ? (
         <div className={s.dashboard}>
           <section className={s.metricsSection} aria-label="Métricas de coordinación">
             <div className={s.metrics}>
@@ -93,14 +92,14 @@ export function CoordinationDashboardWorkspace({ dashboard }: { dashboard: Coord
             </div>
           </section>
 
-          <div className={s.lowerSections}>
+          {state === "empty" ? <Card className={s.emptyState}><ClipboardCheck className={s.emptyIcon} aria-hidden="true" /><h2 className={s.emptyTitle}>No hay inspecciones finalizadas</h2><p className={s.emptyDescription}>Los totales corresponden a las inspecciones visibles para coordinación.</p></Card> : <div className={s.lowerSections}>
             <section aria-labelledby="attention-title">
               <Card className={s.listCard}>
                 <div className={s.listHeader}>
                   <h2 id="attention-title" className={s.listTitle}><span className={s.attentionDot} aria-hidden="true" />Inspecciones que requieren atención</h2>
                   <Badge className={s.priorityBadge}>{dashboard.summary.inspectionCountRequiringAttention} prioritarias</Badge>
                 </div>
-                {dashboard.attentionInspections.length === 0 ? <p className={s.positiveState}><CheckCircle2 className={s.positiveIcon} aria-hidden="true" />No hay hallazgos urgentes.</p> : <div className={s.rows}>{dashboard.attentionInspections.map((inspection) => <InspectionRow key={inspection.id} attention inspection={inspection} />)}</div>}
+                {dashboard.attentionInspections.length === 0 ? <p className={s.positiveState}><CheckCircle2 className={s.positiveIcon} aria-hidden="true" />No hay inspecciones con hallazgos.</p> : <div className={s.rows}>{dashboard.attentionInspections.map((inspection) => <InspectionRow key={inspection.id} attention inspection={inspection} />)}</div>}
               </Card>
             </section>
             <section aria-labelledby="recent-title">
@@ -109,7 +108,7 @@ export function CoordinationDashboardWorkspace({ dashboard }: { dashboard: Coord
                 <div className={s.rows}>{dashboard.recentInspections.map((inspection) => <InspectionRow key={inspection.id} inspection={inspection} />)}</div>
               </Card>
             </section>
-          </div>
+          </div>}
         </div>
       ) : null}
     </section>

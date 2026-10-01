@@ -106,7 +106,7 @@ export type InspectionListDto = {
 };
 
 /** Temporary UI-compatible list shape. New data enters through InspectionListDto. */
-export type InspectionListItem = Pick<InspectionListDto, "id" | "location" | "date" | "summary" | "syncStatus" | "inspector" | "laboratoryCode" | "workflowStatus" | "findingCount" | "result">;
+export type InspectionListItem = Pick<InspectionListDto, "id" | "location" | "date" | "summary" | "syncStatus" | "inspector" | "laboratoryCode" | "workflowStatus" | "findingCount" | "pendingFindingCount" | "result">;
 
 export type InspectionEditorDto = {
   id: string;
