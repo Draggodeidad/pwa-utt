@@ -7,6 +7,7 @@ require.extensions[".ts"] = require.extensions[".js"];
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { MessageChannel } = require("node:worker_threads");
 
 function normalizeKey(requestOrUrl) {
   if (!requestOrUrl) return "";
@@ -218,6 +219,7 @@ function createSWHarness(options = {}) {
 
   let skipWaitingCalled = false;
   let clientsClaimCalled = false;
+  let windowClients = [];
   const networkCalls = [];
 
   let fetchHandler = async (request) => {
@@ -254,6 +256,9 @@ function createSWHarness(options = {}) {
     setManifestHandler(fn) {
       manifestHandler = fn;
     },
+    setClients(clients) {
+      windowClients = clients;
+    },
     fetch: async (request) => {
       const req = typeof request === "string" ? new MockRequest(request) : request;
       networkCalls.push({ url: req.url, method: req.method, request: req });
@@ -275,7 +280,7 @@ function createSWHarness(options = {}) {
         clientsClaimCalled = true;
         return undefined;
       },
-      matchAll: async () => []
+      matchAll: async () => windowClients
     },
     skipWaiting: () => {
       skipWaitingCalled = true;
@@ -296,6 +301,9 @@ function createSWHarness(options = {}) {
     Request: MockRequest,
     URL: URL,
     Promise,
+    MessageChannel,
+    setTimeout,
+    clearTimeout,
     Array,
     Math,
     console
@@ -347,10 +355,11 @@ function createSWHarness(options = {}) {
     await Promise.all(promises);
   };
 
-  harness.triggerMessage = async (data, source) => {
-    const event = { data, source: source ?? null };
+  harness.triggerMessage = async (data, source, ports = []) => {
+    const promises = [];
+    const event = { data, source: source ?? null, ports, waitUntil: (p) => promises.push(Promise.resolve(p)) };
     const results = listeners.message.map((handler) => handler(event));
-    await Promise.all(results);
+    await Promise.all([...results, ...promises]);
   };
 
   harness.triggerFetch = async (request) => {

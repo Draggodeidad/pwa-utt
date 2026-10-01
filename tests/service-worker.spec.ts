@@ -8,7 +8,7 @@ const { createSWHarness, MockRequest, MockResponse } = require("./helpers/sw-har
 async function runTests() {
   const harness = createSWHarness();
   const { APP_SHELL_CACHE, STATIC_ASSET_CACHE, APP_SHELL_URLS } = harness.constants;
-  assert.equal(harness.constants.CACHE_VERSION, "phase-17-v2");
+  assert.equal(harness.constants.CACHE_VERSION, "phase-25-v1");
 
   assert.equal(harness.listeners.install.length, 1);
   assert.equal(harness.listeners.activate.length, 1);
@@ -62,10 +62,10 @@ async function runTests() {
     assert.equal(matcher.test(url), true, `${url} debe pasar por middleware`);
   }
 
-  harness.triggerMessage({ type: "OTHER" });
+  await harness.triggerMessage({ type: "OTHER" });
   assert.equal(harness.skipWaitingCalled, false);
-  harness.triggerMessage({ type: "SKIP_WAITING" });
-  assert.equal(harness.skipWaitingCalled, true);
+  await harness.triggerMessage({ type: "SKIP_WAITING" });
+  assert.equal(harness.skipWaitingCalled, false, "la activación antigua no debe saltar la preparación");
 
   for (const method of ["POST", "PUT", "DELETE"]) {
     assert.equal((await harness.triggerFetch(new MockRequest("/inspections", { method }))).handled, false);
