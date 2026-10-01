@@ -84,9 +84,8 @@ export type CoordinationFinding = {
   technician: string;
   priority: FindingPriority;
   status: FindingStatus;
-  evidenceLabel?: string;
-  evidenceImage?: string;
-  internalNote: string;
+  version: number;
+  syncState: "confirmed" | "pending" | "conflict";
 };
 
 /** Minimal read model for the finding API: origin data plus capture/follow-up fields. */
@@ -102,6 +101,7 @@ export type FindingDto = {
   technician: string;
   title: string;
   description: string;
+  createdBy: Uuid;
   priority: FindingPriority;
   status: FindingStatus;
   workflowStatus: InspectionWorkflowStatus;
@@ -122,4 +122,4 @@ export type FindingFilters = {
   status: "all" | FindingStatus;
 };
 
-export type CoordinationFindingsState = "loading" | "ready" | "empty" | "error";
+export type CoordinationFindingsState = "loading" | "ready" | "empty" | "error" | "forbidden";

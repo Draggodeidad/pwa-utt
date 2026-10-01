@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { navigationSectionsByRole } from "@/config/navigation";
 import { requireRole } from "@/lib/auth/guards";
-import { CoordinationFindingsWorkspace, coordinationFindings } from "@/features/findings";
+import { CoordinationFindingsWorkspace } from "@/features/findings";
 import { createProfileForSession } from "@/features/profile";
 
 export default async function FindingsPage() {
@@ -9,7 +9,7 @@ export default async function FindingsPage() {
 
   return (
     <AppShell activePath="/findings" navigationSections={navigationSectionsByRole[user.role]} profile={createProfileForSession(user)}>
-      <CoordinationFindingsWorkspace findings={coordinationFindings} />
+      <CoordinationFindingsWorkspace owner={user.id} />
     </AppShell>
   );
 }
