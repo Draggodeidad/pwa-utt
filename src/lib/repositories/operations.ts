@@ -16,6 +16,9 @@ export class ApplyOperationError extends Error {
 }
 
 function mapRpcFailure(code: string | undefined, message: string): { domain: DomainErrorCode | "UNAVAILABLE"; http: number } {
+  // The receipt insert is idempotent; a remaining unique violation is an
+  // entity UUID already used by a different operation, including a tombstone.
+  if (code === "23505") return { domain: "ENTITY_ID_REUSED", http: 409 };
   switch (message) {
     case "UNAUTHENTICATED": return { domain: "UNAUTHENTICATED", http: 401 };
     case "FORBIDDEN":

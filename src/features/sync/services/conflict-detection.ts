@@ -9,6 +9,7 @@ export async function inspectConflict(client: ApiClient, sent: SyncQueueItem, er
   if (!(error instanceof ApiClientError) || ![403, 404, 409].includes(error.status)) return null;
   if (error.status !== 409) return { reason: "inaccessible", remoteSnapshot: null, remoteVersion: null };
   if (error.payload.code === "IDEMPOTENCY_KEY_REUSED") return { reason: "key_reused", remoteSnapshot: null, remoteVersion: null };
+  if (error.payload.code === "ENTITY_ID_REUSED") return { reason: "entity_reused", remoteSnapshot: null, remoteVersion: null };
 
   const initialReason: ConflictReason = error.payload.code === "FINDING_SET_CONFLICT" ? "finding_set"
     : error.payload.code === "VERSION_CONFLICT" ? "version" : "unknown";

@@ -41,6 +41,7 @@ function reasonLabel(reason: ConflictRecord["reason"]): string {
     case "state": return "La inspección ya está finalizada";
     case "finding_set": return "Cambió el conjunto de hallazgos";
     case "key_reused": return "La clave de operación se reutilizó con otro contenido";
+    case "entity_reused": return "El identificador de la captura ya fue usado";
     case "inaccessible": return "No hay acceso al registro remoto";
     default: return "No se pudo clasificar el conflicto";
   }

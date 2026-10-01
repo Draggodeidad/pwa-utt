@@ -114,7 +114,7 @@ export async function resolveConflict(context: ResolutionContext, operationId: s
   if (!role) throw new ConflictResolutionError("La sesión ya no corresponde a esta cuenta");
   let conflict = await context.storage.getConflict(context.owner, operationId);
   if (!conflict || conflict.resolvedAt) throw new ConflictResolutionError("El conflicto ya no está pendiente");
-  if (conflict.reason === "key_reused" || conflict.reason === "inaccessible") throw new ConflictResolutionError("Esta operación requiere revisión; no se puede sobrescribir ni copiar desde una respuesta sin acceso");
+  if (conflict.reason === "key_reused" || conflict.reason === "entity_reused" || conflict.reason === "inaccessible") throw new ConflictResolutionError("Esta operación requiere revisión; no se puede sobrescribir ni copiar desde una respuesta sin acceso");
   conflict = await refreshRemote(context, conflict);
   const remote = asRemote(conflict);
   const queue = await context.storage.listQueue(context.owner);
