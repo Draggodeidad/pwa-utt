@@ -6,6 +6,20 @@ import { completeRemoteLogout, isRemoteLogoutPending, isSessionBlocked, isSessio
 let running = false;
 let requested = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let updatePaused = false;
+let idle: Promise<void> | null = null;
+let resolveIdle: (() => void) | null = null;
+
+export async function pauseBrowserQueueForUpdate(): Promise<void> {
+  updatePaused = true;
+  pauseBrowserQueue();
+  await idle;
+}
+
+export function resumeBrowserQueueAfterUpdate(): void {
+  updatePaused = false;
+  if (!isSessionBlocked()) void runBrowserQueue().catch(() => {});
+}
 
 export function pauseBrowserQueue(): void {
   requested = false;
@@ -48,9 +62,11 @@ export function isBrowserQueueRunning(): boolean {
 
 /** Open-app transport with a durable per-account lease and scheduled retries. */
 export async function runBrowserQueue(): Promise<void> {
+  if (updatePaused) return;
   if (isSessionBlocked()) { scheduleRetry(null); await reconcileLogout(); return; }
   if (running) { requested = true; return; }
   running = true;
+  idle = new Promise<void>((resolve) => { resolveIdle = resolve; });
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: true } }));
   }
@@ -65,6 +81,7 @@ export async function runBrowserQueue(): Promise<void> {
         const outcome = await runQueue(storage, owner, {
           client: new HttpClient(),
           verifyOwner: async (expected) => isSessionCurrent(epoch, expected) && await verifiedOwner(epoch) === expected,
+          shouldContinue: () => !updatePaused,
         });
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: true, outcome } }));
@@ -75,13 +92,16 @@ export async function runBrowserQueue(): Promise<void> {
         const leaseExpiry = await storage.leaseExpiresAt(owner);
         if (leaseExpiry && leaseExpiry > Date.now()) next.push(leaseExpiry);
         else if (pending.some((item) => item.status === "syncing" && (!item.nextAttemptAt || Date.parse(item.nextAttemptAt) <= Date.now()))) next.push(Date.now() + 1000);
-        scheduleRetry(next.length ? Math.min(...next) : null);
+        scheduleRetry(updatePaused ? null : next.length ? Math.min(...next) : null);
       } finally {
         storage.close();
       }
-    } while (requested);
+    } while (requested && !updatePaused);
   } finally {
     running = false;
+    resolveIdle?.();
+    resolveIdle = null;
+    idle = null;
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: false } }));
     }

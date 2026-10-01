@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getConnectivityState } from "@/lib/pwa/connectivity";
 import { isSessionCurrent, readLocalSession, sessionEpoch } from "@/lib/pwa/offline-session";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
+import { isPwaUpdatePreparing, trackPwaMutation } from "@/lib/pwa/update-coordination";
 import { isBrowserQueueRunning, runBrowserQueue } from "@/lib/pwa/sync/browser-runner";
 import type { SyncQueueRecord, SyncViewState } from "../types";
 
@@ -199,13 +200,14 @@ export function useSyncWorkspace() {
   };
 
   const retry = async (operationId: string) => {
+    if (isPwaUpdatePreparing()) return;
     const epoch = sessionEpoch();
     const session = readLocalSession();
     if (!session || !isSessionCurrent(epoch, session.userId) || isBrowserQueueRunning()) return;
 
     const storage = await LocalStorage.open();
     try {
-      const retried = await storage.retryQueueItem(session.userId, operationId);
+      const retried = await trackPwaMutation(() => storage.retryQueueItem(session.userId, operationId));
       if (retried) {
         initialBatchCountRef.current = queue.length;
         acknowledgedInRunRef.current = 0;

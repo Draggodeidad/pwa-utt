@@ -8,7 +8,7 @@ const { createSWHarness, MockRequest, MockResponse } = require("./helpers/sw-har
 async function runTests() {
   const harness = createSWHarness();
   const { APP_SHELL_CACHE, STATIC_ASSET_CACHE, APP_SHELL_URLS } = harness.constants;
-  assert.equal(harness.constants.CACHE_VERSION, "phase-17-v2");
+  assert.equal(harness.constants.CACHE_VERSION, "phase-25-v1");
 
   assert.equal(harness.listeners.install.length, 1);
   assert.equal(harness.listeners.activate.length, 1);
@@ -55,17 +55,17 @@ async function runTests() {
   const matcherSource = /matcher:\s*\["([^\"]+)"\]/.exec(middlewareSource)?.[1];
   assert.ok(matcherSource, "el middleware debe declarar un matcher");
   const matcher = new RegExp(`^${JSON.parse(`"${matcherSource}"`)}$`);
-  for (const url of ["/offline", "/sw.js", "/manifest.webmanifest", "/offline-assets.json", "/apple-touch-icon.png", "/icons/icon.svg", "/_next/static/chunks/app.js", "/inspection-assets/finding-evidence.png", "/screenshots/mobile-home.png"]) {
+  for (const url of ["/offline", "/sw.js", "/sw-build.js", "/manifest.webmanifest", "/offline-assets.json", "/apple-touch-icon.png", "/icons/icon.svg", "/_next/static/chunks/app.js", "/inspection-assets/finding-evidence.png", "/screenshots/mobile-home.png"]) {
     assert.equal(matcher.test(url), false, `${url} debe ser público`);
   }
   for (const url of ["/", "/dashboard", "/profile", "/sync", "/login", "/auth/callback", "/offline-private", "/apple-touch-icon.png/private", "/icons-private/icon.svg"]) {
     assert.equal(matcher.test(url), true, `${url} debe pasar por middleware`);
   }
 
-  harness.triggerMessage({ type: "OTHER" });
+  await harness.triggerMessage({ type: "OTHER" });
   assert.equal(harness.skipWaitingCalled, false);
-  harness.triggerMessage({ type: "SKIP_WAITING" });
-  assert.equal(harness.skipWaitingCalled, true);
+  await harness.triggerMessage({ type: "SKIP_WAITING" });
+  assert.equal(harness.skipWaitingCalled, false, "la activación antigua no debe saltar la preparación");
 
   for (const method of ["POST", "PUT", "DELETE"]) {
     assert.equal((await harness.triggerFetch(new MockRequest("/inspections", { method }))).handled, false);

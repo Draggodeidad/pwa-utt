@@ -33,6 +33,7 @@ async function run() {
     mkdirSync(join(buildDir, ".next", "static", "css"), { recursive: true });
     writeFileSync(join(buildDir, ".next", "static", "chunks", "app.js"), "// app");
     writeFileSync(join(buildDir, ".next", "static", "css", "app.css"), "/* app */");
+    writeFileSync(join(buildDir, ".next", "BUILD_ID"), "first-build");
     const output = join(buildDir, "offline-assets.json");
     const generated = spawnSync(process.execPath, ["scripts/generate-offline-assets.mjs", join(buildDir, ".next", "static"), output], {
       cwd: process.cwd(), encoding: "utf8",
@@ -41,6 +42,7 @@ async function run() {
     const manifest = JSON.parse(readFileSync(output, "utf8"));
     assert.equal(manifest.version, 1);
     assert.deepEqual(manifest.assets, ["/_next/static/chunks/app.js", "/_next/static/css/app.css"], "identifica JS/CSS del build");
+    assert.equal(readFileSync(join(buildDir, "sw-build.js"), "utf8"), 'self.PWA_BUILD_ID = "first-build";\n');
   } finally {
     rmSync(buildDir, { recursive: true, force: true });
   }

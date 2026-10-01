@@ -11,9 +11,10 @@ export async function registerServiceWorker(
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
 
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
     callbacks.onRegistered?.(registration);
     observeRegistration(registration, callbacks);
+    void registration.update().catch(error => callbacks.onError?.(toError(error)));
     return registration;
   } catch (reason) {
     callbacks.onError?.(toError(reason));
@@ -21,22 +22,32 @@ export async function registerServiceWorker(
   }
 }
 
-export function activateServiceWorkerUpdate(registration: ServiceWorkerRegistration): boolean {
-  if (!registration.waiting) return false;
-
-  registration.waiting.postMessage({ type: "SKIP_WAITING" });
-  return true;
+export function activateServiceWorkerUpdate(registration: ServiceWorkerRegistration): Promise<{ ready: boolean; reason?: string }> {
+  if (!registration.waiting) return Promise.resolve({ ready: false, reason: "La actualización ya no está disponible." });
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timeout = window.setTimeout(() => {
+      channel.port1.close();
+      resolve({ ready: false, reason: "La actualización tardó demasiado. Vuelve a intentarlo." });
+    }, 35000);
+    channel.port1.onmessage = (event: MessageEvent<{ ready: boolean; reason?: string }>) => {
+      window.clearTimeout(timeout);
+      channel.port1.close();
+      resolve(event.data);
+    };
+    registration.waiting!.postMessage({ type: "PREPARE_AND_ACTIVATE" }, [channel.port2]);
+  });
 }
 
 function observeRegistration(registration: ServiceWorkerRegistration, callbacks: ServiceWorkerRegistrationCallbacks) {
   let updateReported = false;
   const reportUpdate = () => {
-    if (updateReported || !registration.waiting) return;
+    if (updateReported || !registration.waiting || !navigator.serviceWorker.controller) return;
     updateReported = true;
     callbacks.onUpdateAvailable?.(registration);
   };
 
-  navigator.serviceWorker.addEventListener("controllerchange", () => callbacks.onControllerChange?.(), { once: true });
+  navigator.serviceWorker.addEventListener("controllerchange", () => callbacks.onControllerChange?.());
   registration.addEventListener("updatefound", () => {
     const installing = registration.installing;
     if (!installing) return;

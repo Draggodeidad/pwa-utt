@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
+import { isPwaUpdatePreparing, trackPwaMutation } from "@/lib/pwa/update-coordination";
 import {
   enqueueFinalizeIntent,
   hasPendingFinalization,
@@ -61,6 +62,7 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
   }, [finalizationPending, inspection.workflowStatus]);
 
   const removeFinding = useCallback(async (id: string) => {
+    if (isPwaUpdatePreparing()) return;
     const finding = findings.find((item) => item.id === id);
     if (!finding) return;
     const remaining = findings.filter((item) => item.id !== id);
@@ -68,27 +70,28 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
       const findingsLocal = await Promise.all(remaining.map(async (item) => toLocalFinding(
         item.id, inspection.id, item, owner, item.version ?? null, await storage.getFinding(owner, item.id)
       )));
-      await saveFindings(owner, storage, {
+      await trackPwaMutation(() => saveFindings(owner, storage, {
         owner,
         inspectionId: inspection.id,
         findings: findingsLocal,
         removedFindings: [{ id, baseVersion: finding.version ?? null }],
-      });
+      }));
     }
     setFindings(remaining);
     setError(null);
   }, [findings, inspection.id, owner, storage]);
 
   const finalize = useCallback(async () => {
+    if (isPwaUpdatePreparing()) return;
     setState("submitting");
     try {
       if (!storage) throw new Error("storage unavailable");
       const existing = await storage.getInspection(owner, inspection.id);
-      await enqueueFinalizeIntent(owner, storage, {
+      await trackPwaMutation(() => enqueueFinalizeIntent(owner, storage, {
         inspectionId: inspection.id,
         baseVersion: existing?.baseVersion ?? inspection.version,
         expectedFindingIds: findings.map((item) => item.id),
-      });
+      }));
       setInspection((current) => ({ ...current, syncStatus: "pending" }));
       setFinalizationPending(true);
       setState("finalized");

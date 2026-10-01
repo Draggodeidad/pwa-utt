@@ -11,6 +11,7 @@ export type QueueTransport = {
   /** Must verify the server session, not only the remembered offline identity. */
   verifyOwner(owner: Uuid): Promise<boolean>;
   now?: () => number;
+  shouldContinue?: () => boolean;
 };
 
 const MAX_ATTEMPTS = 5;
@@ -73,6 +74,7 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
   const clientId = await storage.getClientId();
 
   while (true) {
+    if (transport.shouldContinue?.() === false) return { acknowledged, failed, paused: true };
     const queue = await storage.listQueue(owner);
     const live = new Set(queue.map((item) => item.operationId));
     let ready: SyncQueueItem | undefined;
@@ -100,7 +102,9 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
     if (!ready) break;
     attempted.add(ready.operationId);
     if (!await transport.verifyOwner(owner)) return { acknowledged, failed, paused: true };
+    if (transport.shouldContinue?.() === false) return { acknowledged, failed, paused: true };
     await storage.renewLease(owner, token, now(), LEASE_MS);
+    if (transport.shouldContinue?.() === false) return { acknowledged, failed, paused: true };
     const sent = await storage.prepareSend(owner, ready.operationId, clientId, token, now());
     if (!sent) continue;
     try {

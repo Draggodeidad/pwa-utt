@@ -2,8 +2,9 @@
 // Generates public/offline-assets.json from the Next build output (.next/static).
 // The service worker precaches these essential JS/CSS files so the offline shell
 // does not depend on having visited every screen. Runs after `next build`.
-import { readdir, stat, writeFile, mkdir } from "node:fs/promises";
+import { readdir, stat, writeFile, mkdir, readFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import { createHash } from "node:crypto";
 
 const baseDir = process.argv[2] ? resolve(process.argv[2]) : resolve(process.cwd(), ".next", "static");
 const outFile = process.argv[3] ? resolve(process.argv[3]) : resolve(process.cwd(), "public", "offline-assets.json");
@@ -36,4 +37,11 @@ const assets = files
 
 await mkdir(resolve(outFile, ".."), { recursive: true });
 await writeFile(outFile, JSON.stringify({ version: 1, assets }, null, 2) + "\n");
+let buildId;
+try {
+  buildId = (await readFile(resolve(baseDir, "..", "BUILD_ID"), "utf8")).trim();
+} catch {
+  buildId = createHash("sha256").update(assets.join("\n")).digest("hex").slice(0, 16);
+}
+await writeFile(resolve(outFile, "..", "sw-build.js"), `self.PWA_BUILD_ID = ${JSON.stringify(buildId)};\n`);
 console.log(`offline-assets.json: ${assets.length} essential asset(s)`);

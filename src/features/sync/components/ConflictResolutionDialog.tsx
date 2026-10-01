@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { HttpClient } from "@/lib/api/http-client";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
+import { isPwaUpdatePreparing, trackPwaMutation } from "@/lib/pwa/update-coordination";
 import { isSessionCurrent, sessionEpoch } from "@/lib/pwa/offline-session";
 import type { ConflictRecord } from "../types";
 import { resolveConflict } from "../services/resolve-conflict";
@@ -77,6 +78,7 @@ export function ConflictResolutionPanel() {
   }, [reload]);
 
   const decide = async (decision: "mine" | "server") => {
+    if (isPwaUpdatePreparing()) return;
     if (!selected || !owner || busy) return;
     const epoch = sessionEpoch();
     if (!isSessionCurrent(epoch, owner.id)) return;
@@ -84,10 +86,10 @@ export function ConflictResolutionPanel() {
     setMessage("");
     const storage = await LocalStorage.open();
     try {
-      const result = await resolveConflict({
+      const result = await trackPwaMutation(() => resolveConflict({
         storage, client: new HttpClient(), owner: owner.id,
         verifyOwner: async (expected) => { const current = await sessionUser(); return isSessionCurrent(epoch, expected) && current?.id === expected ? current.role : null; },
-      }, selected.operationId, decision);
+      }, selected.operationId, decision));
       if (!isSessionCurrent(epoch, owner.id)) return;
       setSelected(null);
       setMessage(result.newInspectionId ? "La captura se guardó en un borrador nuevo. La copia original sigue disponible." : "Resolución guardada; la captura original sigue recuperable.");
