@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { formatDateOnly } from "@/lib/format-date";
 import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionFinalization } from "../hooks/use-inspection-finalization";
 import type { InspectionDetail } from "../types";
@@ -80,7 +81,7 @@ export function InspectionDetailWorkspace({
             </h1>
             <p className={s.metadata}>
               <time dateTime={inspection.date}>
-                {inspection.date ? dateFormatter.format(new Date(`${inspection.date}T12:00:00`)) : "Sin fecha"}
+                {formatDateOnly(inspection.date, dateFormatter)}
               </time>{" "}
               · {inspection.technician}
             </p>

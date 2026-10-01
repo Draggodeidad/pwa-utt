@@ -419,7 +419,7 @@ export class LocalStorage {
   /** Freezes the complete request before HTTP; a later edit never changes its key or body. */
   async prepareSend(owner: Uuid, operationId: string, clientId: Uuid, leaseToken?: string, now = Date.now()): Promise<SyncQueueItem | null> {
     requireOwner(owner);
-    return this.runTransaction(["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
+    const result = await this.runTransaction(["sync_queue", "inspection_local", "finding_local", "metadata"], "readwrite", async (stores) => {
       if (leaseToken) await assertLease(stores.metadata, owner, leaseToken, now);
       const item = await requestToPromise<SyncQueueItem | undefined>(stores.sync_queue.get(operationId));
       if (!item || item.ownerUserId !== owner) return null;
@@ -438,6 +438,39 @@ export class LocalStorage {
       await requestToPromise(stores.sync_queue.put(prepared));
       return prepared;
     });
+    if (result) announceQueueChange();
+    return result;
+  }
+
+  /** Retrieves the ISO timestamp of the last successful synchronization ACK for this owner. */
+  async getLastSyncAt(owner: Uuid): Promise<string | null> {
+    requireOwner(owner);
+    return this.readMetadata(`lastSync:${owner}`);
+  }
+
+  /**
+   * Resets an errored queue item to pending without jumping causal dependencies.
+   * Returns false if the item has unacknowledged dependencies still in queue.
+   */
+  async retryQueueItem(owner: Uuid, operationId: string): Promise<boolean> {
+    requireOwner(owner);
+    const retried = await this.runTransaction(["sync_queue"], "readwrite", async (stores) => {
+      const queue = await requestToPromise<SyncQueueItem[]>(stores.sync_queue.index("owner").getAll(owner));
+      const target = queue.find((item) => item.operationId === operationId);
+      if (!target || target.ownerUserId !== owner) return false;
+      const hasPendingDep = target.dependsOn.some((depId) => queue.some((other) => other.operationId === depId));
+      if (hasPendingDep) return false;
+      const updated: SyncQueueItem = {
+        ...target,
+        status: "pending",
+        nextAttemptAt: null,
+        retryExhausted: false,
+      };
+      await requestToPromise(stores.sync_queue.put(updated));
+      return true;
+    });
+    if (retried) announceQueueChange();
+    return retried;
   }
 
   /** Applies the ACK and dependent version chain in one committed transaction. */
@@ -473,8 +506,10 @@ export class LocalStorage {
         };
         await requestToPromise(stores.sync_queue.put(next));
       }
+      await requestToPromise(stores.metadata.put({ name: `lastSync:${owner}`, value: ack.appliedAt }));
       await requestToPromise(stores.sync_queue.delete(sent.operationId));
     });
+    announceQueueChange();
   }
 
   async failSend(owner: Uuid, sent: SyncQueueItem, error: DomainOperationError, nextAttemptAt: string | null = null, leaseToken?: string, now = Date.now(), retryExhausted = false, conflict?: Pick<ConflictRecord, "reason" | "remoteSnapshot" | "remoteVersion">): Promise<void> {

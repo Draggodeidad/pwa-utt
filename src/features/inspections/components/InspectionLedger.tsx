@@ -2,12 +2,13 @@ import Link from "next/link";
 import { ChevronRight, CloudOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateOnly } from "@/lib/format-date";
 import type { InspectionListItem } from "../types";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 
 export function InspectionLedger({ inspections }: { inspections: readonly InspectionListItem[] }) {
-  return <div className={s.list}>{inspections.map((inspection) => <article key={inspection.id} className={s.row}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h2 className={s.location}>{inspection.location}</h2></div><time className={s.date} dateTime={inspection.date}>{dateFormatter.format(new Date(`${inspection.date}T12:00:00`))}</time><Badge className={`${s.resultBadge} ${inspection.result === "requires_attention" ? s.resultRequiresAttention : s.resultWithoutFindings}`}>{inspection.result === "requires_attention" ? "Requiere atención" : "Sin incidencias"}</Badge><div className={s.findings}><p>{inspection.findingCount} hallazgo{inspection.findingCount === 1 ? "" : "s"}</p>{inspection.syncStatus !== "synced" ? <p className={s.syncPending}><CloudOff className={s.syncIcon} />Pendiente</p> : null}</div><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir detalle de ${inspection.location}`}><ChevronRight className={s.openIcon} /></Link></Button></article>)}</div>;
+  return <div className={s.list}>{inspections.map((inspection) => <article key={inspection.id} className={s.row}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h2 className={s.location}>{inspection.location}</h2></div><time className={s.date} dateTime={inspection.date}>{formatDateOnly(inspection.date, dateFormatter)}</time><Badge className={`${s.resultBadge} ${inspection.result === "requires_attention" ? s.resultRequiresAttention : s.resultWithoutFindings}`}>{inspection.result === "requires_attention" ? "Requiere atención" : "Sin incidencias"}</Badge><div className={s.findings}><p>{inspection.findingCount} hallazgo{inspection.findingCount === 1 ? "" : "s"}</p>{inspection.syncStatus !== "synced" ? <p className={s.syncPending}><CloudOff className={s.syncIcon} />Pendiente</p> : null}</div><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir detalle de ${inspection.location}`}><ChevronRight className={s.openIcon} /></Link></Button></article>)}</div>;
 }
 
 const s = {

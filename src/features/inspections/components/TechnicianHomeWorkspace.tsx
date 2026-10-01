@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, CheckCircle2, ChevronRight, ClipboardPenLine, 
 import { AppShellState } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { formatDateOnly } from "@/lib/format-date";
 import { useInspectionListState } from "../hooks/use-inspection-list-state";
 import type { InspectionListItem } from "../types";
 
@@ -27,7 +28,7 @@ export function TechnicianHomeWorkspace({ inspections, technicianName, isLoading
     {state === "loading" ? <AppShellState state="loading" /> : null}
     {state === "empty" ? <AppShellState state="empty" title="Todavía no hay inspecciones" description="Crea la primera inspección para comenzar." /> : null}
     {state === "error" ? <AppShellState state="error" title="No se pudieron cargar las inspecciones" description="Comprueba la conexión e inténtalo nuevamente." onRetry={() => window.location.reload()} /> : null}
-    {state === "success" || state === "offline-with-data" ? <div className={s.recentList}>{inspections.slice(0, 4).map((inspection) => <article key={inspection.id} className={s.recentRow}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h3 className={s.location}>{inspection.location}</h3></div><time className={s.date} dateTime={inspection.date}>{inspection.date ? dateFormatter.format(new Date(`${inspection.date}T12:00:00`)) : "Sin fecha"}</time><p className={s.findings}>{inspection.findingCount ? `${inspection.findingCount} hallazgos` : "Sin hallazgos"}</p><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir ${inspection.location}`}><ChevronRight className={s.icon} /></Link></Button></article>)}</div> : null}
+    {state === "success" || state === "offline-with-data" ? <div className={s.recentList}>{inspections.slice(0, 4).map((inspection) => <article key={inspection.id} className={s.recentRow}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h3 className={s.location}>{inspection.location}</h3></div><time className={s.date} dateTime={inspection.date}>{formatDateOnly(inspection.date, dateFormatter)}</time><p className={s.findings}>{inspection.findingCount ? `${inspection.findingCount} hallazgos` : "Sin hallazgos"}</p><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir ${inspection.location}`}><ChevronRight className={s.icon} /></Link></Button></article>)}</div> : null}
   </section>;
 }
 

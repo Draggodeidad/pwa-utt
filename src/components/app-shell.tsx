@@ -2,8 +2,24 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, CalendarCheck2, ClipboardCheck, Cloud, Gauge, Home, ListChecks, PanelLeft, RefreshCw, UserRound } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarCheck2,
+  CircleAlert,
+  ClipboardCheck,
+  Clock,
+  Cloud,
+  CloudOff,
+  Gauge,
+  HardDrive,
+  Home,
+  ListChecks,
+  PanelLeft,
+  RefreshCw,
+  UserRound,
+} from "lucide-react";
 import { useState } from "react";
+import { useSyncStatus } from "@/features/sync";
 
 export type AppShellNavigationItem = { label: string; href: string; icon: "home" | "inspections" | "new" | "sync" | "profile" | "summary" | "findings" };
 export type AppShellNavigationSection = { label: string; roleLabel: string; items: readonly AppShellNavigationItem[] };
@@ -27,6 +43,7 @@ const navigationIcons = { home: Home, inspections: ListChecks, new: CalendarChec
 /** Shared application frame; navigation is composed by the route for the active role. */
 export function AppShell({ children, navigationItems, navigationSections, activePath, profile }: AppShellProps) {
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const { status: syncStatus, pendingCount, errorCount, isSyncing, isOffline } = useSyncStatus();
   const initials = getInitials(profile?.displayName);
 
   if (!navigationItems && !navigationSections) {
@@ -35,25 +52,102 @@ export function AppShell({ children, navigationItems, navigationSections, active
 
   const sections = navigationSections ?? [{ label: "Navegación", roleLabel: "", items: navigationItems?.map((item) => ({ ...item, icon: "home" as const })) ?? [] }];
 
+  let syncStatusLabel = "Sincronizado";
+  let SyncIcon = Cloud;
+  if (isSyncing) {
+    syncStatusLabel = "Sincronizando...";
+    SyncIcon = RefreshCw;
+  } else if (errorCount > 0) {
+    syncStatusLabel = errorCount === 1 ? "1 error" : `${errorCount} errores`;
+    SyncIcon = CircleAlert;
+  } else if (pendingCount > 0) {
+    syncStatusLabel = pendingCount === 1 ? "1 pendiente" : `${pendingCount} pendientes`;
+    SyncIcon = Clock;
+  } else if (syncStatus === "local") {
+    syncStatusLabel = "Guardado local";
+    SyncIcon = HardDrive;
+  } else if (isOffline) {
+    syncStatusLabel = "Sin conexión";
+    SyncIcon = CloudOff;
+  }
+
   return (
     <div className={s.shell}>
       <aside className={s.sidebar}>
         <div className={s.brandHeader}>
           <span className={s.brandIcon} aria-hidden="true"><ClipboardCheck className={s.icon} /></span>
-          <span className={s.brandText}><span className={s.brandTitle}>Inspecciones</span><span className={s.brandSubtitle}>LABORATORIO U.</span></span><button type="button" aria-label="Mostrar navegación" aria-expanded={isNavigationOpen} onClick={() => setIsNavigationOpen((open) => !open)} className={s.navigationToggle}><PanelLeft className={s.icon} aria-hidden="true" /></button>
+          <span className={s.brandText}><span className={s.brandTitle}>Inspecciones</span><span className={s.brandSubtitle}>LABORATORIO U.</span></span>
+          <button type="button" aria-label="Mostrar navegación" aria-expanded={isNavigationOpen} onClick={() => setIsNavigationOpen((open) => !open)} className={s.navigationToggle}>
+            <PanelLeft className={s.icon} aria-hidden="true" />
+          </button>
         </div>
         <nav aria-label="Navegación principal" className={`${isNavigationOpen ? s.visible : s.hidden} ${s.navigation}`}>
-          {sections.map((section, index) => <section key={section.label} className={index ? s.navigationSectionDivided : ""} aria-label={section.label}>
-            <div className={s.navigationSectionHeader}><span>{section.label}</span><span>{section.roleLabel}</span></div>
-            <ul className={s.navigationList}>{section.items.map((item) => {
-              const Icon = navigationIcons[item.icon]; const isActive = item.href === activePath;
-              return <li key={`${section.label}-${item.href}-${item.label}`}><Link href={item.href} aria-current={isActive ? "page" : undefined} className={`${s.navigationItem} ${isActive ? s.navigationItemActive : s.navigationItemInactive}`}><Icon className={s.icon} aria-hidden="true" />{item.label}</Link></li>;
-            })}</ul>
-          </section>)}
+          {sections.map((section, index) => (
+            <section key={section.label} className={index ? s.navigationSectionDivided : ""} aria-label={section.label}>
+              <div className={s.navigationSectionHeader}>
+                <span>{section.label}</span>
+                <span>{section.roleLabel}</span>
+              </div>
+              <ul className={s.navigationList}>
+                {section.items.map((item) => {
+                  const Icon = navigationIcons[item.icon];
+                  const isActive = item.href === activePath;
+                  const isSyncItem = item.icon === "sync" || item.href === "/sync";
+                  return (
+                    <li key={`${section.label}-${item.href}-${item.label}`}>
+                      <Link href={item.href} aria-current={isActive ? "page" : undefined} className={`${s.navigationItem} ${isActive ? s.navigationItemActive : s.navigationItemInactive}`}>
+                        <Icon className={s.icon} aria-hidden="true" />
+                        <span className={s.navigationLabel}>{item.label}</span>
+                        {isSyncItem && (pendingCount > 0 || errorCount > 0) ? (
+                          <span className={errorCount > 0 ? s.navBadgeError : s.navBadgePending}>
+                            {errorCount > 0 ? "!" : pendingCount}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
         </nav>
-        <div className={`${isNavigationOpen ? s.visible : s.hidden} ${s.connectivityPanel}`}><div className={s.connectivityStatus}><span className={s.connectivityLabel}><span className={s.connectivityDot} aria-hidden="true" />En línea</span><Cloud className={s.connectivityIcon} aria-hidden="true" /></div></div>
+        <div className={`${isNavigationOpen ? s.visible : s.hidden} ${s.connectivityPanel}`}>
+          <Link href="/sync" className={s.connectivityStatus} aria-label={`Conectividad: ${isOffline ? "Sin conexión" : "En línea"}. Sincronización: ${syncStatusLabel}`}>
+            <div className={s.connectivityDetails}>
+              <span className={s.connectivityLabel}>
+                <span className={isOffline ? s.connectivityDotOffline : s.connectivityDot} aria-hidden="true" />
+                {isOffline ? "Sin conexión" : "En línea"}
+              </span>
+              <span className={s.syncStatusText}>{syncStatusLabel}</span>
+            </div>
+            <SyncIcon className={isSyncing ? s.connectivityIconSpinning : s.connectivityIcon} aria-hidden="true" />
+          </Link>
+        </div>
       </aside>
-      <main className={s.main}><header className={s.topBar}><p className={s.topBarTitle}>Inspecciones de laboratorios</p><Link href="/profile" aria-label="Abrir perfil" className={s.profileButton}>{profile ? <span className={s.profileText}><span className={s.profileName}>{profile.displayName}</span><span className={s.profileRole}>{profile.roleLabel}</span></span> : null}<span className={s.profileAvatar} title={profile?.email}>{profile?.avatarUrl ? <img src={profile.avatarUrl} alt="" className={s.profileAvatarImage} /> : <><UserRound className={s.profileIcon} aria-hidden="true" />{initials ? <span className={s.profileInitials}>{initials}</span> : null}</>}</span></Link></header><div className={s.content}>{children}</div></main>
+      <main className={s.main}>
+        <header className={s.topBar}>
+          <p className={s.topBarTitle}>Inspecciones de laboratorios</p>
+          <Link href="/profile" aria-label="Abrir perfil" className={s.profileButton}>
+            {profile ? (
+              <span className={s.profileText}>
+                <span className={s.profileName}>{profile.displayName}</span>
+                <span className={s.profileRole}>{profile.roleLabel}</span>
+              </span>
+            ) : null}
+            <span className={s.profileAvatar} title={profile?.email}>
+              {profile?.avatarUrl ? (
+                <img src={profile.avatarUrl} alt="" className={s.profileAvatarImage} />
+              ) : (
+                <>
+                  <UserRound className={s.profileIcon} aria-hidden="true" />
+                  {initials ? <span className={s.profileInitials}>{initials}</span> : null}
+                </>
+              )}
+            </span>
+          </Link>
+        </header>
+        <div className={s.content}>{children}</div>
+      </main>
     </div>
   );
 }
@@ -108,11 +202,18 @@ const s = {
   navigationItem: "flex items-center gap-2 rounded-sm px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
   navigationItemActive: "bg-primary text-primary-foreground",
   navigationItemInactive: "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground",
+  navigationLabel: "flex-1",
+  navBadgePending: "ml-auto rounded-full bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-medium text-secondary-foreground",
+  navBadgeError: "ml-auto rounded-full bg-destructive px-1.5 py-0.5 font-mono text-[10px] font-medium text-destructive-foreground",
   connectivityPanel: "lg:block border-t bg-secondary/40 px-4 py-3",
-  connectivityStatus: "flex items-center justify-between rounded-sm border bg-card px-2 py-1.5 text-xs text-foreground",
-  connectivityLabel: "flex items-center gap-1.5",
+  connectivityStatus: "flex items-center justify-between rounded-sm border bg-card px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-secondary/50",
+  connectivityDetails: "flex flex-col text-left",
+  connectivityLabel: "flex items-center gap-1.5 font-medium",
   connectivityDot: "size-2 rounded-full bg-emerald-600",
+  connectivityDotOffline: "size-2 rounded-full bg-destructive",
+  syncStatusText: "text-[10px] text-muted-foreground",
   connectivityIcon: "size-3.5",
+  connectivityIconSpinning: "size-3.5 animate-spin",
   main: "min-w-0",
   topBar: "flex h-16 items-center justify-between border-b bg-card px-4 sm:px-8",
   topBarTitle: "text-sm font-medium text-secondary-foreground",

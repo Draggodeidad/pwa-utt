@@ -42,11 +42,18 @@ async function reconcileLogout(): Promise<void> {
   } catch { /* remain blocked until a later online attempt or fresh login */ }
 }
 
+export function isBrowserQueueRunning(): boolean {
+  return running;
+}
+
 /** Open-app transport with a durable per-account lease and scheduled retries. */
 export async function runBrowserQueue(): Promise<void> {
   if (isSessionBlocked()) { scheduleRetry(null); await reconcileLogout(); return; }
   if (running) { requested = true; return; }
   running = true;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: true } }));
+  }
   try {
     do {
       requested = false;
@@ -55,10 +62,13 @@ export async function runBrowserQueue(): Promise<void> {
       if (!owner) { scheduleRetry(null); return; }
       const storage = await LocalStorage.open();
       try {
-        await runQueue(storage, owner, {
+        const outcome = await runQueue(storage, owner, {
           client: new HttpClient(),
           verifyOwner: async (expected) => isSessionCurrent(epoch, expected) && await verifiedOwner(epoch) === expected,
         });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: true, outcome } }));
+        }
         if (!isSessionCurrent(epoch, owner)) { scheduleRetry(null); return; }
         const pending = await storage.listQueue(owner);
         const next = pending.flatMap((item) => item.nextAttemptAt ? [Date.parse(item.nextAttemptAt)] : []);
@@ -72,5 +82,8 @@ export async function runBrowserQueue(): Promise<void> {
     } while (requested);
   } finally {
     running = false;
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: false } }));
+    }
   }
 }
