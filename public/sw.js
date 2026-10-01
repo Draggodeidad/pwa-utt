@@ -1,6 +1,7 @@
-const CACHE_VERSION = "phase-17-v2";
+const CACHE_VERSION = "phase-25-v1";
 const APP_SHELL_CACHE = `inspecciones-shell-${CACHE_VERSION}`;
 const STATIC_ASSET_CACHE = `inspecciones-static-${CACHE_VERSION}`;
+const PREVIOUS_ASSET_CACHES = ["inspecciones-shell-phase-17-v2", "inspecciones-static-phase-17-v2"];
 const MAX_STATIC_ASSETS = 50;
 
 // Only this public page and these public files may be stored during install.
@@ -21,6 +22,7 @@ const OFFLINE_ASSETS_MANIFEST = "/offline-assets.json";
 
 const PUBLIC_ASSET_URLS = new Set([...APP_SHELL_URLS.filter(path => path !== "/offline"), OFFLINE_ASSETS_MANIFEST]);
 const SENSITIVE_PATHS = ["/api", "/login", "/sync", "/auth", "/_next/webpack-hmr"];
+let updatePreparationRunning = false;
 
 self.addEventListener("install", event => {
   event.waitUntil(precachePublicShell().then(notifyReady));
@@ -36,7 +38,7 @@ self.addEventListener("activate", event => {
             .filter(
               cacheName =>
                 cacheName.startsWith("inspecciones-") &&
-                ![APP_SHELL_CACHE, STATIC_ASSET_CACHE].includes(cacheName)
+                ![APP_SHELL_CACHE, STATIC_ASSET_CACHE, ...PREVIOUS_ASSET_CACHES].includes(cacheName)
             )
             .map(cacheName => caches.delete(cacheName))
         )
@@ -46,8 +48,8 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("message", async event => {
-  if (event.data?.type === "SKIP_WAITING") {
-    self.skipWaiting();
+  if (event.data?.type === "PREPARE_AND_ACTIVATE") {
+    event.waitUntil(prepareAndActivate(event));
     return;
   }
   if (event.data?.type === "READY_QUERY") {
@@ -55,6 +57,43 @@ self.addEventListener("message", async event => {
     if (event.source) event.source.postMessage({ type: "OFFLINE_READY_STATE", ready });
   }
 });
+
+async function prepareAndActivate(event) {
+  const reply = event.ports?.[0];
+  if (!reply) return;
+  if (updatePreparationRunning) {
+    reply.postMessage({ ready: false, reason: "Otra pestaña ya está preparando la actualización." });
+    return;
+  }
+  updatePreparationRunning = true;
+  let clients = [];
+  try {
+    clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const results = await Promise.all(clients.map(client => new Promise(resolve => {
+      const channel = new MessageChannel();
+      const timeout = setTimeout(() => { channel.port1.close(); resolve({ ready: false, reason: "Una pestaña no respondió a tiempo." }); }, 30000);
+      channel.port1.onmessage = message => {
+        clearTimeout(timeout);
+        channel.port1.close();
+        resolve(message.data);
+      };
+      client.postMessage({ type: "PREPARE_PWA_UPDATE" }, [channel.port2]);
+    })));
+    const failure = results.find(result => result?.ready !== true);
+    if (failure) {
+      clients.forEach(client => client.postMessage({ type: "CANCEL_PWA_UPDATE" }));
+      reply.postMessage({ ready: false, reason: failure.reason || "No se pudieron preparar todas las pestañas." });
+      return;
+    }
+    await self.skipWaiting();
+    reply.postMessage({ ready: true });
+  } catch {
+    clients.forEach(client => client.postMessage({ type: "CANCEL_PWA_UPDATE" }));
+    reply.postMessage({ ready: false, reason: "No se pudo preparar la actualización." });
+  } finally {
+    updatePreparationRunning = false;
+  }
+}
 
 self.addEventListener("fetch", event => {
   const request = event.request;
@@ -153,6 +192,13 @@ async function cacheFirstPublicAsset(request) {
   const shellCache = await caches.open(APP_SHELL_CACHE);
   const precachedResponse = await shellCache.match(request);
   if (precachedResponse) return precachedResponse;
+
+  for (const cacheName of PREVIOUS_ASSET_CACHES) {
+    if (await caches.has(cacheName)) {
+      const oldResponse = await (await caches.open(cacheName)).match(request);
+      if (oldResponse) return oldResponse;
+    }
+  }
 
   const cache = await caches.open(STATIC_ASSET_CACHE);
   const cachedResponse = await cache.match(request);
