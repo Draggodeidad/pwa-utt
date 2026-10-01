@@ -302,6 +302,7 @@ function createSWHarness(options = {}) {
     URL: URL,
     Promise,
     MessageChannel,
+    importScripts: (url) => { if (url === "/sw-build.js") selfMock.PWA_BUILD_ID = options.buildId || "v1"; },
     setTimeout,
     clearTimeout,
     Array,

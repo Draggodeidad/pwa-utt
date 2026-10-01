@@ -35,6 +35,9 @@ function tab(prepare) {
 }
 
 async function main() {
+  const nextBuild = createSWHarness({ buildId: "v2" });
+  assert.notEqual(nextBuild.constants.APP_SHELL_CACHE, createSWHarness({ buildId: "v1" }).constants.APP_SHELL_CACHE);
+
   // A failed autosave in either tab blocks global activation and releases the others.
   const failed = createSWHarness();
   const first = tab(async () => {});

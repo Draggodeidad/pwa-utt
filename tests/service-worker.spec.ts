@@ -55,7 +55,7 @@ async function runTests() {
   const matcherSource = /matcher:\s*\["([^\"]+)"\]/.exec(middlewareSource)?.[1];
   assert.ok(matcherSource, "el middleware debe declarar un matcher");
   const matcher = new RegExp(`^${JSON.parse(`"${matcherSource}"`)}$`);
-  for (const url of ["/offline", "/sw.js", "/manifest.webmanifest", "/offline-assets.json", "/apple-touch-icon.png", "/icons/icon.svg", "/_next/static/chunks/app.js", "/inspection-assets/finding-evidence.png", "/screenshots/mobile-home.png"]) {
+  for (const url of ["/offline", "/sw.js", "/sw-build.js", "/manifest.webmanifest", "/offline-assets.json", "/apple-touch-icon.png", "/icons/icon.svg", "/_next/static/chunks/app.js", "/inspection-assets/finding-evidence.png", "/screenshots/mobile-home.png"]) {
     assert.equal(matcher.test(url), false, `${url} debe ser público`);
   }
   for (const url of ["/", "/dashboard", "/profile", "/sync", "/login", "/auth/callback", "/offline-private", "/apple-touch-icon.png/private", "/icons-private/icon.svg"]) {
