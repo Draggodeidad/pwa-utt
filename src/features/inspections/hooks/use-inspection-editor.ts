@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
+import { isPwaUpdatePreparing, registerPwaUpdateFlusher, trackPwaMutation } from "@/lib/pwa/update-coordination";
 import {
   discardDraft,
   finalizeDraft,
@@ -37,6 +38,8 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   const [inspectionId] = useState(initial.id || crypto.randomUUID());
   const dirtyRef = useRef(false);
   const savingRef = useRef(false);
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const revisionRef = useRef(0);
   const removedRef = useRef<readonly RemovedFindingRef[]>([]);
   const valuesRef = useRef(values);
   valuesRef.current = values;
@@ -80,6 +83,8 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   }, [toast]);
 
   const mutate = (next: Partial<InspectionEditorValues>) => {
+    if (isPwaUpdatePreparing()) return;
+    revisionRef.current++;
     dirtyRef.current = true;
     setValues((current) => ({ ...current, ...next }));
     setState("dirty");
@@ -96,33 +101,49 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   };
 
   const save = useCallback(async () => {
+    if (savePromiseRef.current) return savePromiseRef.current;
     if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
-    savingRef.current = true;
-    setState("saving");
-    try {
-      const current = valuesRef.current;
-      const existing = await storage.getInspection(owner, inspectionId);
-      const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
-      const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
-        finding.id, inspectionId, finding, owner, finding.version ?? null, await storage.getFinding(owner, finding.id)
-      )));
-      await saveDraft(owner, storage, { owner, inspection, findings, removedFindings: removedRef.current });
-      removedRef.current = [];
-      setValues((currentValues) => ({ ...currentValues, syncStatus: "local" }));
-      setState("saved");
-      setToast(true);
-      savingRef.current = false;
-      return true;
-    } catch (error) {
-      setErrors({ form: readErrorMessage(error) });
-      setState("save-error");
-      savingRef.current = false;
-      return false;
-    }
+    const task = trackPwaMutation(async () => {
+      savingRef.current = true;
+      setState("saving");
+      try {
+        do {
+          const revision = revisionRef.current;
+          const current = valuesRef.current;
+          const removed = removedRef.current;
+          const existing = await storage.getInspection(owner, inspectionId);
+          const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
+          const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
+            finding.id, inspectionId, finding, owner, finding.version ?? null, await storage.getFinding(owner, finding.id)
+          )));
+          await saveDraft(owner, storage, { owner, inspection, findings, removedFindings: removed });
+          removedRef.current = removedRef.current.slice(removed.length);
+          if (revision === revisionRef.current) break;
+        } while (true);
+        dirtyRef.current = false;
+        setValues((currentValues) => ({ ...currentValues, syncStatus: "local" }));
+        setState("saved");
+        setToast(true);
+        return true;
+      } catch (error) {
+        setErrors({ form: readErrorMessage(error) });
+        setState("save-error");
+        return false;
+      } finally {
+        savingRef.current = false;
+      }
+    });
+    savePromiseRef.current = task;
+    try { return await task; } finally { savePromiseRef.current = null; }
   }, [storage, owner, inspectionId, catalog]);
 
   const saveRef = useRef(save);
   saveRef.current = save;
+
+  useEffect(() => registerPwaUpdateFlusher(async () => {
+    if (!dirtyRef.current && !savingRef.current) return;
+    if (!await saveRef.current()) throw new Error("No se pudo guardar el borrador en este dispositivo.");
+  }), []);
 
   useEffect(() => {
     if (!storage || state !== "dirty" || savingRef.current) return;
@@ -131,16 +152,22 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   }, [values, storage, state]);
 
   const addFinding = (finding: InspectionFinding) => {
+    if (isPwaUpdatePreparing()) return;
+    revisionRef.current++;
     dirtyRef.current = true;
     setValues((current) => ({ ...current, findings: [...current.findings, finding] }));
     setState("dirty");
   };
   const updateFinding = (finding: InspectionFinding) => {
+    if (isPwaUpdatePreparing()) return;
+    revisionRef.current++;
     dirtyRef.current = true;
     setValues((current) => ({ ...current, findings: current.findings.map((item) => (item.id === finding.id ? finding : item)) }));
     setState("dirty");
   };
   const removeFinding = (id: string) => {
+    if (isPwaUpdatePreparing()) return;
+    revisionRef.current++;
     dirtyRef.current = true;
     const removed = valuesRef.current.findings.find((finding) => finding.id === id);
     removedRef.current = [...removedRef.current, { id, baseVersion: removed?.version ?? null }];
@@ -149,6 +176,7 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   };
 
   const finalizeInspection = useCallback(async () => {
+    if (isPwaUpdatePreparing()) return false;
     if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
     setState("finalizing");
     try {
@@ -158,13 +186,13 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
       const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
         finding.id, inspectionId, finding, owner, finding.version ?? null, await storage.getFinding(owner, finding.id)
       )));
-      await finalizeDraft(owner, storage, {
+      await trackPwaMutation(() => finalizeDraft(owner, storage, {
         owner,
         inspection,
         findings,
         removedFindings: removedRef.current,
         expectedFindingIds: current.findings.map((finding) => finding.id),
-      });
+      }));
       removedRef.current = [];
       setValues((currentValues) => ({ ...currentValues, syncStatus: "pending" }));
       setState("finalized");
@@ -177,9 +205,10 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   }, [storage, owner, inspectionId, catalog]);
 
   const discard = useCallback(async () => {
+    if (isPwaUpdatePreparing()) return false;
     if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
     try {
-      await discardDraft(owner, storage, inspectionId);
+      await trackPwaMutation(() => discardDraft(owner, storage, inspectionId));
       removedRef.current = [];
       dirtyRef.current = false;
       setErrors({});

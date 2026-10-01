@@ -6,6 +6,7 @@ import { HttpClient } from "@/lib/api/http-client";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
 import { isSessionCurrent, readLocalSession, rememberLocalSession, sessionEpoch } from "@/lib/pwa/offline-session";
 import { runBrowserQueue } from "@/lib/pwa/sync/browser-runner";
+import { isPwaUpdatePreparing, trackPwaMutation } from "@/lib/pwa/update-coordination";
 import { saveCoordinationFollowup } from "../services/coordination-followup";
 import type { CoordinationFinding, CoordinationFindingsState, FindingDto, FindingFilters, FindingListPage, FindingPriority, FindingStatus } from "../types";
 
@@ -119,6 +120,7 @@ export function useCoordinationFindings(owner: string) {
   };
 
   const saveFinding = async (changes: { priority: FindingPriority; status: FindingStatus }) => {
+    if (isPwaUpdatePreparing()) return;
     if (!selectedId || isSaving || !isSessionCurrent(sessionEpoch(), owner)) return;
     const item = remote.find((finding) => finding.id === selectedId);
     if (!item) return;
@@ -128,7 +130,7 @@ export function useCoordinationFindings(owner: string) {
       const storage = await LocalStorage.open();
       let intent;
       try {
-        intent = await saveCoordinationFollowup(storage, owner, item, changes.priority, changes.status);
+        intent = await trackPwaMutation(() => saveCoordinationFollowup(storage, owner, item, changes.priority, changes.status));
       } finally {
         storage.close();
       }
