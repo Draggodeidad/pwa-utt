@@ -6,29 +6,33 @@ import { AppShellState } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatDateOnly } from "@/lib/format-date";
+import { sortOperationalInspections, summarizeOperationalInspections } from "../operational-summaries";
+import { useLocalInspections } from "../hooks/use-local-inspections";
 import { useInspectionListState } from "../hooks/use-inspection-list-state";
-import type { InspectionListItem } from "../types";
+import type { InspectionListItem, LaboratoryOption } from "../types";
+import type { Uuid } from "@/types/entity";
 
-type Props = { inspections: readonly InspectionListItem[]; technicianName: string; isLoading?: boolean; error?: Error | null };
+type Props = { inspections: readonly InspectionListItem[]; catalog: readonly LaboratoryOption[]; owner: Uuid; technicianName: string; isLoading?: boolean; error?: Error | null };
 const dateFormatter = new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 
 function Metric({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
   return <Card className={s.metric}><div><p className={s.metricLabel}>{label}</p><p className={s.metricValue}>{value}</p></div><span className={s.metricIcon}>{icon}</span></Card>;
 }
 
-export function TechnicianHomeWorkspace({ inspections, technicianName, isLoading = false, error = null }: Props) {
-  const { state, connectivity } = useInspectionListState({ records: inspections, hasActiveFilters: false, isLoading, error });
-  const attention = inspections.filter((item) => item.result === "requires_attention").length;
-  const pending = inspections.filter((item) => item.syncStatus !== "synced").length;
+export function TechnicianHomeWorkspace({ inspections, catalog, owner, technicianName, isLoading = false, error = null }: Props) {
+  const { items, error: readError } = useLocalInspections(inspections, catalog, owner, technicianName, error);
+  const ordered = sortOperationalInspections(items);
+  const totals = summarizeOperationalInspections(ordered);
+  const { state, connectivity } = useInspectionListState({ records: ordered, hasActiveFilters: false, isLoading, error: readError });
   return <section className={s.page} aria-labelledby="home-title">
     {connectivity === "offline" ? <p className={s.offlineNotice} role="status"><CloudOff className={s.icon} />Sin conexión. Se muestran los registros guardados localmente.</p> : null}
     <header className={s.header}><div><h1 id="home-title" className={s.title}>Buen día, {technicianName}</h1><p className={s.subtitle}>Consulta el estado de tus inspecciones recientes.</p></div><Button asChild className={s.newInspectionButton}><Link href="/inspections/new"><ClipboardPenLine className={s.buttonIcon} />Nueva inspección</Link></Button></header>
-    <div className={s.metrics}><Metric label="Inspecciones" value={inspections.length} icon={<CheckCircle2 className={s.metricGlyph} />} /><Metric label="Requieren atención" value={attention} icon={<AlertCircle className={s.metricGlyph} />} /><Metric label="Pendientes de sincronización" value={pending} icon={<RefreshCw className={s.metricGlyph} />} /></div>
+    {state !== "error" ? <><div className={s.metrics}><Metric label="Mis inspecciones visibles" value={totals.visibleCount} icon={<CheckCircle2 className={s.metricGlyph} />} /><Metric label="Finalizadas con hallazgos" value={totals.attentionCount} icon={<AlertCircle className={s.metricGlyph} />} /><Metric label="Pendientes de sincronización" value={totals.syncPendingCount} icon={<RefreshCw className={s.metricGlyph} />} /></div><p className={s.metricScope}>Incluye todas las páginas del servidor y los borradores locales de este dispositivo; cada inspección cuenta una vez.</p></> : null}
     <div className={s.recentHeader}><h2 className={s.sectionTitle}>Inspecciones recientes</h2><Link href="/inspections" className={s.viewAll}>Ver todas <ArrowRight className={s.icon} /></Link></div>
     {state === "loading" ? <AppShellState state="loading" /> : null}
     {state === "empty" ? <AppShellState state="empty" title="Todavía no hay inspecciones" description="Crea la primera inspección para comenzar." /> : null}
     {state === "error" ? <AppShellState state="error" title="No se pudieron cargar las inspecciones" description="Comprueba la conexión e inténtalo nuevamente." onRetry={() => window.location.reload()} /> : null}
-    {state === "success" || state === "offline-with-data" ? <div className={s.recentList}>{inspections.slice(0, 4).map((inspection) => <article key={inspection.id} className={s.recentRow}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h3 className={s.location}>{inspection.location}</h3></div><time className={s.date} dateTime={inspection.date}>{formatDateOnly(inspection.date, dateFormatter)}</time><p className={s.findings}>{inspection.findingCount ? `${inspection.findingCount} hallazgos` : "Sin hallazgos"}</p><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir ${inspection.location}`}><ChevronRight className={s.icon} /></Link></Button></article>)}</div> : null}
+    {state === "success" || state === "offline-with-data" ? <div className={s.recentList}>{ordered.slice(0, 4).map((inspection) => <article key={inspection.id} className={s.recentRow}><div><p className={s.folio}>#{inspection.id.replace("inspection-", "INS-")}</p><h3 className={s.location}>{inspection.location}</h3></div><time className={s.date} dateTime={inspection.date}>{formatDateOnly(inspection.date, dateFormatter)}</time><p className={s.findings}>{inspection.findingCount ? `${inspection.findingCount} hallazgos` : "Sin hallazgos"}</p><Button asChild variant="ghost" size="icon" className={s.openButton}><Link href={`/inspections/${inspection.id}`} aria-label={`Abrir ${inspection.location}`}><ChevronRight className={s.icon} /></Link></Button></article>)}</div> : null}
   </section>;
 }
 
@@ -46,6 +50,7 @@ const s = {
   newInspectionButton: "rounded-sm",
   buttonIcon: "mr-2 size-4",
   metrics: "grid gap-3 sm:grid-cols-3",
+  metricScope: "mt-2 text-xs text-muted-foreground",
   metricGlyph: "size-5",
   recentHeader: "mt-8 flex items-center justify-between",
   sectionTitle: "text-xl font-semibold",
