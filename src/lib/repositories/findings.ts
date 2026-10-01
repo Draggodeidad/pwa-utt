@@ -5,6 +5,7 @@ import { DomainValidationError } from "@/types/entity";
 
 type FindingRow = {
   id: string; inspection_id: string; title: string; description: string;
+  created_by: string;
   priority: FindingPriority; status: FindingStatus; version: number;
   created_at: string; updated_at: string; resolved_at: string | null;
 };
@@ -54,7 +55,7 @@ function encodeFindingCursor(cursor: FindingCursor): string {
 export async function findVisibleFinding(client: SupabaseClient, id: string): Promise<FindingDto | null> {
   if (!isFindingId(id)) return null;
   const { data, error } = await client.from("findings")
-    .select("id, inspection_id, title, description, priority, status, version, created_at, updated_at, resolved_at")
+    .select("id, inspection_id, title, description, created_by, priority, status, version, created_at, updated_at, resolved_at")
     .eq("id", id).is("deleted_at", null).maybeSingle();
   if (error) throw new FindingReadError();
   if (!data) return null;
@@ -65,7 +66,7 @@ export async function findVisibleFinding(client: SupabaseClient, id: string): Pr
 export async function listVisibleFindingsPage(client: SupabaseClient, query: FindingListQuery): Promise<FindingListPage> {
   const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
   let builder = client.from("findings")
-    .select("id, inspection_id, title, description, priority, status, version, created_at, updated_at, resolved_at")
+    .select("id, inspection_id, title, description, created_by, priority, status, version, created_at, updated_at, resolved_at")
     .is("deleted_at", null);
   if (query.inspectionId) builder = builder.eq("inspection_id", query.inspectionId);
   if (query.priority) builder = builder.eq("priority", query.priority);
@@ -119,6 +120,7 @@ async function hydrateFindingItems(client: SupabaseClient, rows: FindingRow[]): 
       technician: inspection ? (profileById.get(inspection.inspector_id)?.display_name ?? "Responsable no disponible") : "Responsable no disponible",
       title: row.title,
       description: row.description,
+      createdBy: row.created_by,
       priority: row.priority,
       status: row.status,
       workflowStatus: inspection?.workflow_status ?? "draft",

@@ -459,6 +459,7 @@ async function main() {
     assert.ok(coordList.items.some((item) => item.id === findingId), "coordinación ve hallazgos de completadas propias");
     assert.ok(coordList.items.some((item) => item.id === foreignFindingId), "coordinación ve hallazgos de completadas ajenas");
     assert.ok(!coordList.items.some((item) => item.inspectionId === techDraftId), "coordinación no ve hallazgos de borradores");
+    assert.equal(coordList.items.find((item) => item.id === findingId).createdBy, technicianId, "el origen del hallazgo es el técnico real");
 
     const byInspection = await (await request(`/api/findings?inspectionId=${techCompletedId}`, {}, coord)).json();
     assert.ok(byInspection.items.length === 1 && byInspection.items[0].id === findingId, "filtro por inspección");
@@ -466,6 +467,10 @@ async function main() {
     assert.ok(byPriority.items.every((item) => item.priority === "high"), "filtro por prioridad");
     const byStatus = await (await request("/api/findings?status=resolved", {}, coord)).json();
     assert.ok(byStatus.items.length === 1 && byStatus.items[0].id === foreignFindingId, "filtro por estado");
+
+    const skipped = await mutation("PATCH", `/api/findings/${findingId}/follow-up`, coord, { clientId, kind: "finding.followup", entityId: findingId, baseVersion: 1, payload: { status: "resolved" } }, op(38));
+    assert.equal(skipped.status, 422, "pending→resolved manipulado se rechaza");
+    assert.equal((await (await request(`/api/findings/${findingId}`, {}, coord)).json()).version, 1, "rechazo no modifica la versión");
 
     const followed = await mutation("PATCH", `/api/findings/${findingId}/follow-up`, coord, { clientId, kind: "finding.followup", entityId: findingId, baseVersion: 1, payload: { status: "in_review", priority: "high" } }, op(31));
     assert.equal(followed.status, 201, "follow-up de coordinación incrementa versión");
@@ -477,6 +482,7 @@ async function main() {
     const badTransition = await mutation("PATCH", `/api/findings/${foreignFindingId}/follow-up`, coord, { clientId, kind: "finding.followup", entityId: foreignFindingId, baseVersion: 1, payload: { status: "pending" } }, op(32));
     assert.equal(badTransition.status, 422, "transición inválida (resolved→pending) es 422");
     assert.equal((await badTransition.json()).code, "VALIDATION_ERROR");
+    assert.equal((await mutation("PATCH", `/api/findings/${foreignFindingId}/follow-up`, coord, { clientId, kind: "finding.followup", entityId: foreignFindingId, baseVersion: 1, payload: { status: "in_review" } }, op(39))).status, 422, "resolved→in_review manipulado se rechaza");
 
     const staleFollowup = await mutation("PATCH", `/api/findings/${findingId}/follow-up`, coord, { clientId, kind: "finding.followup", entityId: findingId, baseVersion: 1, payload: { priority: "low" } }, op(33));
     assert.equal(staleFollowup.status, 409, "follow-up con versión vieja es 409");
