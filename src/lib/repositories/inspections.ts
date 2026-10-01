@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { InspectionDetail, InspectionEditorValues, InspectionListItem, InspectionWorkflowStatus } from "@/features/inspections";
-import { DomainValidationError } from "@/types/entity";
+import { DomainValidationError } from "../../types/entity.ts";
 
 type InspectionRow = {
   id: string; folio_number: number; laboratory_id: string | null; inspector_id: string;
@@ -23,6 +23,7 @@ export type InspectionListQuery = {
   cursor?: string;
   search?: string;
   status?: InspectionWorkflowStatus;
+  inspectorId?: string;
 };
 
 export type InspectionListPage = {
@@ -131,23 +132,44 @@ async function hydrateInspectionItems(client: SupabaseClient, rows: InspectionRo
   const [labs, profiles, findings] = await Promise.all([
     labIds.length ? client.from("laboratories").select("id, code, name").in("id", labIds) : Promise.resolve({ data: [], error: null }),
     client.from("profiles").select("id, display_name").in("id", profileIds),
-    client.from("findings").select("id, inspection_id, title, description, priority, status, version").in("inspection_id", ids).is("deleted_at", null),
+    listVisibleFindingCounts(client, ids),
   ]);
-  if (labs.error || profiles.error || findings.error) throw new InspectionReadError();
+  if (labs.error || profiles.error) throw new InspectionReadError();
   const labById = new Map(((labs.data ?? []) as LaboratoryRow[]).map((lab) => [lab.id, lab]));
   const profileById = new Map(((profiles.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]));
-  const counts = new Map<string, number>();
-  for (const finding of (findings.data ?? []) as FindingRow[]) counts.set(finding.inspection_id, (counts.get(finding.inspection_id) ?? 0) + 1);
+  const counts = new Map<string, { all: number; pending: number }>();
+  for (const finding of findings) {
+    const count = counts.get(finding.inspection_id) ?? { all: 0, pending: 0 };
+    count.all += 1;
+    if (finding.status !== "resolved") count.pending += 1;
+    counts.set(finding.inspection_id, count);
+  }
   return rows.map((row) => {
     const lab = row.laboratory_id ? labById.get(row.laboratory_id) : undefined;
-    const findingCount = counts.get(row.id) ?? 0;
+    const { all: findingCount, pending: pendingFindingCount } = counts.get(row.id) ?? { all: 0, pending: 0 };
     return {
       id: row.id, location: lab?.name ?? "Laboratorio no asignado", laboratoryCode: lab?.code ?? "—",
       date: row.inspection_date ?? "", inspector: profileById.get(row.inspector_id)?.display_name ?? "Responsable no disponible",
-      result: findingCount ? "requires_attention" : "without_findings", findingCount, syncStatus: "synced",
+      result: findingCount ? "requires_attention" : "without_findings", findingCount, pendingFindingCount, syncStatus: "synced",
       workflowStatus: row.workflow_status, summary: row.summary,
     };
   });
+}
+
+async function listVisibleFindingCounts(client: SupabaseClient, inspectionIds: string[]): Promise<Pick<FindingRow, "id" | "inspection_id" | "status">[]> {
+  const rows: Pick<FindingRow, "id" | "inspection_id" | "status">[] = [];
+  let afterId: string | null = null;
+  while (true) {
+    let query = client.from("findings").select("id, inspection_id, status")
+      .in("inspection_id", inspectionIds).is("deleted_at", null);
+    if (afterId) query = query.gt("id", afterId);
+    const { data, error } = await query.order("id").limit(1000);
+    if (error) throw new InspectionReadError();
+    const page = (data ?? []) as Pick<FindingRow, "id" | "inspection_id" | "status">[];
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+    afterId = page[page.length - 1].id;
+  }
 }
 
 export async function listVisibleInspections(client: SupabaseClient): Promise<InspectionListItem[]> {
@@ -164,6 +186,7 @@ export async function listVisibleInspectionsPage(client: SupabaseClient, query: 
     .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status, version")
     .is("deleted_at", null);
   if (query.status) builder = builder.eq("workflow_status", query.status);
+  if (query.inspectorId) builder = builder.eq("inspector_id", query.inspectorId);
   if (query.search?.trim()) {
     const escaped = query.search.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
     builder = builder.ilike("summary", `%${escaped}%`);
@@ -185,4 +208,21 @@ export async function listVisibleInspectionsPage(client: SupabaseClient, query: 
     ? encodeInspectionCursor({ d: page[page.length - 1].inspection_date, i: page[page.length - 1].id })
     : null;
   return { items, nextCursor };
+}
+
+/** Reads the complete visible universe in stable pages for operational totals. */
+export async function listOperationalInspections(client: SupabaseClient, scope: { role: "technician" | "coordinator"; userId: string }): Promise<InspectionListItem[]> {
+  const items: InspectionListItem[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listVisibleInspectionsPage(client, {
+      limit: 100,
+      cursor,
+      status: scope.role === "coordinator" ? "completed" : undefined,
+      inspectorId: scope.role === "technician" ? scope.userId : undefined,
+    });
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return items;
 }

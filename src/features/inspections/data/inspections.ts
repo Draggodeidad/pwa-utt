@@ -10,6 +10,7 @@ export const inspections: InspectionListItem[] = [
     inspector: "Técnica A",
     result: "without_findings",
     findingCount: 0,
+    pendingFindingCount: 0,
     syncStatus: "synced",
     workflowStatus: "completed",
     summary: "Revisión visual de cableado, ventilación y estaciones de trabajo."
@@ -22,6 +23,7 @@ export const inspections: InspectionListItem[] = [
     inspector: "Técnico B",
     result: "requires_attention",
     findingCount: 2,
+    pendingFindingCount: 2,
     syncStatus: "synced",
     workflowStatus: "completed",
     summary: "Se registraron dos observaciones sintéticas para seguimiento de mantenimiento."
@@ -34,6 +36,7 @@ export const inspections: InspectionListItem[] = [
     inspector: "Técnica C",
     result: "without_findings",
     findingCount: 0,
+    pendingFindingCount: 0,
     syncStatus: "synced",
     workflowStatus: "completed",
     summary: "Comprobación de equipo, señalización y disponibilidad del espacio."
@@ -46,6 +49,7 @@ export const inspections: InspectionListItem[] = [
     inspector: "Técnico B",
     result: "requires_attention",
     findingCount: 2,
+    pendingFindingCount: 2,
     syncStatus: "pending",
     workflowStatus: "draft",
     summary: "Registro sintético pendiente de sincronización para el mantenimiento de estaciones."
