@@ -52,6 +52,7 @@ export type DomainErrorCode =
   | "VERSION_CONFLICT"
   | "FINDING_SET_CONFLICT"
   | "IDEMPOTENCY_KEY_REUSED"
+  | "ENTITY_ID_REUSED"
   | "VALIDATION_ERROR"
   | "UNAVAILABLE";
 
@@ -90,7 +91,7 @@ export type SyncQueueItem = {
   sentRevision?: number | null;
 };
 
-export type ConflictReason = "version" | "state" | "finding_set" | "key_reused" | "inaccessible" | "unknown";
+export type ConflictReason = "version" | "state" | "finding_set" | "key_reused" | "entity_reused" | "inaccessible" | "unknown";
 
 /** Immutable evidence is retained after a resolution for local recovery. */
 export type ConflictRecord = {

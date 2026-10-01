@@ -15,6 +15,7 @@ const domainMessages: Record<string, string> = {
   NOT_FOUND: "Recurso no disponible",
   VERSION_CONFLICT: "Versión desactualizada o estado no compatible",
   IDEMPOTENCY_KEY_REUSED: "La clave de idempotencia ya fue usada con otro contenido",
+  ENTITY_ID_REUSED: "El identificador del hallazgo ya fue usado",
   UNAVAILABLE: "Servicio no disponible",
 };
 

@@ -186,8 +186,8 @@ async function main() {
       storage.close();
     }
 
-    // Reused key is not resolved by overwriting; denied reads never become remote evidence.
-    for (const [code, status, name] of [["IDEMPOTENCY_KEY_REUSED", 409, "key"], ["FORBIDDEN", 403, "forbidden"], ["NOT_FOUND", 404, "missing"]]) {
+    // Reused keys/UUIDs cannot overwrite data; denied reads never become remote evidence.
+    for (const [code, status, name, reason] of [["IDEMPOTENCY_KEY_REUSED", 409, "key", "key_reused"], ["ENTITY_ID_REUSED", 409, "entity", "entity_reused"], ["FORBIDDEN", 403, "forbidden", "inaccessible"], ["NOT_FOUND", 404, "missing", "inaccessible"]]) {
       const storage = await LocalStorage.open(name);
       await storage.saveInspection(owner, inspection());
       const failed = intent();
@@ -197,7 +197,7 @@ async function main() {
       await runQueue(storage, owner, { client, verifyOwner: async () => true });
       const conflict = await storage.getConflict(owner, failed.operationId);
       assert.equal(conflict.remoteSnapshot, null);
-      assert.equal(conflict.reason, status === 409 ? "key_reused" : "inaccessible");
+      assert.equal(conflict.reason, reason);
       assert.equal(metrics.gets, 0);
       assert.equal((await storage.listQueue(owner))[0].lastError.remoteSnapshot, undefined);
       await assert.rejects(() => resolveConflict(context(storage, client), failed.operationId, "mine"), /requiere revisión/);
