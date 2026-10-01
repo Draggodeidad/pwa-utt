@@ -11,9 +11,10 @@ export async function registerServiceWorker(
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
 
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
     callbacks.onRegistered?.(registration);
     observeRegistration(registration, callbacks);
+    void registration.update().catch(error => callbacks.onError?.(toError(error)));
     return registration;
   } catch (reason) {
     callbacks.onError?.(toError(reason));

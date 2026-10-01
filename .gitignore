@@ -17,3 +17,4 @@ reports/rendering-metrics.json
 /docs/STATUS.md
 /docs/tasks/
 public/offline-assets.json
+public/sw-build.js

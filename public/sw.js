@@ -1,7 +1,8 @@
-const CACHE_VERSION = "phase-25-v1";
+try { importScripts("/sw-build.js"); } catch { /* development before the first build */ }
+const CACHE_VERSION = `phase-25-${String(self.PWA_BUILD_ID || "development").replace(/[^a-zA-Z0-9_-]/g, "")}`;
 const APP_SHELL_CACHE = `inspecciones-shell-${CACHE_VERSION}`;
 const STATIC_ASSET_CACHE = `inspecciones-static-${CACHE_VERSION}`;
-const PREVIOUS_ASSET_CACHES = ["inspecciones-shell-phase-17-v2", "inspecciones-static-phase-17-v2"];
+const SAFE_LEGACY_CACHES = ["inspecciones-shell-phase-17-v2", "inspecciones-static-phase-17-v2"];
 const MAX_STATIC_ASSETS = 50;
 
 // Only this public page and these public files may be stored during install.
@@ -38,7 +39,7 @@ self.addEventListener("activate", event => {
             .filter(
               cacheName =>
                 cacheName.startsWith("inspecciones-") &&
-                ![APP_SHELL_CACHE, STATIC_ASSET_CACHE, ...PREVIOUS_ASSET_CACHES].includes(cacheName)
+                !isSafeAssetCache(cacheName)
             )
             .map(cacheName => caches.delete(cacheName))
         )
@@ -46,6 +47,11 @@ self.addEventListener("activate", event => {
       .then(() => self.clients.claim())
   );
 });
+
+function isSafeAssetCache(name) {
+  return name === APP_SHELL_CACHE || name === STATIC_ASSET_CACHE || SAFE_LEGACY_CACHES.includes(name) ||
+    /^inspecciones-(?:shell|static)-phase-25-[a-zA-Z0-9_-]+$/.test(name);
+}
 
 self.addEventListener("message", async event => {
   if (event.data?.type === "PREPARE_AND_ACTIVATE") {
@@ -193,16 +199,15 @@ async function cacheFirstPublicAsset(request) {
   const precachedResponse = await shellCache.match(request);
   if (precachedResponse) return precachedResponse;
 
-  for (const cacheName of PREVIOUS_ASSET_CACHES) {
-    if (await caches.has(cacheName)) {
-      const oldResponse = await (await caches.open(cacheName)).match(request);
-      if (oldResponse) return oldResponse;
-    }
-  }
-
   const cache = await caches.open(STATIC_ASSET_CACHE);
   const cachedResponse = await cache.match(request);
   if (cachedResponse) return cachedResponse;
+
+  const oldNames = (await caches.keys()).filter(name => name !== APP_SHELL_CACHE && name !== STATIC_ASSET_CACHE && isSafeAssetCache(name)).reverse();
+  for (const cacheName of oldNames) {
+    const oldResponse = await (await caches.open(cacheName)).match(request);
+    if (oldResponse) return oldResponse;
+  }
 
   const response = await fetch(request);
   if (isCacheable(response) && !isHtmlOrRsc(response)) {
