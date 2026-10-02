@@ -5,7 +5,7 @@ import { createProfileForSession } from "@/features/profile";
 import { SyncWorkspace } from "@/features/sync";
 
 export default async function SyncPage() {
-  const { user } = await requireRole(["technician"]);
+  const { user } = await requireRole(["technician", "coordinator"]);
   const role = user.role;
 
   return (
