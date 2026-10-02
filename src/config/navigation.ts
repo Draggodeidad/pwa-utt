@@ -18,6 +18,7 @@ export const navigationByRole: Record<UserRole, readonly NavigationItem[]> = {
     { label: "Inspecciones", href: "/inspections" },
     { label: "Consultar inspecciones", href: "/inspecciones" },
     { label: "Hallazgos", href: "/findings" },
+    { label: "Sincronización", href: "/sync" },
     { label: "Perfil", href: "/profile" }
   ]
 };
@@ -28,6 +29,6 @@ export const navigationSectionsByRole: Record<UserRole, readonly AppShellNavigat
     { label: "Inicio", href: "/", icon: "home" }, { label: "Inspecciones", href: "/inspections", icon: "inspections" }, { label: "Consultar inspecciones", href: "/inspecciones", icon: "inspections" }, { label: "Nueva inspección", href: "/inspections/new", icon: "new" }, { label: "Sincronización", href: "/sync", icon: "sync" }, { label: "Perfil", href: "/profile", icon: "profile" }
   ] }],
   coordinator: [{ label: "Supervisión", roleLabel: "COORD", items: [
-    { label: "Resumen", href: "/dashboard", icon: "summary" }, { label: "Inspecciones", href: "/inspections", icon: "inspections" }, { label: "Consultar inspecciones", href: "/inspecciones", icon: "inspections" }, { label: "Hallazgos", href: "/findings", icon: "findings" }, { label: "Perfil", href: "/profile", icon: "profile" }
+    { label: "Resumen", href: "/dashboard", icon: "summary" }, { label: "Inspecciones", href: "/inspections", icon: "inspections" }, { label: "Consultar inspecciones", href: "/inspecciones", icon: "inspections" }, { label: "Hallazgos", href: "/findings", icon: "findings" }, { label: "Sincronización", href: "/sync", icon: "sync" }, { label: "Perfil", href: "/profile", icon: "profile" }
   ] }]
 };

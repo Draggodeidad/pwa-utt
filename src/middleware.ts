@@ -17,7 +17,7 @@ export async function middleware(request: NextRequest) {
   if (!session) return auth.withCookies(NextResponse.redirect(new URL("/login", request.url)));
   const coordinatorRoute = pathname === "/dashboard" || pathname.startsWith("/dashboard/") ||
     pathname === "/findings" || pathname.startsWith("/findings/");
-  const technicianRoute = pathname === "/" || pathname === "/sync" || pathname.startsWith("/sync/") ||
+  const technicianRoute = pathname === "/" ||
     pathname === "/inspections/new" || pathname.startsWith("/inspections/new/") ||
     /^\/inspections\/[^/]+\/edit(?:\/|$)/.test(pathname);
   if (coordinatorRoute && session.user.role !== "coordinator") {

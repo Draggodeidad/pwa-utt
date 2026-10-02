@@ -132,6 +132,9 @@ async function main() {
     const deniedFindings = await request("/findings", tech);
     assert.equal(deniedFindings.response.status, 307);
     assert.equal(new URL(deniedFindings.response.headers.get("location")).pathname, "/");
+    const technicianSync = await request("/sync", tech);
+    assert.equal(technicianSync.response.status, 200);
+    assert.match(technicianSync.body, /Sincronización/);
     const coordination = await login("coord@example.invalid");
     const coordinatorDetail = await request(`/inspecciones/${foreignId}`, coordination);
     assert.equal(coordinatorDetail.response.status, 200);
@@ -140,8 +143,9 @@ async function main() {
     assert.equal(deniedCreation.response.status, 307);
     assert.equal(new URL(deniedCreation.response.headers.get("location")).pathname, "/dashboard");
     assert.doesNotMatch(deniedCreation.body, /Crear inspección/);
-    const deniedSync = await request("/sync", coordination);
-    assert.equal(deniedSync.response.status, 307);
+    const coordinationSync = await request("/sync", coordination);
+    assert.equal(coordinationSync.response.status, 200);
+    assert.match(coordinationSync.body, /Sincronización/);
     console.log("rendering.spec.ts: PASS");
   } finally {
     child.kill("SIGTERM");
