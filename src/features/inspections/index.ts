@@ -15,5 +15,5 @@ export { countPendingFindings, deriveInspectionResult, selectNonDeletedFindings,
 export type { InspectionListState } from "./hooks/use-inspection-list-state";
 export { inspections } from "./data/inspections";
 export { findInspectionDetail, inspectionDetail } from "./data/inspection-detail";
-export { createInspectionValues, editInspectionValues, laboratoryProfiles } from "./data/inspection-editor";
+export { createInspectionValues } from "./data/inspection-editor";
 export type { Inspection, InspectionAggregate, InspectionApiRecord, InspectionDetail, InspectionDetailDto, InspectionEditorDto, InspectionEditorValues, InspectionFinding, InspectionListDto, InspectionListItem, InspectionResult, InspectionWorkflowStatus, LaboratoryOption, LaboratoryProfile, LocalInspection, SyncStatus } from "./types";
