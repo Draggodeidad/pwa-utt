@@ -4,11 +4,11 @@ Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenim
 
 ## Requisitos del entorno
 
-- Node.js 20.19 o posterior compatible.
+- Node.js 22.x, como declara `package.json`.
 - npm 10 o posterior.
 - Git; Make es opcional.
 
-GitHub Actions usa Node.js 20.19.6. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
+El workflow W05 usa Node.js 22.22.3. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
 
 ## Instalación y ejecución
 
@@ -65,6 +65,10 @@ Los workflows de las Semanas 02, 03 y 04 repiten una instalación limpia y `make
 - `/inspecciones/[id]` declara `dynamic = "force-dynamic"` y resuelve los datos sintéticos en servidor para incluirlos en el HTML. Un ID desconocido responde HTTP 404; `?estado=error` muestra el estado de error de demostración. `src/app/inspecciones/loading.tsx` y `src/app/inspecciones/[id]/loading.tsx` presentan carga, y la ruta detalle tiene `error.tsx` para fallos inesperados.
 - `tests/rendering.spec.ts` comprueba estados accesibles, contenido HTML, filtros, consistencia de registros y 404. En el `package.json` actual no está encadenada en `npm test`; puede ejecutarse directamente con `node tests/rendering.spec.ts`.
 - `npm run measure:rendering` requiere una build previa y registra tiempos HTTP y tamaño HTML para listado y detalle; no mide hidratación ni tiempo hasta mostrar datos CSR. `docs/rendering-decision.md` documenta la decisión, sus supuestos, límites y validación.
+
+## Baseline de Semana 05
+
+La base común de la app completa, el inventario de persistencia y sincronización, la comparación de todas las entradas del kit W05 y el contrato propuesto para Julian y Osbaldo están en `docs/w05-baseline.md`. El workflow `.github/workflows/week-05-w05-sync-data.yml` ejecuta `make verify` con Node 22 y comprueba por separado los entregables W05. `bash public-tests/check-w05.sh` fallará mientras falten esos archivos o no esté registrada `tests/sync.spec.ts` en `npm test`; ese fallo identifica trabajo pendiente y no representa una prueba funcional aprobada.
 
 ## Decisiones y trade-offs
 

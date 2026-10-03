@@ -185,4 +185,13 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Uso de IA: utilicé GitHub Copilot como apoyo para analizar las rutas y pruebas, redactar la documentación y editar `README.md` y esta evidencia. Contrasté las afirmaciones contra el código; la validación automatizada declarada arriba quedó pendiente por el problema de disponibilidad de comandos en la terminal. No atribuyo a mi persona la implementación de las rutas ni de la suite, que corresponden a otros integrantes.
 
 
+---
 
+## Semana 05 — baseline de Imanol
+
+- SHA base de la app completa: `e1a9dbf010c3561411189246a3a0ede590abd3ff` (`origin/main` y `origin/feat/phase-28-demo-handoff` al verificar). El SHA final evaluado se toma del commit y del artefacto `reports/verification.json` del workflow W05; no se inventa un hash autorreferencial en este archivo.
+- Contribución del baseline: inspección íntegra del ZIP W05 fuera del repo, inventario y correspondencia con la implementación existente en `docs/w05-baseline.md`, `public-tests/check-w05.sh` y workflow W05. No se atribuye aquí implementación funcional ni pruebas W05 de los compañeros.
+- Decisión técnica defendible: reutilizar IndexedDB, cola, recibos idempotentes y resolución de conflictos ya presentes en la app completa; el check W05 falla explícitamente hasta recibir rutas con contenido y una suite registrada. No se crean archivos vacíos para conseguir un pase artificial.
+- Verificación ejecutada por Codex el 3 de octubre de 2026: `npm ci --ignore-scripts --no-audit --no-fund` con Node 22.22.3 terminó con código 0; `PATH=<Node 22.22.3>:$PATH make verify` terminó con código 0 y `status: pass` para estructura, typecheck, suites existentes, build y medición. `bash public-tests/check.sh` devolvió `PUBLIC_OK`. `bash public-tests/check-w05.sh` devolvió código 1 y `W05_MISSING_OR_EMPTY: src/lib/sync/queue.ts`, resultado esperado hasta integrar entregables W05. `bash -n public-tests/check-w05.sh` y `git diff --check` terminaron con código 0.
+- Limitación: el job `w05-contract` estará rojo mientras los cinco artefactos y `tests/sync.spec.ts` no existan y estén integrados. `make verify` prueba el comportamiento existente, no certifica los nuevos entregables W05 ni una auditoría de secretos. La propuesta de contratos y fixtures requiere aceptación de Julian y Osbaldo; no se afirma acuerdo ni validación humana de ellos.
+- Uso de IA: Codex asistió en análisis comparativo del kit, redacción del inventario y contrato, adaptación del check y workflow, y ejecución de comandos. La revisión y defensa humana de Imanol, así como la aceptación de Julian y Osbaldo, quedan pendientes de registro por sus autores.
