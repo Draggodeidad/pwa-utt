@@ -1,0 +1,45 @@
+name: Week 05 — sync data
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+      - name: Clean install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify previous deliveries and current behavior
+        run: make verify
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w05-baseline-verification
+          if-no-files-found: warn
+          path: |
+            reports/verification.json
+            reports/rendering-metrics.json
+
+  w05-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Check required W05 deliverables
+        run: bash public-tests/check-w05.sh
