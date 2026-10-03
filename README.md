@@ -68,7 +68,7 @@ Los workflows de las Semanas 02, 03 y 04 repiten una instalación limpia y `make
 
 ## Baseline de Semana 05
 
-La base común de la app completa, el inventario de persistencia y sincronización, la comparación de todas las entradas del kit W05 y el contrato propuesto para Julian y Osbaldo están en `docs/w05-baseline.md`. El workflow `.github/workflows/week-05-w05-sync-data.yml` ejecuta `make verify` con Node 22 y comprueba por separado los entregables W05. `bash public-tests/check-w05.sh` fallará mientras falten esos archivos o no esté registrada `tests/sync.spec.ts` en `npm test`; ese fallo identifica trabajo pendiente y no representa una prueba funcional aprobada.
+La base común de la app completa, el inventario de persistencia y sincronización, la comparación del kit W05 y el contrato propuesto para Julian y Osbaldo están en `docs/w05-baseline.md`. Las rutas obligatorias W05 exponen la implementación existente; `docs/sync-policy.md` explica su política y `tests/sync.spec.ts` prueba recuperación, reenvío y evidencia de conflictos con datos sintéticos. El workflow `.github/workflows/week-05-w05-sync-data.yml` ejecuta `make verify` con Node 22 y comprueba por separado los entregables mediante `bash public-tests/check-w05.sh`.
 
 ## Decisiones y trade-offs
 
