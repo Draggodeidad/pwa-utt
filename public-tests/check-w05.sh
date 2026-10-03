@@ -18,7 +18,7 @@ for file in "${required[@]}"; do
 done
 
 # A present test file is not sufficient if the normal test command omits it.
-if ! rg -Fq 'tests/sync.spec.ts' package.json; then
+if ! grep -Fq 'tests/sync.spec.ts' package.json; then
   echo 'W05_TEST_NOT_REGISTERED: tests/sync.spec.ts' >&2
   exit 1
 fi
