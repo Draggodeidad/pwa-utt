@@ -186,8 +186,12 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 
 
 ---
+## Semana 05
 
-## Semana 05 — baseline de Imanol
+- Grupo y equipo: **9B-E02**
+- Repositorio: <https://github.com/Draggodeidad/pwa-utt>
+
+## Imanol Antonio De la Cruz -- Evidencia técnica Baseline semana 05
 
 - SHA base de la app completa: `e1a9dbf010c3561411189246a3a0ede590abd3ff` (`origin/main` y `origin/feat/phase-28-demo-handoff` al verificar). El SHA final evaluado se toma del commit y del artefacto `reports/verification.json` del workflow W05; no se inventa un hash autorreferencial en este archivo.
 - Contribución del baseline: inspección íntegra del ZIP W05 fuera del repo, inventario y correspondencia con la implementación existente en `docs/w05-baseline.md`, `public-tests/check-w05.sh` y workflow W05. No se atribuye aquí implementación funcional ni pruebas W05 de los compañeros.
@@ -204,8 +208,17 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Límite: la suite usa un IndexedDB de memoria y transporte falso. No demuestra un despliegue contra Supabase real ni sustituye la revisión humana de contratos, pruebas y evidencia individual de los compañeros.
 - Ajuste de CI tras el primer push: el runner no encontró `rg` en `public-tests/check-w05.sh` y mostró `line 21: rg: command not found`, seguido de un falso `W05_TEST_NOT_REGISTERED`. Reproduje ambos mensajes con un `PATH` local sin `rg` y sustituí la búsqueda literal por `grep -Fq`, sin cambiar la condición verificada. Con `PATH` limitado a `bash` y `grep`, el script devolvió `W05_PUBLIC_OK` y código 0.
 
+### Jose Julian Alvarez Flores
 
----
+- Commit SHA propio o revisión trazable: `fac8d916c04a7f9c6bfb4c923cb47f10e64320e2` (rama `feat/week05-sync-storage-jose-julian`) y Pull Request asociado a la issue de sincronización offline de Semana 05.
+- Contribución concreta: analicé la persistencia IndexedDB, la cola y la resolución de conflictos ya existentes para contrastarlas con los requisitos W05. Revisé las rutas de contrato `src/lib/storage/schema.ts`, `src/lib/sync/queue.ts` y `src/lib/sync/conflict-policy.ts`, que exponen esas implementaciones sin crear una segunda base, cola ni política. Documenté cómo se relacionan con almacenamiento por cuenta, operaciones pendientes, reintentos, idempotencia y resolución explícita de conflictos.
+- Decisión técnica defendible: mantuve la arquitectura persistente existente en IndexedDB en lugar de proponer una cola en memoria, porque las operaciones pendientes y las capturas se conservan entre recargas y se escriben transaccionalmente. La petición se congela antes del envío y conserva el mismo `operationId` al reintentarse; junto con el recibo idempotente del servidor, esto permite repetir un envío cuya respuesta se perdió sin aplicar dos veces la operación. Los conflictos se detectan con evidencia remota autorizada y se resuelven mediante una decisión explícita, no con sobrescritura automática.
+- Pruebas ejecutadas y resultado observado: con apoyo de Copilot ejecuté `node tests/local-storage.spec.ts`, `node tests/queue-transport.spec.ts`, `node tests/queue-recovery.spec.ts`, `node tests/conflict-resolution.spec.ts` y `node tests/sync.spec.ts`; las cinco suites imprimieron `PASS`. `npm run typecheck` no terminó correctamente en este entorno: reportó módulos ausentes `@supabase/supabase-js` y `@supabase/ssr`, además de errores de tipos derivados en `src/lib/supabase/server.ts`. No declaro `npm ci` ni `make verify` como ejecutados en esta revisión.
+- Qué protege la prueba y qué no protege: las suites comprueban persistencia tras reabrir IndexedDB, aislamiento por cuenta, escritura atómica de captura e intención, replay con la misma identidad y cuerpo, reintentos/dependencias y escenarios de resolución de conflictos con respuestas controladas. Usan un harness IndexedDB en memoria y transporte falso; no prueban un despliegue conectado a Supabase real, persistencia frente a limpieza/evicción del navegador ni concurrencia bajo carga productiva.
+- Limitación o fallo que identifiqué: las tres rutas W05 son fachadas de compatibilidad; la lógica efectiva reside en módulos previos del proyecto, por lo que sus contratos dependen de mantener esas implementaciones compatibles. La idempotencia extremo a extremo también depende de que el servidor conserve y valide recibos por `operationId`. Además, el typecheck completo quedó bloqueado por las dependencias Supabase no disponibles en el entorno de esta verificación.
+- Cambio que puedo defender o modificar en vivo: explicar la correspondencia entre los contratos W05 y sus módulos propietarios; proponer y revisar cambios de versión/migración del esquema, invariantes de la cola o reglas de conflicto junto con las pruebas afectadas, sin duplicar las implementaciones de persistencia y sincronización.
+- Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): utilicé Microsoft Copilot para analizar la arquitectura existente, contrastar los requisitos W05 y preparar esta evidencia. Revisé las afirmaciones contra los archivos y resultados de las suites enumeradas; la revisión final, la confirmación del SHA/PR y la defensa personal de las decisiones quedan a mi cargo antes de entregar.
+
 
 ## Semana 05 — validación de sincronización y política (Osbaldo)
 
