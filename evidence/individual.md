@@ -203,3 +203,21 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Validación local observada: `bash public-tests/check-w05.sh` devolvió `W05_PUBLIC_OK` y código 0; `bash public-tests/check.sh` devolvió `PUBLIC_OK`; `node tests/sync.spec.ts` devolvió `sync.spec.ts: PASS`; `make verify` con Node 22.22.3 terminó con `status: pass` e incluyó typecheck, toda la suite, build y medición. El YAML W05 se pudo parsear con PyYAML y se confirmó el comando del job. No hay script `lint` independiente en `package.json`; `next build` ejecutó su fase de lint y tipos.
 - Límite: la suite usa un IndexedDB de memoria y transporte falso. No demuestra un despliegue contra Supabase real ni sustituye la revisión humana de contratos, pruebas y evidencia individual de los compañeros.
 - Ajuste de CI tras el primer push: el runner no encontró `rg` en `public-tests/check-w05.sh` y mostró `line 21: rg: command not found`, seguido de un falso `W05_TEST_NOT_REGISTERED`. Reproduje ambos mensajes con un `PATH` local sin `rg` y sustituí la búsqueda literal por `grep -Fq`, sin cambiar la condición verificada. Con `PATH` limitado a `bash` y `grep`, el script devolvió `W05_PUBLIC_OK` y código 0.
+
+
+---
+
+## Semana 05 — validación de sincronización y política (Osbaldo)
+
+- Archivos modificados: `tests/sync.spec.ts` y `docs/sync-policy.md`.
+- Contribución técnica propia: completé la suite de pruebas `tests/sync.spec.ts` agregando los casos deterministas para el límite de 5 reintentos con backoff exponencial y suspensión de operaciones agotadas (`retryExhausted: true`), comprobando la preservación de los datos locales sin pérdidas. Asimismo, integré las pruebas de resolución activa de conflictos mediante `resolveConflict()` probando ambas estrategias oficiales: `mine` (reencadenando la baseVersion y conservando los cambios locales del técnico) y `server` (adoptando el snapshot remoto autorizado y limpiando la cola). Actualicé `docs/sync-policy.md` documentando los trade-offs, supuestos y el mapeo directo a cada aserción de la suite.
+- Decisión técnica defendible: reutilizar las exportaciones oficiales de `src/lib/sync/conflict-policy.ts` y el harness de IndexedDB en memoria (`tests/helpers/indexed-db-harness.ts`) inyectando un reloj virtual en `transport.now`. Esto permite validar de forma determinista el backoff exponencial y el límite de 5 reintentos en 0 ms sin depender de esperas reales ni generar efectos colaterales de red.
+- Pruebas ejecutadas y resultados observados:
+  - `node --experimental-strip-types tests/sync.spec.ts`: ejecutó todos los escenarios (persistencia tras recarga, aislamiento por cuenta, pérdida de ACK con idempotencia, límite de 5 intentos y suspensión sin pérdida de datos, e inspección y resolución de conflicto con `mine` y `server`) concluyendo con `sync.spec.ts: PASS` y código de salida 0.
+  - `npm run typecheck` (`tsc --noEmit`): finalizó con código 0 sin errores de tipos.
+  - `bash public-tests/check-w05.sh`: devolvió `W05_PUBLIC_OK` y código de salida 0.
+  - Comprobación de fallo determinista: al invertir intencionalmente un assert, la suite aborta inmediatamente con `AssertionError` y código de salida 1.
+- Limitación identificada: la suite utiliza un almacenamiento IndexedDB en memoria y un cliente HTTP simulado con reloj inyectado. Esto permite verificar la lógica determinista del runner y las políticas de sincronización, pero no sustituye pruebas de latencia real, caídas de socket a nivel de red física ni una validación sobre un clúster de base de datos en producción.
+- Uso declarado de IA: utilicé Antigravity (asistente de IA de Google) para analizar el flujo de reintentos y resolución de conflictos en el código existente de `runner.ts` y `resolve-conflict.ts`, y estructurar los fixtures sintéticos deterministas de la suite.
+- Validación humana: verifiqué manualmente el cálculo del backoff exponencial (`1000 * 2 ** (attempt - 1)`), la presencia de `retryExhausted` en el almacenamiento local, que la entidad capturada no sufriera sobreescritura silenciosa, y la correcta ejecución local de los scripts de verificación.
+- Commit SHA propio: `ca088362bc5d506a25a5b062ba3223fb8590cb9e` (`ca08836`) en rama `feature/w05-sync-tests`.
