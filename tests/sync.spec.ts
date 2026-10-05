@@ -4,7 +4,7 @@ const { LocalStorage } = require("../src/lib/pwa/offline-storage.ts");
 const { ApiClientError } = require("../src/lib/api/client.ts");
 const { localStoreSpecs, LOCAL_DB_VERSION } = require("../src/lib/storage/schema.ts");
 const { LocalStorageSyncQueue, runQueue } = require("../src/lib/sync/queue.ts");
-const { inspectConflict } = require("../src/lib/sync/conflict-policy.ts");
+const { inspectConflict, resolveConflict } = require("../src/lib/sync/conflict-policy.ts");
 
 const owner = "11111111-1111-4111-8111-111111111111";
 const otherOwner = "22222222-2222-4222-8222-222222222222";
@@ -92,6 +92,206 @@ async function main() {
     assert.equal(conflict.reason, "version");
     assert.deepEqual(conflict.remoteSnapshot, remote);
     assert.equal(conflict.remoteVersion, 2);
+
+    // 5 repeated transient failures exhaust retries and pause automatic attempts without data loss.
+    {
+      const storage = await LocalStorage.open("w05-retry-limit");
+      const retryInspectionId = "55555555-5555-4555-8555-555555555555";
+      const retryOpId = "66666666-6666-4666-8666-666666666666";
+      const itemInspection = {
+        ...inspection(),
+        id: retryInspectionId,
+        summary: "Inspección persistente ante 5 fallos",
+      };
+      const itemIntent = {
+        ...intent(),
+        operationId: retryOpId,
+        entityId: retryInspectionId,
+        payload: { summary: "Inspección persistente ante 5 fallos" },
+      };
+      await storage.saveDraftWithIntent(owner, { store: "inspection_local", value: itemInspection }, itemIntent);
+
+      const failingClient = {
+        put: async () => {
+          throw new ApiClientError(503, { code: "SERVICE_UNAVAILABLE", message: "Servidor caído" });
+        },
+      };
+
+      let virtualClock = 2_000_000;
+      const transport = { client: failingClient, verifyOwner: async (id) => id === owner, now: () => virtualClock };
+
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        const result = await runQueue(storage, owner, transport);
+        assert.equal(result.failed, 1, `attempt ${attempt} must record failure`);
+        const queueItems = await storage.listQueue(owner);
+        assert.equal(queueItems.length, 1);
+        const current = queueItems[0];
+        assert.equal(current.attempts, attempt);
+        if (attempt < 5) {
+          assert.equal(current.retryExhausted, false);
+          assert.ok(current.nextAttemptAt, `attempt ${attempt} must schedule next attempt`);
+          virtualClock = Date.parse(current.nextAttemptAt) + 1;
+        } else {
+          assert.equal(current.retryExhausted, true);
+          assert.equal(current.nextAttemptAt, null);
+          assert.equal(current.status, "error");
+        }
+      }
+
+      // Next execution with advanced clock must NOT retry exhausted item (queue suspended for this item)
+      virtualClock += 1_000_000;
+      const suspendedRun = await runQueue(storage, owner, transport);
+      assert.equal(suspendedRun.failed, 0);
+      assert.equal(suspendedRun.acknowledged, 0);
+
+      // Local entity remains intact and uncorrupted in storage
+      const persisted = await storage.getInspection(owner, retryInspectionId);
+      assert.equal(persisted.summary, "Inspección persistente ante 5 fallos");
+      storage.close();
+    }
+
+    // Conflict resolution with 'mine' (keeps local edits, rebases to remote baseVersion)
+    {
+      const storage = await LocalStorage.open("w05-conflict-mine");
+      const confInspId = "77777777-7777-4777-8777-777777777777";
+      const confOpId = "88888888-8888-4888-8888-888888888888";
+      const localRecord = {
+        ...inspection(),
+        id: confInspId,
+        summary: "Mi captura local técnica",
+        version: 1,
+        baseVersion: 1,
+      };
+      const updateIntent = {
+        operationId: confOpId, ownerUserId: owner, entity: "inspection", entityId: confInspId,
+        operation: "inspection.update", payload: { summary: "Mi captura local técnica" },
+        baseVersion: 1, dependsOn: [], localOrder: 1, attempts: 0,
+        nextAttemptAt: null, lastError: null, createdAt: timestamp, status: "pending",
+      };
+      await storage.saveInspection(owner, localRecord);
+      await storage.enqueue(owner, updateIntent);
+
+      const remoteSnapshot = {
+        id: confInspId, folio: "INS-77", folioNumber: 77, location: "Laboratorio W05",
+        laboratoryId: null, laboratoryCode: "LAB-01", inspectionDate: "2026-09-30",
+        date: "2026-09-30", technician: "Inspector Servidor", workflowStatus: "draft",
+        result: "without_findings", syncStatus: "synced", scope: "Versión remota concurrente",
+        findings: [], version: 2,
+      };
+
+      const conflictClient = {
+        get: async () => remoteSnapshot,
+        patch: async () => {
+          throw new ApiClientError(409, {
+            code: "VERSION_CONFLICT",
+            message: "Conflicto de versión remota",
+            remoteSnapshot: { secret: "do-not-trust" },
+          });
+        },
+      };
+
+      const conflictTransport = { client: conflictClient, verifyOwner: async () => true };
+      const queueRun = await runQueue(storage, owner, conflictTransport);
+      assert.equal(queueRun.failed, 1);
+
+      const conflictRecord = await storage.getConflict(owner, confOpId);
+      assert.ok(conflictRecord, "conflict must be recorded in conflict_local");
+      assert.equal(conflictRecord.reason, "version");
+      assert.equal(conflictRecord.remoteVersion, 2);
+
+      const resContext = {
+        storage,
+        client: conflictClient,
+        owner,
+        verifyOwner: async (id) => (id === owner ? "technician" : null),
+      };
+
+      await resolveConflict(resContext, confOpId, "mine");
+
+      const resolvedRecord = await storage.getConflict(owner, confOpId);
+      assert.equal(resolvedRecord.resolution, "mine");
+      assert.ok(resolvedRecord.resolvedAt);
+
+      const queue = await storage.listQueue(owner);
+      assert.equal(queue.length, 1);
+      const rebased = queue[0];
+      assert.notEqual(rebased.operationId, confOpId, "mine creates a fresh rebased operation");
+      assert.equal(rebased.baseVersion, 2, "baseVersion updated to remote version");
+      assert.equal(rebased.payload.summary, "Mi captura local técnica", "local edits preserved");
+
+      const inspectionLocal = await storage.getInspection(owner, confInspId);
+      assert.equal(inspectionLocal.summary, "Mi captura local técnica");
+
+      storage.close();
+    }
+
+    // Conflict resolution with 'server' (adopts authorized remote snapshot and clears queue)
+    {
+      const storage = await LocalStorage.open("w05-conflict-server");
+      const srvInspId = "99999999-9999-4999-8999-999999999999";
+      const srvOpId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+      const localRecord = {
+        ...inspection(),
+        id: srvInspId,
+        summary: "Mi captura local descartable",
+        version: 1,
+        baseVersion: 1,
+      };
+      const updateIntent = {
+        operationId: srvOpId, ownerUserId: owner, entity: "inspection", entityId: srvInspId,
+        operation: "inspection.update", payload: { summary: "Mi captura local descartable" },
+        baseVersion: 1, dependsOn: [], localOrder: 1, attempts: 0,
+        nextAttemptAt: null, lastError: null, createdAt: timestamp, status: "pending",
+      };
+      await storage.saveInspection(owner, localRecord);
+      await storage.enqueue(owner, updateIntent);
+
+      const remoteSnapshot = {
+        id: srvInspId, folio: "INS-99", folioNumber: 99, location: "Laboratorio W05",
+        laboratoryId: null, laboratoryCode: "LAB-01", inspectionDate: "2026-09-30",
+        date: "2026-09-30", technician: "Inspector Remoto", workflowStatus: "draft",
+        result: "without_findings", syncStatus: "synced", scope: "Versión oficial del servidor",
+        findings: [], version: 3,
+      };
+
+      const conflictClient = {
+        get: async () => remoteSnapshot,
+        patch: async () => {
+          throw new ApiClientError(409, {
+            code: "VERSION_CONFLICT",
+            message: "Conflicto concurrente",
+            remoteSnapshot: { secret: "do-not-trust" },
+          });
+        },
+      };
+
+      await runQueue(storage, owner, { client: conflictClient, verifyOwner: async () => true });
+
+      const resContext = {
+        storage,
+        client: conflictClient,
+        owner,
+        verifyOwner: async (id) => (id === owner ? "technician" : null),
+      };
+
+      await resolveConflict(resContext, srvOpId, "server");
+
+      const resolvedRecord = await storage.getConflict(owner, srvOpId);
+      assert.equal(resolvedRecord.resolution, "server");
+      assert.ok(resolvedRecord.resolvedAt);
+
+      const queue = await storage.listQueue(owner);
+      assert.equal(queue.length, 0, "queue cleared after server resolution");
+
+      const adopted = await storage.getInspection(owner, srvInspId);
+      assert.equal(adopted.summary, "Versión oficial del servidor", "adopted remote scope");
+      assert.equal(adopted.baseVersion, 3);
+      assert.equal(adopted.version, 3);
+      assert.equal(adopted.syncStatus, "synced");
+
+      storage.close();
+    }
+
     console.log("sync.spec.ts: PASS");
   } finally {
     globalThis.indexedDB = previous;

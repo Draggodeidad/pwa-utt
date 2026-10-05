@@ -186,8 +186,12 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 
 
 ---
+## Semana 05
 
-## Semana 05 — baseline de Imanol
+- Grupo y equipo: **9B-E02**
+- Repositorio: <https://github.com/Draggodeidad/pwa-utt>
+
+## Imanol Antonio De la Cruz -- Evidencia técnica Baseline semana 05
 
 - SHA base de la app completa: `e1a9dbf010c3561411189246a3a0ede590abd3ff` (`origin/main` y `origin/feat/phase-28-demo-handoff` al verificar). El SHA final evaluado se toma del commit y del artefacto `reports/verification.json` del workflow W05; no se inventa un hash autorreferencial en este archivo.
 - Contribución del baseline: inspección íntegra del ZIP W05 fuera del repo, inventario y correspondencia con la implementación existente en `docs/w05-baseline.md`, `public-tests/check-w05.sh` y workflow W05. No se atribuye aquí implementación funcional ni pruebas W05 de los compañeros.
@@ -214,3 +218,19 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Limitación o fallo que identifiqué: las tres rutas W05 son fachadas de compatibilidad; la lógica efectiva reside en módulos previos del proyecto, por lo que sus contratos dependen de mantener esas implementaciones compatibles. La idempotencia extremo a extremo también depende de que el servidor conserve y valide recibos por `operationId`. Además, el typecheck completo quedó bloqueado por las dependencias Supabase no disponibles en el entorno de esta verificación.
 - Cambio que puedo defender o modificar en vivo: explicar la correspondencia entre los contratos W05 y sus módulos propietarios; proponer y revisar cambios de versión/migración del esquema, invariantes de la cola o reglas de conflicto junto con las pruebas afectadas, sin duplicar las implementaciones de persistencia y sincronización.
 - Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): utilicé Microsoft Copilot para analizar la arquitectura existente, contrastar los requisitos W05 y preparar esta evidencia. Revisé las afirmaciones contra los archivos y resultados de las suites enumeradas; la revisión final, la confirmación del SHA/PR y la defensa personal de las decisiones quedan a mi cargo antes de entregar.
+
+
+## Semana 05 — validación de sincronización y política (Osbaldo)
+
+- Archivos modificados: `tests/sync.spec.ts` y `docs/sync-policy.md`.
+- Contribución técnica propia: completé la suite de pruebas `tests/sync.spec.ts` agregando los casos deterministas para el límite de 5 reintentos con backoff exponencial y suspensión de operaciones agotadas (`retryExhausted: true`), comprobando la preservación de los datos locales sin pérdidas. Asimismo, integré las pruebas de resolución activa de conflictos mediante `resolveConflict()` probando ambas estrategias oficiales: `mine` (reencadenando la baseVersion y conservando los cambios locales del técnico) y `server` (adoptando el snapshot remoto autorizado y limpiando la cola). Actualicé `docs/sync-policy.md` documentando los trade-offs, supuestos y el mapeo directo a cada aserción de la suite.
+- Decisión técnica defendible: reutilizar las exportaciones oficiales de `src/lib/sync/conflict-policy.ts` y el harness de IndexedDB en memoria (`tests/helpers/indexed-db-harness.ts`) inyectando un reloj virtual en `transport.now`. Esto permite validar de forma determinista el backoff exponencial y el límite de 5 reintentos en 0 ms sin depender de esperas reales ni generar efectos colaterales de red.
+- Pruebas ejecutadas y resultados observados:
+  - `node --experimental-strip-types tests/sync.spec.ts`: ejecutó todos los escenarios (persistencia tras recarga, aislamiento por cuenta, pérdida de ACK con idempotencia, límite de 5 intentos y suspensión sin pérdida de datos, e inspección y resolución de conflicto con `mine` y `server`) concluyendo con `sync.spec.ts: PASS` y código de salida 0.
+  - `npm run typecheck` (`tsc --noEmit`): finalizó con código 0 sin errores de tipos.
+  - `bash public-tests/check-w05.sh`: devolvió `W05_PUBLIC_OK` y código de salida 0.
+  - Comprobación de fallo determinista: al invertir intencionalmente un assert, la suite aborta inmediatamente con `AssertionError` y código de salida 1.
+- Limitación identificada: la suite utiliza un almacenamiento IndexedDB en memoria y un cliente HTTP simulado con reloj inyectado. Esto permite verificar la lógica determinista del runner y las políticas de sincronización, pero no sustituye pruebas de latencia real, caídas de socket a nivel de red física ni una validación sobre un clúster de base de datos en producción.
+- Uso declarado de IA: utilicé Antigravity (asistente de IA de Google) para analizar el flujo de reintentos y resolución de conflictos en el código existente de `runner.ts` y `resolve-conflict.ts`, y estructurar los fixtures sintéticos deterministas de la suite.
+- Validación humana: verifiqué manualmente el cálculo del backoff exponencial (`1000 * 2 ** (attempt - 1)`), la presencia de `retryExhausted` en el almacenamiento local, que la entidad capturada no sufriera sobreescritura silenciosa, y la correcta ejecución local de los scripts de verificación.
+- Commit SHA propio: `ca088362bc5d506a25a5b062ba3223fb8590cb9e` (`ca08836`) en rama `feature/w05-sync-tests`.
