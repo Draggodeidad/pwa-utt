@@ -1,3 +1,4 @@
+import { createLocalPhoto } from "../../findings/services/photo.repository.ts";
 import type { ApiClient } from "../../../lib/api/client.ts";
 import { ApiClientError } from "../../../lib/api/client.ts";
 import type { LocalStorage, ConflictResolutionWrite, LocalEntityRecord } from "../../../lib/pwa/offline-storage.ts";
@@ -11,6 +12,7 @@ import { inspectConflict } from "./conflict-detection.ts";
 export class ConflictResolutionError extends Error {}
 
 type ResolutionContext = {
+  readPhoto?: (id: string) => Promise<Blob>;
   storage: LocalStorage;
   client: ApiClient;
   owner: Uuid;
@@ -90,9 +92,11 @@ async function copyCapture(context: ResolutionContext, conflict: ConflictRecord,
     baseVersion: null, dependsOn: [], localOrder: order,
   });
   const enqueue = [inspectionIntent];
+  const copiedFindingIds = new Map<string, string>();
   for (let index = 0; index < findings.length; index++) {
     const finding = findings[index];
     const id = crypto.randomUUID();
+    copiedFindingIds.set(finding.id, id);
     const fresh: LocalFinding = {
       ...finding, id, inspectionId: newInspectionId, createdBy: context.owner, updatedBy: context.owner,
       status: "pending", resolvedAt: null, deletedAt: null, version: 0, baseVersion: null,
@@ -104,6 +108,21 @@ async function copyCapture(context: ResolutionContext, conflict: ConflictRecord,
       operation: "finding.create", payload: { inspectionId: newInspectionId, title: fresh.title, description: fresh.description, priority: fresh.priority },
       baseVersion: null, dependsOn: [inspectionIntent.operationId], localOrder: order + index + 1,
     }));
+  }
+  const photos = (await context.storage.listPhotos(context.owner, parentId)).filter(photo => !photo.deletedAt);
+  for (const photo of photos) {
+    const findingId = copiedFindingIds.get(photo.findingId);
+    if (!findingId) continue;
+    let blob = photo.blob;
+    if (!blob) {
+      // ApiClient is JSON-only; the optional binary port is supplied by the browser caller.
+      if (!context.readPhoto) throw new ConflictResolutionError("Conserva las fotos originales: vuelve a intentar la copia con conexión.");
+      blob = await context.readPhoto(photo.id);
+    }
+    const fresh = await createLocalPhoto({ id: crypto.randomUUID(), owner: context.owner, inspectionId: newInspectionId, findingId, file: blob });
+    records.push({ store: "photo_local", value: fresh });
+    const dependencies = enqueue.filter(item => item.entityId === findingId || item.entityId === newInspectionId).map(item => item.operationId);
+    enqueue.push(createIntent({ owner: context.owner, entity: "photo", entityId: fresh.id, parentEntityId: newInspectionId, operation: "photo.upload", payload: { inspectionId: newInspectionId, findingId, sourceHash: fresh.sourceHash, mimeType: fresh.mimeType, bytes: fresh.bytes }, baseVersion: null, dependsOn: dependencies, localOrder: order + enqueue.length }));
   }
   return { records, enqueue, update: [], remove: related.map((item) => item.operationId), resolution: "copied", newInspectionId };
 }

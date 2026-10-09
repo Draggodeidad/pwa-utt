@@ -88,6 +88,11 @@ export function ConflictResolutionPanel() {
     const storage = await LocalStorage.open();
     try {
       const result = await trackPwaMutation(() => resolveConflict({
+        readPhoto: async (id) => {
+          const response = await fetch(`/api/photos/${id}`, { credentials: "same-origin", cache: "no-store" });
+          if (!response.ok) throw new Error("No se pudo recuperar la foto autorizada para copiar el borrador");
+          return response.blob();
+        },
         storage, client: new HttpClient(), owner: owner.id,
         verifyOwner: async (expected) => { const current = await sessionUser(); return isSessionCurrent(epoch, expected) && current?.id === expected ? current.role : null; },
       }, selected.operationId, decision));

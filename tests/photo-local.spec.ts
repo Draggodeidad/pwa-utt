@@ -79,6 +79,22 @@ async function main() {
     await saveDraft(owner, storage, { ...capture(), photos: { add: three, remove: [] } });
     await assert.rejects(saveDraft(owner, storage, { ...capture(), photos: { add: [await photo()], remove: [] } }), /too-many/);
     assert.equal((await storage.listPhotos(owner)).length, 3);
+    storage.close(); storage = await LocalStorage.open("photo-conflict-copy");
+    await saveDraft(owner, storage, { ...capture(), photos: { add: [await photo()], remove: [] } });
+    const conflictClient = {
+      ...client,
+      get: async () => ({ id: insp, workflowStatus: "completed", version: 3, findings: [], scope: "Synthetic remote" }),
+      put: async () => { throw new ApiClientError(409, { code: "VERSION_CONFLICT", message: "Synthetic conflict" }); },
+    };
+    await runQueue(storage, owner, { client: conflictClient, verifyOwner: async () => true });
+    const failed = (await storage.listQueue(owner)).find(item => item.entity === "inspection");
+    const { resolveConflict } = require("../src/features/sync/services/resolve-conflict.ts");
+    const { newInspectionId } = await resolveConflict({ storage, client: conflictClient, owner, verifyOwner: async () => "technician" }, failed.operationId, "mine");
+    const copiedPhotos = await storage.listPhotos(owner, newInspectionId);
+    assert.equal(copiedPhotos.length, 1);
+    assert.notEqual(copiedPhotos[0].findingId, finding);
+    assert.equal(copiedPhotos[0].blob.size, (await storage.listPhotos(owner, insp))[0].blob.size);
+    assert.equal((await storage.listQueue(owner)).filter(item => item.operation === "photo.upload").length, 1);
     storage.close();
     console.log("photo-local.spec.ts: PASS (upgrade/atomicity/partition/replay/finalization/discard/limits)");
   } finally { globalThis.indexedDB = original; }
