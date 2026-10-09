@@ -8,7 +8,7 @@ Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenim
 - npm 10 o posterior.
 - Git; Make es opcional.
 
-El workflow W05 usa Node.js 22.22.3. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
+Los workflows W05 y W06 usan Node.js 22.22.3. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
 
 ## Instalación y ejecución
 
@@ -63,7 +63,7 @@ Los workflows de las Semanas 02, 03 y 04 repiten una instalación limpia y `make
 
 - `/inspecciones` gestiona en cliente la carga de la colección sintética, búsqueda y filtros. Next.js prerenderiza el estado de carga inicial en HTML; no confundir ese HTML inicial con los registros, que aparecen tras la transición de cliente. `?estado=cargando`, `?estado=error` y `?estado=vacio` permiten inspeccionar estados de demostración.
 - `/inspecciones/[id]` declara `dynamic = "force-dynamic"` y resuelve los datos sintéticos en servidor para incluirlos en el HTML. Un ID desconocido responde HTTP 404; `?estado=error` muestra el estado de error de demostración. `src/app/inspecciones/loading.tsx` y `src/app/inspecciones/[id]/loading.tsx` presentan carga, y la ruta detalle tiene `error.tsx` para fallos inesperados.
-- `tests/rendering.spec.ts` comprueba estados accesibles, contenido HTML, filtros, consistencia de registros y 404. En el `package.json` actual no está encadenada en `npm test`; puede ejecutarse directamente con `node tests/rendering.spec.ts`.
+- `tests/rendering.spec.ts` comprueba estados accesibles, contenido HTML, filtros, consistencia de registros y 404. Está encadenada en `npm test` y también puede ejecutarse directamente con `node tests/rendering.spec.ts`.
 - `npm run measure:rendering` requiere una build previa y registra tiempos HTTP y tamaño HTML para listado y detalle; no mide hidratación ni tiempo hasta mostrar datos CSR. `docs/rendering-decision.md` documenta la decisión, sus supuestos, límites y validación.
 
 ## Baseline de Semana 05
@@ -114,3 +114,13 @@ Registrar fecha, navegador, URL, estado de red, versión de caché y resultado o
 El reporte individual está en `evidence/individual.md`. El commit funcional principal de Imanol es `15f08bb763e29d966087414fc1299361bdf2fa6f`; los commits `4a163f1` y `d39ff30` preservan el aporte de Osbaldo al manifest y sus recursos. Para Semana 03, el aporte técnico principal de Imanol es el commit `1192dfccab246a60464e99a46b426d4ba34e38d4` (service worker y registro seguro, PR #21); Osbaldo contribuye las suites `tests/service-worker.spec.ts` y `tests/offline.spec.ts` (PR #22) y Jose Julian documenta la estrategia en `docs/cache-strategy.md` (PR #24). La integración final de la Semana 03 queda registrada en el PR de esta entrega.
 
 Las instrucciones acotadas para que los integrantes restantes verifiquen el resultado y completen únicamente su propia evidencia están en `docs/week-02-contributor-guide.md`.
+
+## Baseline de Semana 06 (#68)
+
+`docs/w06-baseline.md` registra la inspección completa del kit, brechas y contratos. La app ya tiene Auth/Supabase, IndexedDB v2, cola persistente y conflictos; las capacidades W06 y fotos aún requieren #69/#70. La documentación y suites de comportamiento pertenecen a #71/#72.
+
+El workflow `.github/workflows/week-06-w06-device-push.yml` ejecuta `npm ci`, checks públicos acumulativos y `make verify` con Node 22.22.3. Publica los reportes reales, sin generar una calificación docente. `bash public-tests/check-w06.sh` comprueba contenido e integración; no acredita comportamiento.
+
+`npm test` conserva todas las suites anteriores, prueba la infraestructura con `tests/w06-baseline.spec.mjs` y ejecuta el runner único `tests/capabilities.spec.ts`. **npm test y make verify fallan mientras falten los módulos, documentación o suites W06**; ese estado es intencional y no un pase. Cada suite auxiliar debe importar los adaptadores reales, ejecutar assertions y devolver un entero positivo de escenarios completados. Los contratos por sí solos no verifican capacidades.
+
+Fotos: JPEG/PNG/WebP, hasta 5 MiB por archivo y tres por hallazgo. Esta extensión usa Storage privado y es distinta del mínimo docente. Permisos voluntarios, selección manual del laboratorio y avisos dentro de la app mantienen el flujo útil. No se implementa servidor Push/VAPID en el baseline.
