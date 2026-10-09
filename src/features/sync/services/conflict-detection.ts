@@ -6,6 +6,7 @@ export type ConflictEvidence = { reason: ConflictReason; remoteSnapshot: unknown
 
 /** Only an authorized GET may supply remote evidence; an error body is never a snapshot. */
 export async function inspectConflict(client: ApiClient, sent: SyncQueueItem, error: unknown): Promise<ConflictEvidence | null> {
+  if (sent.entity === "photo") return null; // Photo replay is identity/hash based; preserve errored blob for retry.
   if (!(error instanceof ApiClientError) || ![403, 404, 409].includes(error.status)) return null;
   if (error.status !== 409) return { reason: "inaccessible", remoteSnapshot: null, remoteVersion: null };
   if (error.payload.code === "IDEMPOTENCY_KEY_REUSED") return { reason: "key_reused", remoteSnapshot: null, remoteVersion: null };

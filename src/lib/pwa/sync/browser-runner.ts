@@ -1,3 +1,4 @@
+import { sendPhotoOperation } from "../../photos/http-client";
 import { HttpClient } from "../../api/http-client";
 import { LocalStorage } from "../offline-storage";
 import { runQueue } from "./runner";
@@ -80,6 +81,7 @@ export async function runBrowserQueue(): Promise<void> {
       try {
         const outcome = await runQueue(storage, owner, {
           client: new HttpClient(),
+          sendPhoto: sendPhotoOperation,
           verifyOwner: async (expected) => isSessionCurrent(epoch, expected) && await verifiedOwner(epoch) === expected,
           shouldContinue: () => !updatePaused,
         });

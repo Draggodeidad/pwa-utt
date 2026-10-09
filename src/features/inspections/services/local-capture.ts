@@ -1,3 +1,4 @@
+import type { PhotoEdits } from "../../findings/photo-contracts.ts";
 import type { LocalStorage, LocalEntityRecord } from "../../../lib/pwa/offline-storage.ts";
 import type { LocalInspection, InspectionEditorValues, InspectionFinding, InspectionListItem, LaboratoryOption, InspectionWorkflowStatus } from "../types.ts";
 import type { LocalFinding } from "../../findings/types.ts";
@@ -11,6 +12,7 @@ export type DraftCapture = {
   inspection: LocalInspection;
   findings: readonly LocalFinding[];
   removedFindings: readonly RemovedFindingRef[];
+  photos?: PhotoEdits;
 };
 
 export type FindingsCapture = {
@@ -132,7 +134,7 @@ export async function saveDraft(owner: Uuid, storage: LocalStorage, draft: Draft
     ...draft.findings.map((finding) => ({ store: "finding_local" as const, value: finding })),
   ];
   const intents = buildCaptureIntents(draft, await storage.listQueue(owner));
-  await storage.saveCapture(owner, records, intents, draft.removedFindings);
+  await storage.saveCapture(owner, records, intents, draft.removedFindings, draft.photos);
   return intents;
 }
 

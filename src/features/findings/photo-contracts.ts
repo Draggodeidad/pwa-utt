@@ -43,3 +43,18 @@ export interface FindingPhotoRepository {
   sync(photoId: string): Promise<PhotoResult<FindingPhoto>>;
   read(photoId: string): Promise<PhotoResult<Blob>>;
 }
+
+/** Device-only payload; never returned by a server API or serialized into queue JSON. */
+export type LocalPhoto = FindingPhoto & {
+  blob: Blob | null;
+  sourceHash: string;
+  deletedAt: string | null;
+  version: number;
+  baseVersion: number | null;
+  localRevision: number;
+  syncStatus: "local" | "pending" | "syncing" | "synced" | "error";
+  localUpdatedAt: string;
+  updatedAt: string;
+};
+export type PhotoEdits = { add: readonly LocalPhoto[]; remove: readonly string[] };
+export type PhotoUploadPayload = { inspectionId: string; findingId: string; sourceHash: string; mimeType: PhotoMimeType; bytes: number };
