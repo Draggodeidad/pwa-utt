@@ -26,6 +26,7 @@ import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionFinalization } from "../hooks/use-inspection-finalization";
 import type { InspectionDetail } from "../types";
 import type { Uuid } from "@/types/entity";
+import { FindingPhotos } from "@/features/findings";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -153,19 +154,7 @@ export function InspectionDetailWorkspace({
                     <p className={s.findingDescription}>
                       {finding.description}
                     </p>
-                    {finding.evidenceImage ? (
-                      <div className={s.evidence}>
-                        <img
-                          src={finding.evidenceImage}
-                          alt={finding.evidenceLabel}
-                          className={s.evidenceImage}
-                        />
-                        <p className={s.evidenceLabel}>
-                          <ImageIcon className={s.evidenceIcon} />
-                          Evidencia fotográfica
-                        </p>
-                      </div>
-                    ) : null}
+                    <FindingPhotos owner={owner} inspectionId={inspection.id} findingId={finding.id} />
                   </div>
                   {editable ? (
                     <div className={s.findingActions}>

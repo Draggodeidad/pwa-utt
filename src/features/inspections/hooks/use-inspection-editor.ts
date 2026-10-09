@@ -1,5 +1,7 @@
 "use client";
 
+import type { PhotoEdits } from "@/features/findings";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
 import { isPwaUpdatePreparing, registerPwaUpdateFlusher, trackPwaMutation } from "@/lib/pwa/update-coordination";
@@ -158,6 +160,32 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
     setValues((current) => ({ ...current, findings: [...current.findings, finding] }));
     setState("dirty");
   };
+  const saveFindingWithPhotos = async (finding: InspectionFinding, photos: PhotoEdits): Promise<boolean> => {
+    if (!storage || isPwaUpdatePreparing()) return false;
+    if (savePromiseRef.current && !await savePromiseRef.current) return false;
+    const task = trackPwaMutation(async () => {
+      savingRef.current = true;
+      setState("saving");
+      try {
+        const revision = revisionRef.current;
+        const current = valuesRef.current;
+        const next = { ...current, findings: current.findings.some(item => item.id === finding.id) ? current.findings.map(item => item.id === finding.id ? finding : item) : [...current.findings, finding] };
+        const existing = await storage.getInspection(owner, inspectionId);
+        const inspection = toLocalInspection(inspectionId, next, owner, catalog, existing);
+        const findings = await Promise.all(next.findings.map(async item => toLocalFinding(item.id, inspectionId, item, owner, item.version ?? null, await storage.getFinding(owner, item.id))));
+        const removed = removedRef.current;
+        await saveDraft(owner, storage, { owner, inspection, findings, removedFindings: removed, photos });
+        const latest = valuesRef.current;
+        const committed = { ...(revision === revisionRef.current ? next : latest), findings: latest.findings.some(item => item.id === finding.id) ? latest.findings.map(item => item.id === finding.id ? finding : item) : [...latest.findings, finding] };
+        valuesRef.current = committed; setValues(committed); removedRef.current = removedRef.current.slice(removed.length);
+        dirtyRef.current = revision !== revisionRef.current; setState(dirtyRef.current ? "dirty" : "saved");
+        return true;
+      } catch { setErrors({ form: "No se pudo guardar el hallazgo y sus fotos. Se conservan en el diálogo para reintentar." }); setState("save-error"); return false; }
+      finally { savingRef.current = false; }
+    });
+    savePromiseRef.current = task;
+    try { return await task; } finally { savePromiseRef.current = null; }
+  };
   const updateFinding = (finding: InspectionFinding) => {
     if (isPwaUpdatePreparing()) return;
     revisionRef.current++;
@@ -181,6 +209,10 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
     setState("finalizing");
     try {
       const current = valuesRef.current;
+      const photos = await storage.listPhotos(owner, inspectionId);
+      if (photos.some(photo => photo.status !== "uploaded" || photo.deletedAt)) {
+        setErrors({ form: "Hay fotos pendientes o con error. Sincronízalas o quítalas antes de finalizar." }); setState("save-error"); return false;
+      }
       const existing = await storage.getInspection(owner, inspectionId);
       const inspection = toLocalInspection(inspectionId, current, owner, catalog, existing);
       const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
@@ -229,5 +261,5 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
     setState("pristine");
   };
 
-  return { inspectionId, values, state, errors, toast, mutate, validate, save, addFinding, updateFinding, removeFinding, finalizeInspection, discard, reset };
+  return { inspectionId, values, state, errors, toast, mutate, validate, save, addFinding, saveFindingWithPhotos, updateFinding, removeFinding, finalizeInspection, discard, reset };
 }

@@ -20,6 +20,7 @@ function readErrorMessage(error: unknown): string {
     const payload = (error as { payload: { message?: string } }).payload;
     if (payload?.message) return payload.message;
   }
+  if (error instanceof Error) return error.message;
   return "No se pudo completar la operación. Intenta de nuevo.";
 }
 
@@ -86,6 +87,8 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
     setState("submitting");
     try {
       if (!storage) throw new Error("storage unavailable");
+      const photos = await storage.listPhotos(owner, inspection.id);
+      if (photos.some(photo => photo.status !== "uploaded" || photo.deletedAt)) throw new Error("Hay fotos pendientes: sincroniza o descarta antes de finalizar");
       const existing = await storage.getInspection(owner, inspection.id);
       await trackPwaMutation(() => enqueueFinalizeIntent(owner, storage, {
         inspectionId: inspection.id,

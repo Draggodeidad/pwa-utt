@@ -33,41 +33,54 @@ import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionEditor } from "../hooks/use-inspection-editor";
 import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
 import type { Uuid } from "@/types/entity";
+import { FindingPhotos, type PhotoEdits } from "@/features/findings";
 
 type Props = { mode: "create" | "edit"; initialValues: InspectionEditorValues; catalog: readonly LaboratoryOption[]; owner: Uuid };
 const maxSummary = 500;
 
 function FindingDialog({
   finding,
+  owner,
+  inspectionId,
   open,
   onOpenChange,
   onSave,
 }: {
   finding?: InspectionFinding;
+  owner: string;
+  inspectionId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (finding: InspectionFinding) => void;
+  onSave: (finding: InspectionFinding, photos: PhotoEdits) => Promise<boolean>;
 }) {
   const [title, setTitle] = useState(finding?.title ?? "");
   const [description, setDescription] = useState(finding?.description ?? "");
   const [priority, setPriority] = useState<InspectionFinding["priority"]>(
     finding?.priority ?? "medium",
   );
-  const submit = () => {
+  const [findingId] = useState(() => finding?.id ?? crypto.randomUUID());
+  const [photoEdits, setPhotoEdits] = useState<PhotoEdits>({ add: [], remove: [] });
+  const [saving, setSaving] = useState(false);
+  const [photosBusy, setPhotosBusy] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const submit = async () => {
     if (!title.trim() || !description.trim()) return;
-    onSave({
+    if (saving || photosBusy) return;
+    setSaving(true);
+    const saved = await onSave({
       ...finding,
-      id: finding?.id ?? crypto.randomUUID(),
+      id: findingId,
       title: title.trim(),
       description: description.trim(),
       priority,
       status: finding?.status ?? "pending",
-      evidenceCount: finding?.evidenceCount ?? 0,
-    });
-    onOpenChange(false);
+
+    }, photoEdits);
+    setSaving(false); setSaveError(!saved);
+    if (saved) onOpenChange(false);
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={value => { if (!saving) onOpenChange(value); }}>
       <DialogContent className={s.findingDialog}>
         <DialogTitle>
           {finding ? "Editar hallazgo" : "Agregar hallazgo"}
@@ -104,11 +117,13 @@ function FindingDialog({
             <option value="high">Alta</option>
           </select>
         </label>
+        <FindingPhotos owner={owner} inspectionId={inspectionId} findingId={findingId} editable onChange={setPhotoEdits} onBusyChange={setPhotosBusy} />
+        {saveError ? <p role="alert" className={s.field}>No se pudo guardar. Intenta de nuevo; tus fotos siguen en el diálogo.</p> : null}
         <div className={s.dialogActions}>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={submit}>Guardar hallazgo</Button>
+          <Button disabled={saving || photosBusy} onClick={() => void submit()}>Guardar hallazgo</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -127,8 +142,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
     mutate,
     validate,
     save,
-    addFinding,
-    updateFinding,
+    saveFindingWithPhotos,
     removeFinding,
     finalizeInspection,
     discard,
@@ -326,12 +340,9 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
                       <p className={s.findingDescription}>
                         {finding.description}
                       </p>
-                      {finding.evidenceCount ? (
-                        <p className={s.evidenceCount}>
-                          {finding.evidenceCount} evidencia adjunta
-                        </p>
-                      ) : null}
+
                     </div>
+                    <FindingPhotos owner={owner} inspectionId={inspectionId} findingId={finding.id} />
                     {editable ? (
                       <div className={s.findingActions}>
                         <Button
@@ -415,17 +426,17 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
           </Button>
         </div>
       </Card>
-      <FindingDialog
+      {findingDialog.open ? <FindingDialog
         key={findingDialog.finding?.id ?? "new"}
         finding={findingDialog.finding}
+        owner={owner}
+        inspectionId={inspectionId}
         open={findingDialog.open}
         onOpenChange={(open) =>
           setFindingDialog((current) => ({ ...current, open }))
         }
-        onSave={(finding) =>
-          findingDialog.finding ? updateFinding(finding) : addFinding(finding)
-        }
-      />
+        onSave={saveFindingWithPhotos}
+      /> : null}
       <AlertDialog
         open={Boolean(deleteId)}
         onOpenChange={(open) => !open && setDeleteId(undefined)}
