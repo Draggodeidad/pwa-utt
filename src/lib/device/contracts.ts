@@ -18,6 +18,8 @@ export type CameraResult<T> = CapabilityResult<T, "file-picker"> | {
 export interface CameraDependencies {
   isSecureContext: () => boolean;
   mediaDevices: Pick<MediaDevices, "getUserMedia"> | null;
+  /** Client frame encoder (e.g. canvas); tests inject synthetic image bytes. */
+  captureFrame: (stream: MediaStream) => Promise<Blob>;
   objectUrls: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
   now: () => number;
 }
