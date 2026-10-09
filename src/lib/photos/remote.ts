@@ -25,6 +25,9 @@ export function photoAcknowledgement(row: PhotoRow, operationId: string): Operat
 export async function uploadFindingPhoto(client: SupabaseClient, photoId: string, operationId: string, payload: PhotoUploadPayload, bytes: Buffer) {
   const image = await normalizePhoto(bytes, payload.mimeType);
   if (image.sourceHash !== payload.sourceHash || bytes.length !== payload.bytes) throw new PhotoRemoteError("IDEMPOTENCY_KEY_REUSED");
+  const finding = await client.from("findings").select("inspection_id").eq("id", payload.findingId).maybeSingle();
+  if (finding.error) throw new PhotoRemoteError("UNAVAILABLE");
+  if (!finding.data || finding.data.inspection_id !== payload.inspectionId) throw new PhotoRemoteError("NOT_FOUND");
   const reservation = await client.rpc("reserve_finding_photo", { p_id: photoId, p_finding_id: payload.findingId, p_mime: image.mimeType, p_bytes: image.bytes.length, p_source_hash: image.sourceHash, p_content_hash: image.hash });
   const row = rpcRow(reservation.data, reservation.error);
   if (row.inspection_id !== payload.inspectionId) throw new PhotoRemoteError("NOT_FOUND");
