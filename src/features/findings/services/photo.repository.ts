@@ -26,6 +26,7 @@ export function createFindingPhotoRepository(dependencies: { owner: string; stor
         await storage.cachePhotos(owner, remote);
       } else if (response.status === 401 || response.status === 403) return { status: "error", code: "forbidden" };
     } catch { /* local photos remain available offline */ }
+    if (!active()) return { status: "error", code: "forbidden" };
     const byId = new Map(remote.map(photo => [photo.id, photo]));
     for (const photo of local) { if (photo.deletedAt) byId.delete(photo.id); else byId.set(photo.id, photo); }
     return { status: "success", value: Array.from(byId.values()) };
@@ -36,6 +37,7 @@ export function createFindingPhotoRepository(dependencies: { owner: string; stor
       if (!active()) return { status: "error", code: "forbidden" };
       try {
         const photo = await createLocalPhoto({ id: input.photoId, owner, inspectionId: input.inspectionId, findingId: input.findingId, file: input.file }, dependencies.now);
+        if (!active()) return { status: "error", code: "forbidden" };
         await storage.saveCapture(owner, [], [], [], { add: [photo], remove: [] });
         return { status: "success", value: photo };
       } catch (error) { return { status: "error", code: error instanceof PhotoValidationError ? error.code : "write-failed" }; }
@@ -47,13 +49,16 @@ export function createFindingPhotoRepository(dependencies: { owner: string; stor
     },
     async sync(photoId) {
       // Transport belongs to the shared leased runner, not a second independent loop.
+      if (!active()) return { status: "error", code: "forbidden" };
       const photo = await storage.getPhoto(owner, photoId);
+      if (!active()) return { status: "error", code: "forbidden" };
       if (!photo || photo.status !== "uploaded") return { status: "error", code: "upload-failed" };
       return { status: "success", value: photo };
     },
     async read(photoId) {
       if (!active()) return { status: "error", code: "forbidden" };
       const local = await storage.getPhoto(owner, photoId);
+      if (!active()) return { status: "error", code: "forbidden" };
       if (local?.blob && !local.deletedAt) return { status: "success", value: local.blob };
       try {
         const response = await request(`/api/photos/${photoId}`, { credentials: "same-origin", cache: "no-store" });
