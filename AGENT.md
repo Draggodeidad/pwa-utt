@@ -6,7 +6,7 @@
 
 Build **Laboratorio Inspect**, a Progressive Web App (PWA) for maintenance inspections in university laboratories. It replaces notebooks and spreadsheets, supports technicians working with intermittent connectivity, and gives laboratory coordination a view to prioritize and follow up findings.
 
-The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v3, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 camera/photo persistence is implemented in #69; geolocation and notifications remain in #70. Photo Storage setup/recovery is documented in docs/w06-photo-storage.md. Independent W06 suites and real-device/Storage validation remain pending; baseline contracts and gates do not establish their behavior. Deployment and private-service validation must be reported separately.
+The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v3, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 camera/photo persistence is implemented in #69; #70 adds voluntary in-memory geolocation and session-only local synchronization notifications with accessible fallback. These are not remote Push subscriptions. Photo Storage setup/recovery is documented in docs/w06-photo-storage.md. Independent W06 suites and real-device/Storage validation remain pending; baseline contracts and gates do not establish their behavior. Deployment and private-service validation must be reported separately.
 
 ### Technology stack
 

@@ -15,7 +15,7 @@ Los workflows W05 y W06 usan Node.js 22.22.3. No se requieren servicios externos
 Desde la raíz del repositorio:
 
 ```bash
-npm ci --ignore-scripts --no-audit --no-fund
+npm ci
 npm run dev
 ```
 
@@ -117,7 +117,7 @@ Las instrucciones acotadas para que los integrantes restantes verifiquen el resu
 
 ## Baseline de Semana 06 (#68)
 
-`docs/w06-baseline.md` registra la inspección completa del kit, brechas y contratos. La app ya tiene Auth/Supabase, IndexedDB v3, cola persistente, conflictos y módulo de cámara/fotos #69; geolocalización y notificaciones aún requieren #70. La documentación y suites de comportamiento pertenecen a #71/#72.
+`docs/w06-baseline.md` registra la inspección completa del kit, brechas y contratos. La app ya tiene Auth/Supabase, IndexedDB v3, cola persistente, conflictos, cámara/fotos #69 y ubicación/avisos locales opcionales #70. La documentación y suites de comportamiento pertenecen a #71/#72.
 
 El workflow `.github/workflows/week-06-w06-device-push.yml` ejecuta `npm ci`, checks públicos acumulativos y `make verify` con Node 22.22.3. Publica los reportes reales, sin generar una calificación docente. `bash public-tests/check-w06.sh` comprueba contenido e integración; no acredita comportamiento.
 
@@ -129,3 +129,13 @@ Fotos: JPEG/PNG/WebP, hasta 5 MiB por archivo y tres por hallazgo. Esta extensi�
 ## Cámara y fotos W06 (#69)
 
 El editor permite capturar/seleccionar y confirmar fotos con el hallazgo. Los pendientes sobreviven offline; la subida usa Storage privado y bloquea finalización hasta confirmar o descartar. Preparación manual de bucket y migración, permisos, recuperación y validación humana pendiente: [docs/w06-photo-storage.md](docs/w06-photo-storage.md). Se añadieron pruebas propias; el gate W06 sigue exigiendo las contribuciones restantes sin omitirlas.
+
+## Ubicación y avisos opcionales W06 (#70)
+
+En el editor, **Obtener ubicación** realiza una petición puntual de baja precisión (timeout 10 s, sin reutilizar una posición anterior). Latitud, longitud y precisión sólo aparecen en memoria durante esa edición; **Borrar ubicación**, salir del editor o cambiar de sesión las descarta. No se envían ni se incorporan al borrador. El laboratorio se selecciona manualmente y se puede guardar sin ubicación o si se deniega el permiso. No se necesitan buckets, migraciones ni cambios en Supabase para #70.
+
+En **Sincronización**, **Activar avisos de sincronización** solicita permiso únicamente al pulsarlo. La activación se conserva durante las navegaciones de esta pestaña y se pierde al recargar o cerrar/cambiar sesión; **Desactivar avisos** conserva los avisos dentro de la app. Una sincronización con ACKs persistidos, sin cola ni conflictos pendientes, muestra un mensaje genérico. Fallos, resultados parciales y una cola vacía sin un ACK nuevo no generan ese evento. Repetir la identidad del último ACK no duplica la presentación, incluso si previamente se utilizó fallback.
+
+Son notificaciones locales producidas mientras la app ejecuta la sincronización. No hay suscripción Push remota, VAPID, servidor ni garantía de nuevos avisos con la app cerrada. El adaptador prefiere el service worker activo; el constructor de Notification es un fallback para plataformas que lo admiten. En móvil se recomienda el service worker ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API/Using_the_Notifications_API)); iOS/iPadOS 16.4 incorporan soporte para apps añadidas a la pantalla de inicio y requieren interacción directa para solicitar permiso ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)). La disponibilidad depende del navegador, instalación y permiso; siempre queda el aviso accesible dentro de la app.
+
+Exports inyectables, evento interno y criterios de pruebas para Julian: [baseline W06](docs/w06-baseline.md#integración-implementada-en-70). Ejecutar con Node 22.22.3: `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, los tres checks públicos y `make verify`, de forma secuencial. El gate aún exige `docs/capabilities.md` y las dos suites auxiliares de #71/#72; no se omiten. No hay script/binario de lint independiente ni se añade ESLint. La revisión en hardware/navegador real y la validación humana siguen pendientes.
