@@ -483,6 +483,8 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
         </AlertDialogContent>
       </AlertDialog>
       <InspectionFinalizationDialog
+        owner={owner}
+        inspectionId={inspectionId}
         open={confirming}
         folio={values.folio}
         laboratory={laboratory?.name ?? "Sin seleccionar"}

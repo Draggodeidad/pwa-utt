@@ -231,6 +231,8 @@ export function InspectionDetailWorkspace({
         </AlertDialogContent>
       </AlertDialog>
       <InspectionFinalizationDialog
+        owner={owner}
+        inspectionId={inspection.id}
         open={
           state === "confirming" || state === "submitting" || state === "error"
         }
