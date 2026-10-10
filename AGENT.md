@@ -6,7 +6,7 @@
 
 Build **Laboratorio Inspect**, a Progressive Web App (PWA) for maintenance inspections in university laboratories. It replaces notebooks and spreadsheets, supports technicians working with intermittent connectivity, and gives laboratory coordination a view to prioritize and follow up findings.
 
-The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v2, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 device capabilities and photo persistence are pending implementation in #69/#70; baseline contracts and gates do not establish their behavior. Deployment and private-service validation must be reported separately.
+The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v3, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 camera/photo persistence is implemented in #69; geolocation and notifications remain in #70. Photo Storage setup/recovery is documented in docs/w06-photo-storage.md. Independent W06 suites and real-device/Storage validation remain pending; baseline contracts and gates do not establish their behavior. Deployment and private-service validation must be reported separately.
 
 ### Technology stack
 
@@ -20,7 +20,7 @@ The repository contains a Next.js inspection app with Supabase Auth, authorized 
 | Runtime | Node.js `22.x`; W05/W06 CI uses Node `22.22.3` |
 | Package manager | npm `10+`; use the committed `package-lock.json` |
 | Database / backend | Supabase Auth/Postgres/RLS and Next.js API routes |
-| PWA runtime | Manifest, service worker, IndexedDB v2 and synchronization adapters |
+| PWA runtime | Manifest, service worker, IndexedDB v3 and synchronization adapters |
 | Testing | Node assertion unit/integration suites; no additional test framework |
 
 ### Architectural rules
