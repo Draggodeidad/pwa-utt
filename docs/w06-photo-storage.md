@@ -40,3 +40,22 @@ La validación de contenido reside en la API de la app. Storage/RPCs validan per
 Validación humana/independiente pendiente: con cuentas sintéticas A/B/coordinación, capturar y seleccionar; denegar permisos; cancelar y cerrar; guardar offline y reabrir; reconectar y perder una respuesta; comprobar una sola identidad; quitar fotos y descartar; finalizar sólo tras confirmación; verificar que B/anon/inactivo no leen y coordinación sólo lee tras finalizar, con intentos reales de Storage API. No publicar fotografías personales, coordenadas, tokens ni claves. #72 registra sus propias pruebas/evidencia.
 
 Referencias de APIs: [Supabase Storage RLS](https://supabase.com/docs/guides/storage/security/access-control), [sharp: salida y metadatos](https://sharp.pixelplumbing.com/api-output/).
+
+
+### Reproducir la comprobación SQL local
+
+Docker con una base vacía y sin puerto publicado. El bootstrap rechaza una base que ya tenga `auth.users`; no representa el esquema completo de Supabase ni un servicio Storage. Todos los comandos se ejecutan desde este checkout. Si un comando falla, detener la prueba y corregir antes de continuar.
+
+```bash
+docker run --rm -d --name pwa-w06-photo-sql -e POSTGRES_HOST_AUTH_METHOD=trust postgres:16-alpine
+docker exec pwa-w06-photo-sql pg_isready -U postgres
+# Continuar cuando pg_isready indique accepting connections.
+docker exec -i pwa-w06-photo-sql psql -U postgres -v ON_ERROR_STOP=1 < supabase/tests/photo-local-bootstrap.sql
+for migration in supabase/migrations/*.sql; do
+  docker exec -i pwa-w06-photo-sql psql -U postgres -v ON_ERROR_STOP=1 < "$migration" || exit 1
+done
+docker exec -i pwa-w06-photo-sql psql -U postgres -v ON_ERROR_STOP=1 < supabase/tests/photo-module-smoke.sql
+docker stop pwa-w06-photo-sql
+```
+
+El smoke aborta con `SMOKE:` si un permiso o guard falla; `ROLLBACK` confirma que no conserva sus filas sintéticas. No acredita lectura/upload por HTTP ni permisos reales del navegador.
