@@ -38,6 +38,11 @@ async function main() {
     await assert.rejects(normalizePhoto(bytes, format === "png" ? "image/jpeg" : "image/png"), /invalid-format/);
     await assert.rejects(normalizePhoto(bytes.subarray(0, 15), mime), /invalid-format/);
   }
+  const tagged = await sharp({ create: { width: 2, height: 3, channels: 3, background: "#ff0000" } }).jpeg().withMetadata({ orientation: 6, exif: { IFD0: { Artist: "Synthetic W06" } } }).toBuffer();
+  assert.ok((await sharp(tagged).metadata()).exif, "fixture actually contains EXIF");
+  const cleaned = await normalizePhoto(tagged, "image/jpeg");
+  const metadata = await sharp(cleaned.bytes).metadata();
+  assert.equal(metadata.exif, undefined); assert.equal(metadata.width, 3); assert.equal(metadata.height, 2);
   console.log("photo-validation.spec.ts: PASS (own #69 module tests)");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

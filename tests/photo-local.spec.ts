@@ -96,7 +96,27 @@ async function main() {
     assert.equal(copiedPhotos[0].blob.size, (await storage.listPhotos(owner, insp))[0].blob.size);
     assert.equal((await storage.listQueue(owner)).filter(item => item.operation === "photo.upload").length, 1);
     storage.close();
-    console.log("photo-local.spec.ts: PASS (upgrade/atomicity/partition/replay/finalization/discard/limits)");
+    // A delayed local read/hash must not expose or write photos after logout.
+    const previousSessionStorage = globalThis.localStorage;
+    const sessionValues = new Map();
+    globalThis.localStorage = { getItem: key => sessionValues.get(key) ?? null, setItem: (key, value) => sessionValues.set(key, value), removeItem: key => sessionValues.delete(key) };
+    try {
+      const { establishLocalSession, blockLocalSession } = require("../src/lib/pwa/offline-session.ts");
+      const { createFindingPhotoRepository } = require("../src/features/findings/services/photo.repository.ts");
+      establishLocalSession({ userId: owner, displayName: "Synthetic" });
+      let release, writes = 0;
+      const repository = createFindingPhotoRepository({ owner, storage: { getPhoto: () => new Promise(resolve => { release = resolve; }), saveCapture: async () => { writes++; } }, fetch: async () => { throw new Error("unexpected request"); } });
+      const delayed = repository.read("synthetic-photo");
+      blockLocalSession(); release({ blob: new Blob(["synthetic"], { type: "image/png" }), deletedAt: null });
+      assert.deepEqual(await delayed, { status: "error", code: "forbidden" });
+      establishLocalSession({ userId: owner, displayName: "Synthetic" });
+      const currentRepository = createFindingPhotoRepository({ owner, storage: { saveCapture: async () => { writes++; } }, fetch: async () => { throw new Error("unexpected request"); } });
+      const attaching = currentRepository.attach({ photoId: crypto.randomUUID(), inspectionId: insp, findingId: finding, file: new Blob(["synthetic"], { type: "image/png" }) });
+      blockLocalSession();
+      assert.deepEqual(await attaching, { status: "error", code: "forbidden" });
+      assert.equal(writes, 0);
+    } finally { if (previousSessionStorage === undefined) delete globalThis.localStorage; else globalThis.localStorage = previousSessionStorage; }
+    console.log("photo-local.spec.ts: PASS (upgrade/atomicity/partition/replay/finalization/discard/limits/copy/session-race)");
   } finally { globalThis.indexedDB = original; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
