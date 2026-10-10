@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { InspectionLocation } from "@/features/inspections/components/InspectionLocation";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CalendarDays, ClipboardCheck, MapPin, UserRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -28,7 +29,7 @@ export async function generateMetadata({ params }: Pick<InspectionDetailPageProp
 export default async function InspeccionDetailPage({ params, searchParams }: InspectionDetailPageProps) {
   const { user } = await requireRole(["technician", "coordinator"]);
   const state = searchParams?.estado;
-  const inspection = await findVisibleInspection(createComponentSupabaseClient(), params.id);
+  const inspection = await findVisibleInspection(createComponentSupabaseClient(), params.id, user.role);
   if (!inspection) notFound();
 
   return (
@@ -62,6 +63,7 @@ function InspectionDetailContent({ inspection }: { inspection: InspectionDetail 
         </dl>
       </section>
 
+      <InspectionLocation inspection={inspection} />
       <section className={s.findingsSection} aria-labelledby="hallazgos-title">
         <div className={s.sectionHeading}>
           <h2 id="hallazgos-title" className={s.sectionTitle}>Hallazgos</h2>

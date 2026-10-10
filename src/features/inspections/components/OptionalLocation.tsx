@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { createGeolocationClient } from "@/lib/device/geolocation";
+import type { InspectionLocation } from "../types";
 import type { DeviceLocation } from "@/lib/device/contracts";
 import { isSessionCurrent, sessionEpoch } from "@/lib/pwa/offline-session";
 
@@ -14,15 +15,17 @@ const failureMessages: Record<string, string> = {
   "position-unavailable": "No se pudo obtener la ubicación. Puedes continuar sin ella.",
 };
 
-export function OptionalLocation({ owner }: { owner: string }) {
+export function OptionalLocation({ owner, onChange, disabled = false }: { owner: string; onChange: (location: InspectionLocation | null) => void; disabled?: boolean }) {
   const [location, setLocation] = useState<DeviceLocation | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const request = useRef(0);
   useEffect(() => {
+    onChange(null);
     const clear = () => {
       request.current++;
       setLocation(null);
+      onChange(null);
       setBusy(false);
       setMessage("");
     };
@@ -33,10 +36,11 @@ export function OptionalLocation({ owner }: { owner: string }) {
     window.addEventListener("storage", storageChanged);
     return () => {
       request.current++;
+      onChange(null);
       window.removeEventListener("pwa-utt:session-changed", clear);
       window.removeEventListener("storage", storageChanged);
     };
-  }, [owner]);
+  }, [owner, onChange]);
   const locate = async () => {
     const epoch = sessionEpoch();
     if (!isSessionCurrent(epoch, owner)) {
@@ -56,24 +60,26 @@ export function OptionalLocation({ owner }: { owner: string }) {
     setBusy(false);
     if (result.status === "success") {
       setLocation(result.value);
-      setMessage("Ubicación obtenida. Sólo se muestra durante esta edición.");
+      onChange({ ...result.value, capturedAt: new Date(result.value.capturedAt).toISOString() });
+      setMessage("Ubicación obtenida. Se compartirá con el coordinador al finalizar.");
     } else setMessage(failureMessages[result.code] ?? failureMessages["position-unavailable"]);
   };
   const clear = () => {
     request.current++;
     setLocation(null);
+    onChange(null);
     setBusy(false);
     setMessage("Ubicación borrada.");
   };
   return (
     <section className={s.panel} aria-labelledby="optional-location-title">
       <h3 id="optional-location-title" className={s.title}>Ubicación opcional</h3>
-      <p className={s.description}>No se guarda ni se envía. Selecciona siempre el laboratorio manualmente; puedes guardar sin ubicación.</p>
+      <p className={s.description}>La ubicación se compartirá con el coordinador al finalizar. Puedes borrarla antes de finalizar o continuar sin ubicación. Selecciona siempre el laboratorio manualmente.</p>
       <div className={s.actions}>
-        <Button type="button" variant="outline" className={s.button} disabled={busy} onClick={() => void locate()}>
+        <Button type="button" variant="outline" className={s.button} disabled={busy || disabled} onClick={() => void locate()}>
           {busy ? "Obteniendo…" : location ? "Actualizar ubicación" : "Obtener ubicación"}
         </Button>
-        {location || busy ? <Button type="button" variant="ghost" className={s.button} onClick={clear}>Borrar ubicación</Button> : null}
+        {location || busy ? <Button type="button" variant="ghost" className={s.button} disabled={disabled} onClick={clear}>Borrar ubicación</Button> : null}
       </div>
       {location ? (
         <dl className={s.coordinates}>

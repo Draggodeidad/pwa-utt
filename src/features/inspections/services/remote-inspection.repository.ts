@@ -1,7 +1,7 @@
 import type { ApiClient } from "../../../lib/api/client.ts";
 import { getInstallationId } from "../../sync/installation.ts";
 import type { OperationAcknowledgement } from "../../sync/types.ts";
-import type { InspectionDetail, InspectionListItem } from "../types.ts";
+import type { InspectionDetail, InspectionListItem, InspectionLocation } from "../types.ts";
 import type { InspectionDraftInput } from "../schemas/inspection.schema.ts";
 import type { InspectionRepository } from "./inspection.repository.ts";
 
@@ -62,10 +62,10 @@ export class RemoteInspectionRepository implements InspectionRepository {
     );
   }
 
-  finalize(id: string, baseVersion: number, expectedFindingIds: readonly string[]): Promise<OperationAcknowledgement> {
+  finalize(id: string, baseVersion: number, expectedFindingIds: readonly string[], location?: InspectionLocation | null): Promise<OperationAcknowledgement> {
     return this.client.post<OperationAcknowledgement, OperationBody>(
       `/api/inspections/${id}/finalize`,
-      buildBody("inspection.finalize", id, baseVersion, { expectedFindingIds }),
+      buildBody("inspection.finalize", id, baseVersion, { expectedFindingIds, location: location ?? null }),
       { operationId: crypto.randomUUID() }
     );
   }

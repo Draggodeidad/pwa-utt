@@ -50,6 +50,6 @@ export interface GeolocationDependencies {
 }
 
 export interface GeolocationClient {
-  /** One voluntary request; no watchPosition and no remote coordinate storage. */
+  /** One voluntary request; no watchPosition. Persistence belongs to finalization. */
   locate(options?: PositionOptions): Promise<CapabilityResult<DeviceLocation, "manual-laboratory">>;
 }

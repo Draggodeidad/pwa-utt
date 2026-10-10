@@ -36,6 +36,8 @@ const inspections = [
 const findings = [
   { id: findingId, inspection_id: techCompletedId, title: "Cableado expuesto", description: "Cable de prueba", priority: "medium", status: "pending", deleted_at: null },
 ];
+const locations = new Map();
+const gps = { latitude: 19.4326, longitude: -99.1332, accuracy: 12.5, capturedAt: "2026-10-09T12:00:00.000Z" };
 const receipts = new Map();
 let nextFolio = 200;
 
@@ -175,7 +177,7 @@ function applyInspectionKind(actor, op) {
     return row;
   }
   if (kind === "inspection.finalize") {
-    if (Object.keys(payload || {}).some((key) => key !== "expectedFindingIds")) raise("INVALID_INPUT");
+    if (Object.keys(payload || {}).some((key) => !["expectedFindingIds", "location"].includes(key))) raise("INVALID_INPUT");
     if (!Array.isArray(payload?.expectedFindingIds)) raise("INVALID_INPUT");
     const expected = [...payload.expectedFindingIds].map(String).sort();
     const actual = findings.filter((finding) => finding.inspection_id === entityId && finding.deleted_at === null).map((finding) => finding.id).sort();
@@ -184,6 +186,7 @@ function applyInspectionKind(actor, op) {
         findings.some((finding) => finding.inspection_id === entityId && finding.deleted_at === null && !String(finding.title).trim())) {
       raise("FINALIZATION_INVALID");
     }
+    locations.set(entityId, payload.location ?? null);
     row.workflow_status = "completed"; row.completed_at = nowIso(); row.version += 1; row.updated_at = nowIso();
     return row;
   }
@@ -220,6 +223,11 @@ const backend = createServer(async (req, res) => {
     let rows = findings.filter((finding) => finding.deleted_at === null);
     rows = filterById(rows, url.searchParams.get("inspection_id"), "inspection_id");
     return send(res, 200, rows);
+  }
+  if (url.pathname === "/rest/v1/inspection_locations") {
+    const visible = new Set(visibleInspections(account.id).map(row => row.id));
+    const rows = account.role === "coordinator" ? [...locations.entries()].filter(([id]) => visible.has(id)).map(([inspection_id, value]) => ({ inspection_id, ...(value ? { ...value, captured_at: value.capturedAt } : { latitude: null, longitude: null, accuracy: null, captured_at: null }) })) : [];
+    return send(res, 200, filterById(rows, url.searchParams.get("inspection_id"), "inspection_id"));
   }
   if (url.pathname === "/rest/v1/inspections") {
     queryInspections.actor = account.id;
@@ -370,12 +378,23 @@ async function main() {
     const finalizeId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeee02";
     const finalizeDraft = await mutation("PUT", `/api/inspections/${finalizeId}`, tech, { clientId, kind: "inspection.create", entityId: finalizeId, payload: { laboratoryId, inspectionDate: "2026-09-23", summary: "Para finalizar" } }, op(8));
     assert.equal(finalizeDraft.status, 201);
-    const finalized = await mutation("POST", `/api/inspections/${finalizeId}/finalize`, tech, { clientId, kind: "inspection.finalize", entityId: finalizeId, baseVersion: 1, payload: { expectedFindingIds: [] } }, op(9));
+    const finalized = await mutation("POST", `/api/inspections/${finalizeId}/finalize`, tech, { clientId, kind: "inspection.finalize", entityId: finalizeId, baseVersion: 1, payload: { expectedFindingIds: [], location: gps } }, op(9));
     assert.equal(finalized.status, 201, "finalize válido completa la inspección");
+    const finalAck = await finalized.json();
+    assert.ok(!JSON.stringify(finalAck).includes("latitude"), "ACK no devuelve coordenadas");
+    const retryGps = await mutation("POST", `/api/inspections/${finalizeId}/finalize`, tech, { clientId, kind: "inspection.finalize", entityId: finalizeId, baseVersion: 1, payload: { expectedFindingIds: [], location: gps } }, op(9));
+    assert.equal(retryGps.status, 200);
+    assert.equal((await retryGps.json()).replayed, true);
+
     const afterCapture = await mutation("PATCH", `/api/inspections/${finalizeId}`, tech, { clientId, kind: "inspection.update", entityId: finalizeId, baseVersion: 2, payload: { summary: "Tarde" } }, op(10));
     assert.equal(afterCapture.status, 409, "finalizada bloquea captura posterior");
     const finalizedDetail = await (await request(`/api/inspections/${finalizeId}`, {}, tech)).json();
     assert.equal(finalizedDetail.workflowStatus, "completed");
+    assert.ok(!("capturedLocation" in finalizedDetail), "técnico no recibe su GPS");
+    assert.ok(!JSON.stringify(await (await request("/api/inspections", {}, tech)).json()).includes("latitude"));
+    const techPage = await (await request(`/inspections/${finalizeId}`, {}, tech)).text();
+    assert.ok(!techPage.includes("maps?q="), "detalle técnico sin GPS");
+
 
     const wrongSetId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeee03";
     await mutation("PUT", `/api/inspections/${wrongSetId}`, tech, { clientId, kind: "inspection.create", entityId: wrongSetId, payload: { laboratoryId, inspectionDate: "2026-09-24", summary: "Conjunto erróneo" } }, op(11));
@@ -420,6 +439,24 @@ async function main() {
 
     const coord = new Map();
     assert.equal((await login("coord@example.invalid", coord)).status, 200);
+    const coordGps = await (await request(`/api/inspections/${finalizeId}`, {}, coord)).json();
+    assert.deepEqual(coordGps.capturedLocation, gps, "coordinador recibe captura persistida");
+    const noGps = await (await request(`/api/inspections/${techCompletedId}`, {}, coord)).json();
+    assert.equal(noGps.capturedLocation, null, "inspección anterior sin captura");
+    for (const prefix of ["/inspections", "/inspecciones"]) {
+      const html = await (await request(`${prefix}/${finalizeId}`, {}, coord)).text();
+      assert.ok(html.includes("Ubicación de captura") && html.includes("maps?q=19.4326,-99.1332"), "detalle coordinador con mapa");
+      const empty = await (await request(`${prefix}/${techCompletedId}`, {}, coord)).text();
+      assert.ok(empty.includes("No se registró ubicación GPS"), "estado vacío coordinador");
+    }
+    const otherTech = new Map();
+    await login("other@example.invalid", otherTech);
+    assert.equal((await request(`/api/inspections/${finalizeId}`, {}, otherTech)).status, 404);
+    const emptyId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeee70";
+    await mutation("PUT", `/api/inspections/${emptyId}`, tech, { clientId, kind: "inspection.create", entityId: emptyId, payload: { laboratoryId, inspectionDate: "2026-10-09", summary: "Sin GPS" } }, op(70));
+    const noCaptureAck = await mutation("POST", `/api/inspections/${emptyId}/finalize`, tech, { clientId, kind: "inspection.finalize", entityId: emptyId, baseVersion: 1, payload: { expectedFindingIds: [], location: null } }, op(71));
+    assert.equal(noCaptureAck.status, 201, "sin ubicación se finaliza normalmente");
+    assert.equal((await (await request(`/api/inspections/${emptyId}`, {}, coord)).json()).capturedLocation, null);
     const coordList = await (await request("/api/inspections", {}, coord)).json();
     assert.ok(coordList.items.length > 0 && coordList.items.every((item) => item.workflowStatus === "completed"), "coordinación solo lista completed");
     assert.ok(!coordList.items.some((item) => item.id === techDraftId), "coordinación no ve borradores");

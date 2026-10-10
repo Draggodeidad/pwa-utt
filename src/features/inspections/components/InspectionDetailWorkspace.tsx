@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { InspectionLocation } from "@/features/inspections/components/InspectionLocation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -118,6 +119,7 @@ export function InspectionDetailWorkspace({
           </Button>
         ) : null}
       </Card>
+      <InspectionLocation inspection={inspection} />
       <section className={s.findingsSection} aria-labelledby="findings-title">
         <div className={s.findingsHeader}>
           <h2 id="findings-title" className={s.findingsTitle}>

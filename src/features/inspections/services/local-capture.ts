@@ -1,6 +1,6 @@
 import type { PhotoEdits } from "../../findings/photo-contracts.ts";
 import type { LocalStorage, LocalEntityRecord } from "../../../lib/pwa/offline-storage.ts";
-import type { LocalInspection, InspectionEditorValues, InspectionFinding, InspectionListItem, LaboratoryOption, InspectionWorkflowStatus } from "../types.ts";
+import type { InspectionLocation, LocalInspection, InspectionEditorValues, InspectionFinding, InspectionListItem, LaboratoryOption, InspectionWorkflowStatus } from "../types.ts";
 import type { LocalFinding } from "../../findings/types.ts";
 import type { DomainOperationKind, SyncEntityKind, SyncQueueItem } from "../../sync/types.ts";
 import type { SyncStatus, Uuid } from "../../../types/entity.ts";
@@ -22,7 +22,7 @@ export type FindingsCapture = {
   removedFindings: readonly RemovedFindingRef[];
 };
 
-export type FinalizeCapture = DraftCapture & { expectedFindingIds: readonly string[] };
+export type FinalizeCapture = DraftCapture & { expectedFindingIds: readonly string[]; location?: InspectionLocation | null };
 
 export function createIntent(input: {
   owner: Uuid;
@@ -150,7 +150,7 @@ export async function saveFindings(owner: Uuid, storage: LocalStorage, capture: 
 }
 
 /** Appends a finalize intent ordered after the inspection's pending intents. */
-export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, input: { inspectionId: string; baseVersion: number | null; expectedFindingIds: readonly string[] }): Promise<SyncQueueItem> {
+export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, input: { inspectionId: string; baseVersion: number | null; expectedFindingIds: readonly string[]; location?: InspectionLocation | null }): Promise<SyncQueueItem> {
   const queue = await storage.listQueue(owner);
   const findings = await storage.listFindings(owner, input.inspectionId);
   const findingIds = new Set([...findings.map((finding) => finding.id), ...input.expectedFindingIds]);
@@ -160,7 +160,7 @@ export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, 
     entity: "inspection",
     entityId: input.inspectionId,
     operation: "inspection.finalize",
-    payload: { expectedFindingIds: [...input.expectedFindingIds] },
+    payload: { expectedFindingIds: [...input.expectedFindingIds], location: input.location ?? null },
     baseVersion: input.baseVersion,
     dependsOn: dependencies.map((item) => item.operationId),
     localOrder: nextOrder(queue),
@@ -187,7 +187,7 @@ export async function finalizeDraft(owner: Uuid, storage: LocalStorage, capture:
     entity: "inspection",
     entityId: inspection.id,
     operation: "inspection.finalize",
-    payload: { expectedFindingIds: [...capture.expectedFindingIds] },
+    payload: { expectedFindingIds: [...capture.expectedFindingIds], location: capture.location ?? null },
     baseVersion: inspection.baseVersion,
     dependsOn: [...existingQueue, ...intents].filter((item) =>
       item.entityId === inspection.id || item.parentEntityId === inspection.id || capture.findings.some((finding) => finding.id === item.entityId) || capture.removedFindings.some((finding) => finding.id === item.entityId)

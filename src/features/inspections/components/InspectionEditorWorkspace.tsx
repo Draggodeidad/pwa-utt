@@ -137,6 +137,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
   const editor = useInspectionEditor(initialValues, { mode, catalog, owner, technician: initialValues.technician });
   const {
     inspectionId,
+    setCapturedLocation,
     values,
     state,
     errors,
@@ -278,7 +279,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
                   </div>
                 </div>
               </div>
-              <OptionalLocation key={`${owner}:${inspectionId}`} owner={owner} />
+              <OptionalLocation key={`${owner}:${inspectionId}`} owner={owner} onChange={setCapturedLocation} disabled={!editable} />
               <label className={s.field}>
                 Resumen
                 <Textarea

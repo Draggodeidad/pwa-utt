@@ -218,7 +218,7 @@ function applyOperationKind(actor, role, op) {
       return row;
     }
     if (kind === "inspection.finalize") {
-      if (role !== "technician" || Object.keys(payload || {}).some((key) => key !== "expectedFindingIds")) raise("INVALID_INPUT");
+      if (role !== "technician" || Object.keys(payload || {}).some((key) => !["expectedFindingIds", "location"].includes(key))) raise("INVALID_INPUT");
       if (!Array.isArray(payload?.expectedFindingIds)) raise("INVALID_INPUT");
       const expected = [...payload.expectedFindingIds].map(String).sort();
       const actual = findings.filter((finding) => finding.inspection_id === entityId && finding.deleted_at === null).map((finding) => finding.id).sort();
@@ -308,6 +308,7 @@ const backend = createServer(async (req, res) => {
     const active = url.searchParams.get("active");
     return send(res, 200, active === "eq.true" ? rows.filter((lab) => lab.active) : rows);
   }
+  if (url.pathname === "/rest/v1/inspection_locations") return send(res, 200, []);
   if (url.pathname === "/rest/v1/inspections") {
     queryInspections.actor = account.id;
     return send(res, 200, queryInspections(url));

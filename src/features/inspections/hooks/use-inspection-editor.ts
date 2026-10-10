@@ -3,6 +3,7 @@
 import type { PhotoEdits } from "@/features/findings";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isSessionCurrent, sessionEpoch } from "@/lib/pwa/offline-session";
 import { LocalStorage } from "@/lib/pwa/offline-storage";
 import { isPwaUpdatePreparing, registerPwaUpdateFlusher, trackPwaMutation } from "@/lib/pwa/update-coordination";
 import {
@@ -15,7 +16,7 @@ import {
   toLocalInspection,
   type RemovedFindingRef,
 } from "../services/local-capture";
-import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
+import type { InspectionLocation, InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
 import type { Uuid } from "@/types/entity";
 
 export type InspectionEditorState = "pristine" | "dirty" | "saving" | "saved" | "validation-error" | "save-error" | "finalizing" | "finalized";
@@ -38,6 +39,8 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState(false);
   const [inspectionId] = useState(initial.id || crypto.randomUUID());
+  const locationRef = useRef<InspectionLocation | null>(null);
+  const setCapturedLocation = useCallback((location: InspectionLocation | null) => { locationRef.current = location; }, []);
   const dirtyRef = useRef(false);
   const savingRef = useRef(false);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
@@ -206,6 +209,8 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
   const finalizeInspection = useCallback(async () => {
     if (isPwaUpdatePreparing()) return false;
     if (!storage) { setErrors({ form: "Almacenamiento local no disponible" }); setState("save-error"); return false; }
+    const locationEpoch = sessionEpoch();
+    const location = locationRef.current ? { ...locationRef.current } : null;
     setState("finalizing");
     try {
       const current = valuesRef.current;
@@ -218,11 +223,13 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
       const findings = await Promise.all(current.findings.map(async (finding) => toLocalFinding(
         finding.id, inspectionId, finding, owner, finding.version ?? null, await storage.getFinding(owner, finding.id)
       )));
+      if (!isSessionCurrent(locationEpoch, owner)) throw new Error("La sesión cambió antes de finalizar");
       await trackPwaMutation(() => finalizeDraft(owner, storage, {
         owner,
         inspection,
         findings,
         removedFindings: removedRef.current,
+        location,
         expectedFindingIds: current.findings.map((finding) => finding.id),
       }));
       removedRef.current = [];
@@ -261,5 +268,5 @@ export function useInspectionEditor(initial: InspectionEditorValues, options: Ed
     setState("pristine");
   };
 
-  return { inspectionId, values, state, errors, toast, mutate, validate, save, addFinding, saveFindingWithPhotos, updateFinding, removeFinding, finalizeInspection, discard, reset };
+  return { setCapturedLocation, inspectionId, values, state, errors, toast, mutate, validate, save, addFinding, saveFindingWithPhotos, updateFinding, removeFinding, finalizeInspection, discard, reset };
 }
