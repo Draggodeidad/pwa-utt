@@ -1,6 +1,14 @@
 # Flujo de coordinación: revisión, archivo y eliminación lógica
 
-Implementación del 9/10/2026 (America/Mexico_City) en `feat/w06-baseline-contracts`. Base auditada: `a0fa1b10ec1cc65c083a217bac0703a991fed629`. Los ZIP locales W03 eliminado y W06 sin versionar se preservan fuera de los commits. La instrucción directa del usuario autoriza commits atómicos; no autoriza push, PR, despliegue ni SQL remoto.
+Implementación del 9/10/2026 (America/Mexico_City) en `feat/w06-baseline-contracts`. Base auditada: `a0fa1b10ec1cc65c083a217bac0703a991fed629`. Los ZIP locales W03 eliminado y W06 sin versionar se preservan fuera de los commits.
+
+## Qué significa eliminar lógicamente
+
+Eliminar lógicamente marca la inspección como eliminada, registrando quién lo hizo y cuándo. Desaparece de Activas, Histórico y métricas; los permisos impiden su consulta y modificación normales. La inspección, sus hallazgos y sus fotografías permanecen almacenados: no se borran físicamente.
+
+Archivar permite seguir consultando la inspección en Histórico y desarchivarla después. Eliminar lógicamente no ofrece papelera ni restauración desde la interfaz. Una recuperación futura requeriría mantenimiento controlado por un administrador de base de datos autorizado, según el procedimiento de [migración, aplicación y recuperación](#migración-aplicación-y-recuperación).
+
+Un dispositivo sin conexión puede conservar información que consultó antes de la eliminación. La aplicación retira esas copias sincronizadas del listado después de una actualización completa y exitosa; los permisos del servidor se aplican a cada nueva consulta o modificación.
 
 ## Baseline y decisiones
 
