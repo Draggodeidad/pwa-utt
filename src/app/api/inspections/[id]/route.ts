@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const permission = await authorizeRequest(auth.client, ["technician", "coordinator"]);
   if ("error" in permission) return auth.withCookies(apiError(permission.error === 401 ? "UNAUTHENTICATED" : "FORBIDDEN"));
   try {
-    const detail = await findVisibleInspection(auth.client, params.id);
+    const detail = await findVisibleInspection(auth.client, params.id, permission.session.user.role);
     return auth.withCookies(detail ? privateJson(detail) : apiError("NOT_FOUND"));
   } catch (error) {
     if (!(error instanceof InspectionReadError)) throw error;

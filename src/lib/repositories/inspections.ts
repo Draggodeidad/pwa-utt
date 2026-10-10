@@ -2,6 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { InspectionDetail, InspectionEditorValues, InspectionListItem, InspectionWorkflowStatus } from "@/features/inspections";
 import { DomainValidationError } from "../../types/entity.ts";
 
+import type { InspectionLocation } from "../../features/inspections/types.ts";
+import type { UserRole } from "../../features/auth/types.ts";
+
 type InspectionRow = {
   id: string; folio_number: number; laboratory_id: string | null; inspector_id: string;
   inspection_date: string | null; summary: string; workflow_status: "draft" | "completed";
@@ -77,7 +80,7 @@ export async function hasEditableInspection(client: SupabaseClient, id: string, 
 }
 
 /** Every query uses the caller's cookie session and PostgreSQL RLS. */
-export async function findVisibleInspection(client: SupabaseClient, id: string): Promise<InspectionDetail | null> {
+export async function findVisibleInspection(client: SupabaseClient, id: string, role?: UserRole): Promise<InspectionDetail | null> {
   if (!isInspectionId(id)) return null;
   const { data, error } = await client.from("inspections")
     .select("id, folio_number, laboratory_id, inspector_id, inspection_date, summary, workflow_status, version")
@@ -94,7 +97,18 @@ export async function findVisibleInspection(client: SupabaseClient, id: string):
   const lab = (labs.data as LaboratoryRow[] | null)?.[0];
   const profile = (profiles.data as ProfileRow[] | null)?.[0];
   const visibleFindings = (findings.data ?? []) as FindingRow[];
+  let capturedLocation: InspectionLocation | null | undefined;
+  if (row.workflow_status === "completed" && role === "coordinator") {
+    const snapshot = await client.from("inspection_locations")
+      .select("latitude, longitude, accuracy, captured_at").eq("inspection_id", id).maybeSingle();
+    if (snapshot.error) throw new InspectionReadError();
+    capturedLocation = snapshot.data?.latitude != null ? {
+      latitude: snapshot.data.latitude, longitude: snapshot.data.longitude,
+      accuracy: snapshot.data.accuracy, capturedAt: snapshot.data.captured_at,
+    } : null;
+  }
   return {
+    ...(capturedLocation !== undefined ? { capturedLocation } : {}),
     id: row.id, folio: `INS-${row.folio_number}`, folioNumber: row.folio_number, location: lab?.name ?? "Laboratorio no asignado",
     laboratoryId: row.laboratory_id, laboratoryCode: lab?.code ?? "—", inspectionDate: row.inspection_date,
     date: row.inspection_date ?? "", technician: profile?.display_name ?? "Responsable no disponible",
