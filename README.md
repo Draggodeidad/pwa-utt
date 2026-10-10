@@ -117,10 +117,15 @@ Las instrucciones acotadas para que los integrantes restantes verifiquen el resu
 
 ## Baseline de Semana 06 (#68)
 
-`docs/w06-baseline.md` registra la inspección completa del kit, brechas y contratos. La app ya tiene Auth/Supabase, IndexedDB v2, cola persistente y conflictos; las capacidades W06 y fotos aún requieren #69/#70. La documentación y suites de comportamiento pertenecen a #71/#72.
+`docs/w06-baseline.md` registra la inspección completa del kit, brechas y contratos. La app ya tiene Auth/Supabase, IndexedDB v3, cola persistente, conflictos y módulo de cámara/fotos #69; geolocalización y notificaciones aún requieren #70. La documentación y suites de comportamiento pertenecen a #71/#72.
 
 El workflow `.github/workflows/week-06-w06-device-push.yml` ejecuta `npm ci`, checks públicos acumulativos y `make verify` con Node 22.22.3. Publica los reportes reales, sin generar una calificación docente. `bash public-tests/check-w06.sh` comprueba contenido e integración; no acredita comportamiento.
 
 `npm test` conserva todas las suites anteriores, prueba la infraestructura con `tests/w06-baseline.spec.mjs` y ejecuta el runner único `tests/capabilities.spec.ts`. **npm test y make verify fallan mientras falten los módulos, documentación o suites W06**; ese estado es intencional y no un pase. Cada suite auxiliar debe importar los adaptadores reales, ejecutar assertions y devolver un entero positivo de escenarios completados. Los contratos por sí solos no verifican capacidades.
 
 Fotos: JPEG/PNG/WebP, hasta 5 MiB por archivo y tres por hallazgo. Esta extensión usa Storage privado y es distinta del mínimo docente. Permisos voluntarios, selección manual del laboratorio y avisos dentro de la app mantienen el flujo útil. No se implementa servidor Push/VAPID en el baseline.
+
+
+## Cámara y fotos W06 (#69)
+
+El editor permite capturar/seleccionar y confirmar fotos con el hallazgo. Los pendientes sobreviven offline; la subida usa Storage privado y bloquea finalización hasta confirmar o descartar. Preparación manual de bucket y migración, permisos, recuperación y validación humana pendiente: [docs/w06-photo-storage.md](docs/w06-photo-storage.md). Se añadieron pruebas propias; el gate W06 sigue exigiendo las contribuciones restantes sin omitirlas.

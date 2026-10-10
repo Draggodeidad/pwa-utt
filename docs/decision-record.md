@@ -183,4 +183,9 @@ Riesgos y mitigaciones:
 
 ## Alcance de validación del MVP (2026-09-28)
 
-La entrega se prueba en navegadores de escritorio sobre Windows, macOS y Linux. La interfaz sigue siendo responsive, pero la validación móvil no bloquea este MVP escolar. El recorrido mínimo es: iniciar sesión como técnico, crear inspección y hallazgos, recargar offline, finalizar, sincronizar sin duplicados y revisar el resultado como coordinación. Filtros avanzados, fotos, Realtime, reapertura y trabajo garantizado con la app cerrada quedan pos-MVP. Esta sección documenta la decisión; no afirma que el backend ya esté implementado.
+La entrega se prueba en navegadores de escritorio sobre Windows, macOS y Linux. La interfaz sigue siendo responsive, pero la validación móvil no bloquea este MVP escolar. El recorrido mínimo es: iniciar sesión como técnico, crear inspección y hallazgos, recargar offline, finalizar, sincronizar sin duplicados y revisar el resultado como coordinación. Filtros avanzados, Realtime, reapertura y trabajo garantizado con la app cerrada quedan pos-MVP. Esta sección documenta la decisión; no afirma que el backend ya esté implementado.
+
+
+## Extensión W06: fotos de hallazgos (#69)
+
+La nueva autorización incorpora fotos persistentes, antes pos-MVP, al borrador existente. Cámara explícita y selector comparten los límites de #68. Los blobs pendientes se guardan en IndexedDB v3 y el objeto confirmado en Storage privado, con metadatos vinculados al hallazgo y finalización bloqueada hasta completar o descartar. La API recodifica contenido con sharp; reserva/subida/confirmación y borrado por fases permiten recuperar fallos sin asumir una transacción Storage/Postgres. Procedimiento, permisos, límites y validación pendiente: `docs/w06-photo-storage.md`. No cambia la decisión sobre las demás extensiones pos-MVP.
