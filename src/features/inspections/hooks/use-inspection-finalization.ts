@@ -24,7 +24,7 @@ function readErrorMessage(error: unknown): string {
   return "No se pudo completar la operación. Intenta de nuevo.";
 }
 
-export function useInspectionFinalization(initialInspection: InspectionDetail, owner: Uuid) {
+export function useInspectionFinalization(initialInspection: InspectionDetail, owner: Uuid, allowLocal = true) {
   const [storage, setStorage] = useState<LocalStorage | null>(null);
   const [inspection, setInspection] = useState(initialInspection);
   const [findings, setFindings] = useState<readonly InspectionFinding[]>(() => [...initialInspection.findings]);
@@ -33,15 +33,16 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
   const [finalizationPending, setFinalizationPending] = useState(false);
 
   useEffect(() => {
+    if (!allowLocal) return;
     let active = true;
     LocalStorage.open().then((store) => {
       if (active) setStorage(store);
     }).catch(() => { /* local finalization unavailable */ });
     return () => { active = false; };
-  }, []);
+  }, [allowLocal]);
 
   useEffect(() => {
-    if (!storage) return;
+    if (!allowLocal || !storage) return;
     let active = true;
     (async () => {
       const draft = await loadLocalDraft(owner, storage, initialInspection.id);
@@ -54,7 +55,11 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
       setFinalizationPending(await hasPendingFinalization(owner, storage, initialInspection.id));
     })();
     return () => { active = false; };
-  }, [storage, owner, initialInspection.id]);
+  }, [allowLocal, storage, owner, initialInspection.id]);
+
+  useEffect(() => {
+    if (!allowLocal) { setInspection(initialInspection); setFindings(initialInspection.findings); setState("finalized"); }
+  }, [allowLocal, initialInspection]);
 
   const openConfirmation = useCallback(() => setState("confirming"), []);
   const closeConfirmation = useCallback(() => {

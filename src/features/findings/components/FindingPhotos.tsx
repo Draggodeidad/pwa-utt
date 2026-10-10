@@ -11,16 +11,16 @@ import type { CameraSession } from "@/lib/device/contracts";
 import { createFindingPhotoRepository, createLocalPhoto } from "../services/photo.repository";
 import { PHOTO_LIMITS, type FindingPhoto, type LocalPhoto, type PhotoEdits } from "../photo-contracts";
 
-const photoStatus = {
-  uploaded: { label: "Subido", className: "bg-emerald-800 text-white", icon: Check },
-  pending: { label: "Pendiente", className: "bg-slate-800 text-white", icon: Clock3 },
-  local: { label: "Pendiente", className: "bg-slate-800 text-white", icon: Clock3 },
-  error: { label: "Error", className: "bg-red-800 text-white", icon: TriangleAlert },
-} as const;
+type Props = { owner: string; inspectionId: string; findingId: string; editable?: boolean; remoteOnly?: boolean; onChange?: (edits: PhotoEdits) => void; onBusyChange?: (busy: boolean) => void };
 
-type Props = { owner: string; inspectionId: string; findingId: string; editable?: boolean; onChange?: (edits: PhotoEdits) => void; onBusyChange?: (busy: boolean) => void };
-
-export function FindingPhotos({ owner, inspectionId, findingId, editable = false, onChange, onBusyChange }: Props) {
+export function FindingPhotos({ owner, inspectionId, findingId, editable = false, remoteOnly = false, onChange, onBusyChange }: Props) {
+  const photoStatus = {
+    uploaded: { label: "Subido", className: s.statusUploaded, icon: Check },
+    pending: { label: "Pendiente", className: s.statusPending, icon: Clock3 },
+    local: { label: "Pendiente", className: s.statusPending, icon: Clock3 },
+    error: { label: "Error", className: s.statusError, icon: TriangleAlert },
+  } as const;
+  const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<readonly FindingPhoto[]>([]);
   const [added, setAdded] = useState<LocalPhoto[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
@@ -47,13 +47,16 @@ export function FindingPhotos({ owner, inspectionId, findingId, editable = false
     const resources: string[] = [];
     let storage: LocalStorage | null = null;
     const load = async () => {
+      setLoading(true);
+      if (remoteOnly) { setPhotos([]); setUrls({}); setMessage(null); }
       try {
         storage = await LocalStorage.open();
-        const repository = createFindingPhotoRepository({ owner, storage, fetch: (...args) => fetch(...args) });
+        const repository = createFindingPhotoRepository({ owner, storage, remoteOnly, fetch: (...args) => fetch(...args) });
         const result = await repository.list(findingId);
         if (!active) return;
         const existing = result.status === "success" ? result.value : [];
         setPhotos(existing);
+        setMessage(null);
         if (result.status !== "success") setMessage("No se pudo consultar la evidencia autorizada.");
         const next: Record<string, string> = {};
         for (const photo of [...existing, ...added]) {
@@ -62,14 +65,15 @@ export function FindingPhotos({ owner, inspectionId, findingId, editable = false
           const read = staged?.blob ? { status: "success" as const, value: staged.blob } : await repository.read(photo.id);
           if (!active) break;
           if (read.status === "success") { const url = URL.createObjectURL(read.value); resources.push(url); next[photo.id] = url; }
+          else if (remoteOnly && active) setMessage("No se pudo cargar una foto autorizada. Comprueba la conexión e intenta de nuevo.");
         }
         if (active) setUrls(next);
       } catch { if (active) setMessage("No se pudo abrir la evidencia local. Intenta de nuevo."); }
-      finally { storage?.close(); }
+      finally { storage?.close(); if (active) setLoading(false); }
     };
     void load();
     return () => { active = false; for (const url of resources) URL.revokeObjectURL(url); storage?.close(); };
-  }, [owner, findingId, added, removed, revision]);
+  }, [owner, findingId, added, removed, revision, remoteOnly]);
 
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
@@ -149,7 +153,7 @@ export function FindingPhotos({ owner, inspectionId, findingId, editable = false
 
   return <section className={editable ? s.panel : s.readOnlyPanel} aria-label="Fotos del hallazgo">
     <div className={s.galleryHeader}>
-      <p className={s.label}>Evidencia · {visible.length}/{PHOTO_LIMITS.maxPerFinding} fotos</p>
+      <p className={s.label}>{remoteOnly && loading ? "Consultando evidencia…" : remoteOnly && message && visible.length === 0 ? "Evidencia no disponible" : `Evidencia · ${visible.length}/${PHOTO_LIMITS.maxPerFinding} fotos`}</p>
       {editable ? <Button type="button" variant="outline" className={s.cameraButton} disabled={busy || capturing || visible.length >= PHOTO_LIMITS.maxPerFinding} onClick={() => void openCamera()}><Camera className={s.icon} aria-hidden="true" />Usar cámara</Button> : null}
     </div>
     <div className={s.photos}>
@@ -209,6 +213,9 @@ export function FindingPhotos({ owner, inspectionId, findingId, editable = false
 }
 
 const s = {
+  statusUploaded: "bg-emerald-800 text-white",
+  statusPending: "bg-slate-800 text-white",
+  statusError: "bg-red-800 text-white",
   panel: "space-y-2.5",
   readOnlyPanel: "mt-3 space-y-2.5",
   galleryHeader: "flex min-w-0 flex-wrap items-center justify-between gap-2",

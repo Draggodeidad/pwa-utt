@@ -28,6 +28,7 @@ import { useInspectionFinalization } from "../hooks/use-inspection-finalization"
 import type { InspectionDetail } from "../types";
 import type { Uuid } from "@/types/entity";
 import { FindingPhotos } from "@/features/findings";
+import { InspectionCoordinationPanel } from "./InspectionCoordinationPanel";
 import { FindingDescription } from "./FindingDescription";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
@@ -45,16 +46,18 @@ const statusLabel = {
 export function InspectionDetailWorkspace({
   inspection: initialInspection,
   owner,
+  coordinator = false,
 }: {
   inspection: InspectionDetail;
   owner: Uuid;
+  coordinator?: boolean;
 }) {
   const { inspection, findings, state, finalizationPending, openConfirmation, closeConfirmation, removeFinding, finalize } =
-    useInspectionFinalization(initialInspection, owner);
+    useInspectionFinalization(initialInspection, owner, !coordinator);
   const [deleteId, setDeleteId] = useState<string>();
   const [deleteError, setDeleteError] = useState(false);
   const editable =
-    !finalizationPending && (state === "draft" || state === "confirming" || state === "error");
+    !coordinator && !finalizationPending && (state === "draft" || state === "confirming" || state === "error");
   const completed = inspection.workflowStatus === "completed";
   const pendingFinalization = finalizationPending;
   const pendingSync = inspection.syncStatus === "pending" || inspection.syncStatus === "local" || inspection.syncStatus === "error";
@@ -64,7 +67,7 @@ export function InspectionDetailWorkspace({
       aria-labelledby="inspection-title"
     >
       <Link
-        href="/inspections"
+        href={inspection.coordination?.archivedAt ? "/inspections/archive" : "/inspections"}
         className={s.backLink}
       >
         <ArrowLeft className={s.icon} />
@@ -119,6 +122,7 @@ export function InspectionDetailWorkspace({
           </Button>
         ) : null}
       </Card>
+      {coordinator ? <InspectionCoordinationPanel inspection={inspection} owner={owner} /> : null}
       <InspectionLocation inspection={inspection} />
       <section className={s.findingsSection} aria-labelledby="findings-title">
         <div className={s.findingsHeader}>
@@ -174,7 +178,7 @@ export function InspectionDetailWorkspace({
                   </div>
                   <h3 className={s.findingTitle}>{finding.title}</h3>
                   <FindingDescription description={finding.description} />
-                  <FindingPhotos owner={owner} inspectionId={inspection.id} findingId={finding.id} />
+                  <FindingPhotos remoteOnly={coordinator} owner={owner} inspectionId={inspection.id} findingId={finding.id} />
                 </div>
               </Card>
             ))

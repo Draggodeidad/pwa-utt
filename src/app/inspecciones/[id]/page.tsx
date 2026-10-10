@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { InspectionCoordinationPanel } from "@/features/inspections/components/InspectionCoordinationPanel";
+import { FindingPhotos } from "@/features/findings";
 import { InspectionLocation } from "@/features/inspections/components/InspectionLocation";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CalendarDays, ClipboardCheck, MapPin, UserRound } from "lucide-react";
@@ -34,12 +36,12 @@ export default async function InspeccionDetailPage({ params, searchParams }: Ins
 
   return (
     <AppShell activePath="/inspecciones" navigationSections={navigationSectionsByRole[user.role]} profile={createProfileForSession(user)}>
-      {state === "error" ? <LoadingState state="error" title="No fue posible cargar el detalle" action={<Link className={s.retryLink} href={`/inspecciones/${params.id}`}>Volver a intentar</Link>} /> : <InspectionDetailContent inspection={inspection} />}
+      {state === "error" ? <LoadingState state="error" title="No fue posible cargar el detalle" action={<Link className={s.retryLink} href={`/inspecciones/${params.id}`}>Volver a intentar</Link>} /> : <InspectionDetailContent inspection={inspection} owner={user.id} coordinator={user.role === "coordinator"} />}
     </AppShell>
   );
 }
 
-function InspectionDetailContent({ inspection }: { inspection: InspectionDetail }) {
+function InspectionDetailContent({ inspection, owner, coordinator }: { inspection: InspectionDetail; owner: string; coordinator: boolean }) {
   return (
     <section aria-labelledby="inspeccion-title" className={s.page}>
       <Link className={s.backLink} href="/inspecciones"><ArrowLeft aria-hidden="true" className={s.backIcon} />Volver al listado</Link>
@@ -63,6 +65,7 @@ function InspectionDetailContent({ inspection }: { inspection: InspectionDetail 
         </dl>
       </section>
 
+      {coordinator ? <InspectionCoordinationPanel inspection={inspection} owner={owner} /> : null}
       <InspectionLocation inspection={inspection} />
       <section className={s.findingsSection} aria-labelledby="hallazgos-title">
         <div className={s.sectionHeading}>
@@ -75,7 +78,7 @@ function InspectionDetailContent({ inspection }: { inspection: InspectionDetail 
           <ul className={s.findingsList}>
             {inspection.findings.map((finding) => <li key={finding.id} className={s.findingCard}>
               <AlertTriangle aria-hidden="true" className={s.findingIcon} />
-              <div><h3 className={s.findingTitle}>{finding.title}</h3><p className={s.findingDescription}>{finding.description}</p><span className={s.priority}>Prioridad {priorityLabel[finding.priority]}</span></div>
+              <div><h3 className={s.findingTitle}>{finding.title}</h3><p className={s.findingDescription}>{finding.description}</p><span className={s.priority}>Prioridad {priorityLabel[finding.priority]}</span><p className={s.priority}>Estado: {finding.status === "resolved" ? "Atendido" : finding.status === "in_review" ? "En revisión" : "Pendiente"}</p><FindingPhotos remoteOnly={coordinator} owner={owner} inspectionId={inspection.id} findingId={finding.id} /></div>
             </li>)}
           </ul>
         )}

@@ -245,7 +245,7 @@ export async function hasPendingFinalization(owner: Uuid, storage: LocalStorage,
  * Merges an authorized remote refresh into the local list without clobbering
  * pending local edits and without resurrecting discarded tombstones.
  */
-export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote: readonly InspectionListItem[], tombstonedIds: ReadonlySet<string> = new Set()): InspectionListItem[] {
+export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote: readonly InspectionListItem[], tombstonedIds: ReadonlySet<string> = new Set(), authoritative = false): InspectionListItem[] {
   const remoteById = new Map(remote.map((item) => [item.id, item]));
   const result: InspectionListItem[] = [];
   const present = new Set<string>();
@@ -256,7 +256,9 @@ export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote:
       result.push(item);
       continue;
     }
-    result.push(remoteById.get(item.id) ?? item);
+    // A successful complete refresh is authoritative for synced records that
+    // disappeared (archive/delete/permission change). Keep unsynced work above.
+    if (remoteById.has(item.id) || !authoritative) result.push(remoteById.get(item.id) ?? item);
   }
   for (const item of remote) {
     if (present.has(item.id) || tombstonedIds.has(item.id)) continue;

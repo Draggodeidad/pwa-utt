@@ -116,6 +116,8 @@ function queryInspections(url) {
   let rows = visibleInspections(queryInspections.actor);
   rows = filterById(rows, params.get("id"), "id");
   if (params.get("deleted_at") === "is.null") rows = rows.filter((row) => row.deleted_at === null);
+  if (params.get("archived_at") === "is.null") rows = rows.filter(row => row.archived_at == null);
+  if (params.get("archived_at") === "not.is.null") rows = rows.filter(row => row.archived_at != null);
   const status = params.get("workflow_status");
   if (status?.startsWith("eq.")) rows = rows.filter((row) => row.workflow_status === status.slice(3));
   const summary = params.get("summary");
@@ -211,7 +213,7 @@ const backend = createServer(async (req, res) => {
   const account = entry[1];
 
   if (url.pathname === "/rest/v1/profiles") {
-    const profiles = Object.entries(accounts).map(([email, value]) => ({ id: value.id, display_name: value.name, role: value.role, active: true, email }));
+    const profiles = Object.entries(accounts).map(([email, value]) => ({ id: value.id, display_name: value.name, role: value.role, active: value.active !== false, email }));
     return send(res, 200, filterById(profiles, url.searchParams.get("id"), "id"));
   }
   if (url.pathname === "/rest/v1/laboratories") {
@@ -232,6 +234,29 @@ const backend = createServer(async (req, res) => {
   if (url.pathname === "/rest/v1/inspections") {
     queryInspections.actor = account.id;
     return send(res, 200, queryInspections(url));
+  }
+  // Transport stand-in only: real SQL authorization/transitions have a separate PostgreSQL suite.
+  if (url.pathname === "/rest/v1/rpc/coordinate_inspection") {
+    let raw = ""; for await (const chunk of req) raw += chunk;
+    const input = JSON.parse(raw);
+    const key = `${account.id}:${input.p_operation_id}`;
+    const existing = receipts.get(key);
+    if (account.role !== "coordinator" || account.active === false) return send(res,400,{message:"FORBIDDEN"});
+    if (existing) return JSON.stringify(existing.request) === JSON.stringify(input) ? send(res,200,{...existing.result,replayed:true}) : send(res,400,{message:"IDEMPOTENCY_KEY_REUSED"});
+    const row = inspections.find(i => i.id === input.p_inspection_id && i.deleted_at === null && i.workflow_status === "completed");
+    if (!row) return send(res,400,{message:"NOT_FOUND"});
+    if (row.version !== input.p_base_version) return send(res,400,{message:"VERSION_CONFLICT"});
+    const action = input.p_action, status = row.review_status ?? "pending";
+    if ((["approve","reject"].includes(action) && (status !== "pending" || row.archived_at)) || (action === "archive" && status === "pending") || (action === "delete" && !row.archived_at && status !== "rejected")) return send(res,400,{message:"VERSION_OR_STATE_CONFLICT"});
+    if (action === "delete" && input.p_confirmation !== `INS-${row.folio_number}`) return send(res,400,{message:"INVALID_CONFIRMATION"});
+    if (action === "approve" || action === "reject") Object.assign(row,{ review_status:action === "approve" ? "approved" : "rejected",review_notes:input.p_notes,reviewed_by:account.id,reviewed_at:nowIso() });
+    if (action === "archive") row.archived_at = nowIso();
+    if (action === "unarchive") row.archived_at = null;
+    if (action === "delete") row.deleted_at = nowIso();
+    row.version++;
+    const result = { id:row.id,version:row.version,reviewStatus:row.review_status,reviewNotes:row.review_notes,reviewedBy:row.reviewed_by,reviewedAt:row.reviewed_at,archivedAt:row.archived_at ?? null,archivedBy:row.archived_at ? account.id : null,deletedAt:row.deleted_at,replayed:false };
+    receipts.set(key,{request:input,result});
+    return send(res,200,result);
   }
   if (url.pathname === "/rest/v1/rpc/apply_operation") {
     let body = ""; for await (const chunk of req) body += chunk;
@@ -464,6 +489,52 @@ async function main() {
     const coordMutation = await mutation("PUT", "/api/inspections/eeeeeeee-eeee-4eee-8eee-eeeeeeeeee99", coord, { clientId, kind: "inspection.create", entityId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeee99", payload: {} }, op(20));
     assert.equal(coordMutation.status, 403, "coordinación no escribe inspecciones");
 
+    const coordinationPath = `/api/inspections/${techCompletedId}/coordination`;
+    const decision = { action:"approve",baseVersion:2,notes:"Validated note" };
+    assert.equal((await mutation("POST",coordinationPath,undefined,decision,op(200))).status,401);
+    assert.equal((await mutation("POST",coordinationPath,tech,decision,op(200))).status,403);
+    assert.equal((await mutation("POST",coordinationPath,otherTech,decision,op(200))).status,403);
+    assert.equal((await mutation("POST",`/api/inspections/${techDraftId}/coordination`,coord,{action:"approve",baseVersion:1},op(201))).status,404);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"reject",baseVersion:2,notes:"  "},op(202))).status,422);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"archive",baseVersion:2},op(203))).status,409);
+    assert.equal((await mutation("POST",coordinationPath,coord,{...decision,deleted_by:coordinatorId},op(204))).status,422);
+    assert.equal((await mutation("POST",coordinationPath,coord,decision)).status,422);
+    assert.equal((await request(coordinationPath,{method:"POST",headers:{Origin:"https://foreign.invalid","Content-Type":"application/json"},body:JSON.stringify(decision)},coord)).status,403);
+    const approved = await mutation("POST",coordinationPath,coord,decision,op(205));
+    assert.equal(approved.status,200);
+    assert.equal((await approved.json()).reviewStatus,"approved");
+    const replay = await mutation("POST",coordinationPath,coord,decision,op(205));
+    assert.equal((await replay.json()).replayed,true);
+    assert.equal((await mutation("POST",coordinationPath,coord,{...decision,notes:"Different"},op(205))).status,409);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"archive",baseVersion:2},op(206))).status,409);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"delete",baseVersion:3,confirmation:"INS-102"},op(207))).status,409);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"archive",baseVersion:3},op(208))).status,200);
+    const activeIds = (await (await request("/api/inspections?limit=100",{},coord)).json()).items.map(i=>i.id);
+    assert.ok(!activeIds.includes(techCompletedId));
+    assert.deepEqual((await (await request("/api/inspections?view=archive",{},coord)).json()).items.map(i=>i.id),[techCompletedId]);
+    assert.equal((await request("/api/inspections?view=archive",{},tech)).status,403);
+    assert.equal((await request("/api/inspections?view=invalid",{},coord)).status,422);
+    assert.equal((await request("/inspections/archive",{},tech)).status,307);
+    const archivePage = await request("/inspections/archive",{},coord);
+    assert.equal(archivePage.status,200);
+    assert.ok((await archivePage.text()).includes("INS-102"));
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"unarchive",baseVersion:4},op(209))).status,200);
+    assert.ok((await (await request("/api/inspections?limit=100",{},coord)).json()).items.some(i=>i.id===techCompletedId));
+    const afterUnarchive = await (await request(`/api/inspections/${techCompletedId}`,{},coord)).json();
+    assert.equal(afterUnarchive.coordination.reviewStatus,"approved");
+    assert.equal(afterUnarchive.findings[0].status,"pending");
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"archive",baseVersion:5},op(210))).status,200);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"delete",baseVersion:6},op(211))).status,422);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"delete",baseVersion:6,confirmation:"INS-999"},op(212))).status,422);
+    assert.equal((await mutation("POST",coordinationPath,coord,{action:"delete",baseVersion:6,confirmation:"INS-102"},op(213))).status,200);
+    assert.equal((await request(`/api/inspections/${techCompletedId}`,{},coord)).status,404);
+    assert.equal((await request(`/api/inspections/${techCompletedId}`,{},tech)).status,404);
+    assert.equal((await (await request("/api/inspections?view=archive",{},coord)).json()).items.length,0);
+    assert.ok(inspections.some(i=>i.id===techCompletedId && i.deleted_at),"record retained in backend");
+    accounts["coord@example.invalid"].active=false;
+    assert.equal((await mutation("POST",coordinationPath,coord,decision,op(214))).status,401,"inactive profile denied by session guard");
+    accounts["coord@example.invalid"].active=true;
+    console.log("inspection coordination HTTP: PASS (auth, CSRF, validation, conflict, replay, active/archive, unarchive, soft delete)");
     console.log("inspection-api.spec.ts: PASS");
   } finally {
     child.kill("SIGTERM");

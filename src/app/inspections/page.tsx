@@ -6,7 +6,7 @@ import { createProfileForSession } from "@/features/profile";
 import { listActiveLaboratories, listOperationalInspections } from "@/lib/repositories/inspections";
 import { createComponentSupabaseClient } from "@/lib/supabase/server";
 
-export default async function InspectionsPage() {
+export default async function InspectionsPage({ searchParams }: { searchParams?: { notice?: string } }) {
   const { user } = await requireRole(["technician", "coordinator"]);
   const role = user.role;
   const client = createComponentSupabaseClient();
@@ -15,7 +15,7 @@ export default async function InspectionsPage() {
   return (
     <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}>
       {role === "coordinator" ? (
-        <CoordinationInspectionsWorkspace inspections={inspections ?? undefined} />
+        <CoordinationInspectionsWorkspace inspections={inspections ?? undefined} notice={searchParams?.notice} />
       ) : (
         <LocalInspectionsWorkspace remote={inspections ?? []} catalog={await listActiveLaboratories(client).catch(() => [])} owner={user.id} technician={user.displayName} error={inspections === null ? new Error("No fue posible cargar las inspecciones") : null} />
       )}

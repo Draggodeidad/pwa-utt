@@ -22,7 +22,7 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
     const lock = () => { if (!isSessionCurrent(epoch, owner)) { active = false; setItems([]); } };
     window.addEventListener("pwa-utt:session-changed", lock);
     window.addEventListener("storage", lock);
-    const merge = async (authorized: readonly InspectionListItem[], index: number) => {
+    const merge = async (authorized: readonly InspectionListItem[], index: number, authoritative: boolean) => {
       const store = await LocalStorage.open();
       try {
         if (!isSessionCurrent(epoch, owner)) return;
@@ -42,12 +42,12 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
           .filter((local) => local.deletedAt === null)
           .map((local) => toLocalInspectionListItem(local, counts.get(local.id)?.all ?? 0, technician, activeCatalog, counts.get(local.id)?.pending ?? 0));
         const tombstoned = new Set(locals.filter((local) => local.deletedAt !== null).map((local) => local.id));
-        if (active && index === refreshIndex && isSessionCurrent(epoch, owner)) setItems(mergeRemoteRefresh(localItems, [...authorized], tombstoned));
+        if (active && index === refreshIndex && isSessionCurrent(epoch, owner)) setItems(mergeRemoteRefresh(localItems, [...authorized], tombstoned, authoritative));
       } finally {
         store.close();
       }
     };
-    void merge(remote, refreshIndex).catch(() => {
+    void merge(remote, refreshIndex, initialError === null).catch(() => {
       if (active && refreshIndex === 0 && isSessionCurrent(epoch, owner)) setItems(remote);
     });
     const refresh = async () => {
@@ -65,7 +65,7 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
           cursor = page.nextCursor;
         } while (cursor);
         if (!active || index !== refreshIndex || !isSessionCurrent(epoch, owner)) return;
-        await merge(authorized, index);
+        await merge(authorized, index, true);
         if (active && index === refreshIndex) setError(null);
       } catch {
         if (active && index === refreshIndex && isSessionCurrent(epoch, owner)) setError(new Error("No fue posible refrescar las inspecciones"));
@@ -74,6 +74,6 @@ export function useLocalInspections(remote: readonly InspectionListItem[], catal
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     return () => { active = false; window.removeEventListener("pwa-utt:session-changed", lock); window.removeEventListener("storage", lock); window.removeEventListener("focus", refresh); window.removeEventListener("online", refresh); };
-  }, [remote, catalog, owner, technician]);
+  }, [remote, catalog, owner, technician, initialError]);
   return { items, error };
 }

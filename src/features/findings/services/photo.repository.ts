@@ -10,22 +10,23 @@ export async function createLocalPhoto(input: { id: string; owner: string; inspe
   return { id: input.id, ownerUserId: input.owner, inspectionId: input.inspectionId, findingId: input.findingId, mimeType, bytes: input.file.size, object: null, status: "pending", createdAt: at, lastError: null, sourceHash, blob: input.file, deletedAt: null, version: 0, baseVersion: null, localRevision: 1, syncStatus: "pending", localUpdatedAt: at, updatedAt: at };
 }
 
-export function createFindingPhotoRepository(dependencies: { owner: string; storage: LocalStorage; fetch: typeof fetch; now?: () => number }): FindingPhotoRepository {
-  const { owner, storage, fetch: request } = dependencies;
+export function createFindingPhotoRepository(dependencies: { owner: string; storage: LocalStorage; fetch: typeof fetch; now?: () => number; remoteOnly?: boolean }): FindingPhotoRepository {
+  const { owner, storage, fetch: request, remoteOnly = false } = dependencies;
   const epoch = sessionEpoch();
   const active = () => typeof localStorage === "undefined" || isSessionCurrent(epoch, owner);
   async function list(findingId: string): Promise<PhotoResult<readonly FindingPhoto[]>> {
     if (!active()) return { status: "error", code: "forbidden" };
-    const local = await storage.listPhotos(owner, undefined, findingId);
+    const local = remoteOnly ? [] : await storage.listPhotos(owner, undefined, findingId);
     let remote: FindingPhoto[] = [];
     try {
       const response = await request(`/api/findings/${findingId}/photos`, { credentials: "same-origin", cache: "no-store" });
       if (!active()) return { status: "error", code: "forbidden" };
       if (response.ok) {
         remote = await response.json() as FindingPhoto[];
-        await storage.cachePhotos(owner, remote);
-      } else if (response.status === 401 || response.status === 403) return { status: "error", code: "forbidden" };
-    } catch { /* local photos remain available offline */ }
+        if (!remoteOnly) await storage.cachePhotos(owner, remote);
+      } else if (response.status === 401 || response.status === 403 || (remoteOnly && response.status === 404)) return { status: "error", code: "forbidden" };
+      else if (remoteOnly) return { status: "error", code: "upload-failed" };
+    } catch { if (remoteOnly) return { status: "error", code: "upload-failed" }; /* local photos remain available offline */ }
     if (!active()) return { status: "error", code: "forbidden" };
     const byId = new Map(remote.map(photo => [photo.id, photo]));
     for (const photo of local) { if (photo.deletedAt) byId.delete(photo.id); else byId.set(photo.id, photo); }
@@ -57,7 +58,7 @@ export function createFindingPhotoRepository(dependencies: { owner: string; stor
     },
     async read(photoId) {
       if (!active()) return { status: "error", code: "forbidden" };
-      const local = await storage.getPhoto(owner, photoId);
+      const local = remoteOnly ? null : await storage.getPhoto(owner, photoId);
       if (!active()) return { status: "error", code: "forbidden" };
       if (local?.blob && !local.deletedAt) return { status: "success", value: local.blob };
       try {
