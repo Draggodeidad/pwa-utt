@@ -14,7 +14,7 @@ const id = (n) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`;
 const row = (n, owner, status = "completed") => ({
   id: id(n), folio_number: n, laboratory_id: LAB, inspector_id: owner,
   inspection_date: n < 3 ? "2026-09-30" : "2026-09-29", summary: `Inspección ${n}`,
-  workflow_status: status, version: 1, deleted_at: null,
+  workflow_status: status, version: 1, deleted_at: null, archived_at: null,
 });
 const inspections = Array.from({ length: 101 }, (_, n) => row(n + 1, A, n === 100 ? "draft" : "completed"));
 inspections.push(row(102, B));

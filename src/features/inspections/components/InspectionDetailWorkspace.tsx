@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { InspectionLocation } from "@/features/inspections/components/InspectionLocation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -26,6 +27,9 @@ import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { useInspectionFinalization } from "../hooks/use-inspection-finalization";
 import type { InspectionDetail } from "../types";
 import type { Uuid } from "@/types/entity";
+import { FindingPhotos } from "@/features/findings";
+import { InspectionCoordinationPanel } from "./InspectionCoordinationPanel";
+import { FindingDescription } from "./FindingDescription";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -42,16 +46,18 @@ const statusLabel = {
 export function InspectionDetailWorkspace({
   inspection: initialInspection,
   owner,
+  coordinator = false,
 }: {
   inspection: InspectionDetail;
   owner: Uuid;
+  coordinator?: boolean;
 }) {
   const { inspection, findings, state, finalizationPending, openConfirmation, closeConfirmation, removeFinding, finalize } =
-    useInspectionFinalization(initialInspection, owner);
+    useInspectionFinalization(initialInspection, owner, !coordinator);
   const [deleteId, setDeleteId] = useState<string>();
   const [deleteError, setDeleteError] = useState(false);
   const editable =
-    !finalizationPending && (state === "draft" || state === "confirming" || state === "error");
+    !coordinator && !finalizationPending && (state === "draft" || state === "confirming" || state === "error");
   const completed = inspection.workflowStatus === "completed";
   const pendingFinalization = finalizationPending;
   const pendingSync = inspection.syncStatus === "pending" || inspection.syncStatus === "local" || inspection.syncStatus === "error";
@@ -61,7 +67,7 @@ export function InspectionDetailWorkspace({
       aria-labelledby="inspection-title"
     >
       <Link
-        href="/inspections"
+        href={inspection.coordination?.archivedAt ? "/inspections/archive" : "/inspections"}
         className={s.backLink}
       >
         <ArrowLeft className={s.icon} />
@@ -116,6 +122,8 @@ export function InspectionDetailWorkspace({
           </Button>
         ) : null}
       </Card>
+      {coordinator ? <InspectionCoordinationPanel inspection={inspection} owner={owner} /> : null}
+      <InspectionLocation inspection={inspection} />
       <section className={s.findingsSection} aria-labelledby="findings-title">
         <div className={s.findingsHeader}>
           <h2 id="findings-title" className={s.findingsTitle}>
@@ -139,9 +147,9 @@ export function InspectionDetailWorkspace({
             findings.map((finding) => (
               <Card key={finding.id} className={s.findingCard}>
                 <div className={s.findingLayout}>
-                  <AlertTriangle className={s.findingIcon} />
-                  <div className={s.findingContent}>
+                  <div className={s.findingTopline}>
                     <div className={s.findingBadges}>
+                      <AlertTriangle className={s.findingIcon} aria-hidden="true" />
                       <span className={s.findingBadge}>
                         Prioridad {priorityLabel[finding.priority]}
                       </span>
@@ -149,50 +157,28 @@ export function InspectionDetailWorkspace({
                         {statusLabel[finding.status]}
                       </span>
                     </div>
-                    <h3 className={s.findingTitle}>{finding.title}</h3>
-                    <p className={s.findingDescription}>
-                      {finding.description}
-                    </p>
-                    {finding.evidenceImage ? (
-                      <div className={s.evidence}>
-                        <img
-                          src={finding.evidenceImage}
-                          alt={finding.evidenceLabel}
-                          className={s.evidenceImage}
-                        />
-                        <p className={s.evidenceLabel}>
-                          <ImageIcon className={s.evidenceIcon} />
-                          Evidencia fotográfica
-                        </p>
+                    {editable ? (
+                      <div className={s.findingActions}>
+                        <Button asChild variant="ghost" size="icon" className={s.findingAction}>
+                          <Link href={`/inspections/${inspection.id}/edit`} aria-label={`Editar ${finding.title}`}>
+                            <Edit3 className={s.icon} />
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={s.deleteFindingButton}
+                          aria-label={`Eliminar ${finding.title}`}
+                          onClick={() => setDeleteId(finding.id)}
+                        >
+                          <Trash2 className={s.icon} />
+                        </Button>
                       </div>
                     ) : null}
                   </div>
-                  {editable ? (
-                    <div className={s.findingActions}>
-                      <Button
-                        asChild
-                        variant="ghost"
-                        size="icon"
-                        className={s.findingAction}
-                      >
-                        <Link
-                          href={`/inspections/${inspection.id}/edit`}
-                          aria-label={`Editar ${finding.title}`}
-                        >
-                          <Edit3 className={s.icon} />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={s.deleteFindingButton}
-                        aria-label={`Eliminar ${finding.title}`}
-                        onClick={() => setDeleteId(finding.id)}
-                      >
-                        <Trash2 className={s.icon} />
-                      </Button>
-                    </div>
-                  ) : null}
+                  <h3 className={s.findingTitle}>{finding.title}</h3>
+                  <FindingDescription description={finding.description} />
+                  <FindingPhotos remoteOnly={coordinator} owner={owner} inspectionId={inspection.id} findingId={finding.id} />
                 </div>
               </Card>
             ))
@@ -205,7 +191,7 @@ export function InspectionDetailWorkspace({
             <span className={s.draftStatusDot} />
             Borrador editable
           </p>
-          <Button onClick={openConfirmation}>Finalizar inspección</Button>
+          <Button className={s.finalizeButton} onClick={openConfirmation}>Finalizar inspección</Button>
         </Card>
       ) : (
         <p className={s.completedNotice}>
@@ -242,6 +228,8 @@ export function InspectionDetailWorkspace({
         </AlertDialogContent>
       </AlertDialog>
       <InspectionFinalizationDialog
+        owner={owner}
+        inspectionId={inspection.id}
         open={
           state === "confirming" || state === "submitting" || state === "error"
         }
@@ -259,7 +247,7 @@ export function InspectionDetailWorkspace({
 }
 
 const s = {
-  page: "mx-auto max-w-[1050px] pb-24",
+  page: "mx-auto max-w-[1050px] pb-32",
   backLink: "inline-flex items-center gap-1 text-sm text-secondary-foreground hover:text-foreground",
   icon: "size-4",
   summaryCard: "mt-4 border-0 p-5 shadow-sm sm:p-7",
@@ -278,29 +266,25 @@ const s = {
   editInspectionButton: "mt-5",
   buttonIcon: "mr-1.5 size-4",
   findingsSection: "mt-7",
-  findingsHeader: "flex items-center justify-between",
+  findingsHeader: "flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between",
   findingsTitle: "text-xl font-semibold",
   findingsCount: "text-sm text-muted-foreground",
   findingsList: "mt-3 space-y-3",
   deleteError:
     "rounded-sm border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive",
   emptyFindings: "border-dashed p-8 text-center text-sm text-muted-foreground",
-  findingCard: "p-5 shadow-sm",
-  findingLayout: "flex gap-3",
-  findingIcon: "mt-1 size-4 shrink-0 text-amber-700",
-  findingContent: "min-w-0 flex-1",
-  findingBadges: "flex flex-wrap gap-1.5 text-xs",
+  findingCard: "p-3 shadow-sm sm:p-5",
+  findingLayout: "flex min-w-0 flex-col gap-3",
+  findingTopline: "flex min-w-0 items-start justify-between gap-2",
+  findingIcon: "size-4 shrink-0 text-amber-700",
+  findingBadges: "flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs",
   findingBadge: "rounded-sm bg-secondary px-1.5 py-0.5",
-  findingTitle: "mt-2 font-semibold",
-  findingDescription: "mt-1 text-sm leading-6 text-secondary-foreground",
-  evidence: "mt-4 flex items-center gap-3 border-t pt-4",
-  evidenceImage: "size-14 rounded-sm object-cover",
-  evidenceLabel: "flex items-center gap-1 text-xs text-muted-foreground",
-  evidenceIcon: "size-3.5",
-  findingActions: "flex",
-  findingAction: "size-8",
-  deleteFindingButton: "size-8 text-destructive hover:text-destructive",
-  actionBar: "sticky bottom-3 z-10 mt-6 flex flex-col gap-3 border-0 bg-card/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between",
+  findingTitle: "break-words font-semibold",
+  findingActions: "flex shrink-0 items-center gap-1",
+  findingAction: "size-11 min-h-11 min-w-11",
+  deleteFindingButton: "size-11 min-h-11 min-w-11 text-destructive hover:text-destructive",
+  actionBar: "sticky bottom-0 z-20 mt-6 flex flex-col gap-3 border-t bg-card p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-8px_24px_rgba(0,0,0,0.08)] sm:flex-row sm:items-center sm:justify-between sm:p-4",
+  finalizeButton: "min-h-11 w-full whitespace-nowrap sm:w-auto",
   draftStatus: "flex items-center gap-2 text-sm",
   draftStatusDot: "size-2 rounded-full bg-amber-700",
   completedNotice: "mt-6 flex items-center gap-2 rounded-sm bg-emerald-50 p-3 text-sm text-emerald-900",

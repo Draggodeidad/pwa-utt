@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useSyncWorkspace } from "../hooks/use-sync-workspace";
 import { ConflictResolutionPanel } from "./ConflictResolutionDialog";
+import { SyncNotificationControls } from "./SyncNotificationsProvider";
 import type { SyncQueueRecord } from "../types";
 
 const dateFormatter = new Intl.DateTimeFormat("es-MX", {
@@ -150,6 +151,7 @@ export function SyncWorkspace() {
       </header>
 
       <div className={s.content} aria-live="polite">
+        <SyncNotificationControls />
         <div id="conflict-panel">
           <ConflictResolutionPanel />
         </div>

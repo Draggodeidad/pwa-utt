@@ -20,10 +20,11 @@ function readErrorMessage(error: unknown): string {
     const payload = (error as { payload: { message?: string } }).payload;
     if (payload?.message) return payload.message;
   }
+  if (error instanceof Error) return error.message;
   return "No se pudo completar la operación. Intenta de nuevo.";
 }
 
-export function useInspectionFinalization(initialInspection: InspectionDetail, owner: Uuid) {
+export function useInspectionFinalization(initialInspection: InspectionDetail, owner: Uuid, allowLocal = true) {
   const [storage, setStorage] = useState<LocalStorage | null>(null);
   const [inspection, setInspection] = useState(initialInspection);
   const [findings, setFindings] = useState<readonly InspectionFinding[]>(() => [...initialInspection.findings]);
@@ -32,15 +33,16 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
   const [finalizationPending, setFinalizationPending] = useState(false);
 
   useEffect(() => {
+    if (!allowLocal) return;
     let active = true;
     LocalStorage.open().then((store) => {
       if (active) setStorage(store);
     }).catch(() => { /* local finalization unavailable */ });
     return () => { active = false; };
-  }, []);
+  }, [allowLocal]);
 
   useEffect(() => {
-    if (!storage) return;
+    if (!allowLocal || !storage) return;
     let active = true;
     (async () => {
       const draft = await loadLocalDraft(owner, storage, initialInspection.id);
@@ -53,7 +55,11 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
       setFinalizationPending(await hasPendingFinalization(owner, storage, initialInspection.id));
     })();
     return () => { active = false; };
-  }, [storage, owner, initialInspection.id]);
+  }, [allowLocal, storage, owner, initialInspection.id]);
+
+  useEffect(() => {
+    if (!allowLocal) { setInspection(initialInspection); setFindings(initialInspection.findings); setState("finalized"); }
+  }, [allowLocal, initialInspection]);
 
   const openConfirmation = useCallback(() => setState("confirming"), []);
   const closeConfirmation = useCallback(() => {
@@ -86,6 +92,8 @@ export function useInspectionFinalization(initialInspection: InspectionDetail, o
     setState("submitting");
     try {
       if (!storage) throw new Error("storage unavailable");
+      const photos = await storage.listPhotos(owner, inspection.id);
+      if (photos.some(photo => photo.status !== "uploaded" || photo.deletedAt)) throw new Error("Hay fotos pendientes: sincroniza o descarta antes de finalizar");
       const existing = await storage.getInspection(owner, inspection.id);
       await trackPwaMutation(() => enqueueFinalizeIntent(owner, storage, {
         inspectionId: inspection.id,

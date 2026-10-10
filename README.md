@@ -8,14 +8,14 @@ Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenim
 - npm 10 o posterior.
 - Git; Make es opcional.
 
-El workflow W05 usa Node.js 22.22.3. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
+Los workflows W05 y W06 usan Node.js 22.22.3. No se requieren servicios externos, cuentas privadas, variables de entorno ni credenciales para instalar, probar o compilar.
 
 ## Instalación y ejecución
 
 Desde la raíz del repositorio:
 
 ```bash
-npm ci --ignore-scripts --no-audit --no-fund
+npm ci
 npm run dev
 ```
 
@@ -63,7 +63,7 @@ Los workflows de las Semanas 02, 03 y 04 repiten una instalación limpia y `make
 
 - `/inspecciones` gestiona en cliente la carga de la colección sintética, búsqueda y filtros. Next.js prerenderiza el estado de carga inicial en HTML; no confundir ese HTML inicial con los registros, que aparecen tras la transición de cliente. `?estado=cargando`, `?estado=error` y `?estado=vacio` permiten inspeccionar estados de demostración.
 - `/inspecciones/[id]` declara `dynamic = "force-dynamic"` y resuelve los datos sintéticos en servidor para incluirlos en el HTML. Un ID desconocido responde HTTP 404; `?estado=error` muestra el estado de error de demostración. `src/app/inspecciones/loading.tsx` y `src/app/inspecciones/[id]/loading.tsx` presentan carga, y la ruta detalle tiene `error.tsx` para fallos inesperados.
-- `tests/rendering.spec.ts` comprueba estados accesibles, contenido HTML, filtros, consistencia de registros y 404. En el `package.json` actual no está encadenada en `npm test`; puede ejecutarse directamente con `node tests/rendering.spec.ts`.
+- `tests/rendering.spec.ts` comprueba estados accesibles, contenido HTML, filtros, consistencia de registros y 404. Está encadenada en `npm test` y también puede ejecutarse directamente con `node tests/rendering.spec.ts`.
 - `npm run measure:rendering` requiere una build previa y registra tiempos HTTP y tamaño HTML para listado y detalle; no mide hidratación ni tiempo hasta mostrar datos CSR. `docs/rendering-decision.md` documenta la decisión, sus supuestos, límites y validación.
 
 ## Baseline de Semana 05
@@ -114,3 +114,34 @@ Registrar fecha, navegador, URL, estado de red, versión de caché y resultado o
 El reporte individual está en `evidence/individual.md`. El commit funcional principal de Imanol es `15f08bb763e29d966087414fc1299361bdf2fa6f`; los commits `4a163f1` y `d39ff30` preservan el aporte de Osbaldo al manifest y sus recursos. Para Semana 03, el aporte técnico principal de Imanol es el commit `1192dfccab246a60464e99a46b426d4ba34e38d4` (service worker y registro seguro, PR #21); Osbaldo contribuye las suites `tests/service-worker.spec.ts` y `tests/offline.spec.ts` (PR #22) y Jose Julian documenta la estrategia en `docs/cache-strategy.md` (PR #24). La integración final de la Semana 03 queda registrada en el PR de esta entrega.
 
 Las instrucciones acotadas para que los integrantes restantes verifiquen el resultado y completen únicamente su propia evidencia están en `docs/week-02-contributor-guide.md`.
+
+## Baseline de Semana 06 (#68)
+
+`docs/w06-baseline.md` registra la inspección completa del kit, brechas y contratos. La app ya tiene Auth/Supabase, IndexedDB v3, cola persistente, conflictos, cámara/fotos #69 y ubicación/avisos locales opcionales #70. La documentación y suites de comportamiento pertenecen a #71/#72.
+
+El workflow `.github/workflows/week-06-w06-device-push.yml` ejecuta `npm ci`, checks públicos acumulativos y `make verify` con Node 22.22.3. Publica los reportes reales, sin generar una calificación docente. `bash public-tests/check-w06.sh` comprueba contenido e integración; no acredita comportamiento.
+
+`npm test` conserva todas las suites anteriores, prueba la infraestructura con `tests/w06-baseline.spec.mjs` y ejecuta el runner único `tests/capabilities.spec.ts`. **npm test y make verify fallan mientras falten los módulos, documentación o suites W06**; ese estado es intencional y no un pase. Cada suite auxiliar debe importar los adaptadores reales, ejecutar assertions y devolver un entero positivo de escenarios completados. Los contratos por sí solos no verifican capacidades.
+
+Fotos: JPEG/PNG/WebP, hasta 5 MiB por archivo y tres por hallazgo. Esta extensión usa Storage privado y es distinta del mínimo docente. Permisos voluntarios, selección manual del laboratorio y avisos dentro de la app mantienen el flujo útil. No se implementa servidor Push/VAPID en el baseline.
+
+
+## Cámara y fotos W06 (#69)
+
+El editor permite capturar/seleccionar y confirmar fotos con el hallazgo. Los pendientes sobreviven offline; la subida usa Storage privado y bloquea finalización hasta confirmar o descartar. Preparación manual de bucket y migración, permisos, recuperación y validación humana pendiente: [docs/w06-photo-storage.md](docs/w06-photo-storage.md). Se añadieron pruebas propias; el gate W06 sigue exigiendo las contribuciones restantes sin omitirlas.
+
+## Ubicación y avisos opcionales W06 (#70)
+
+En el editor, **Obtener ubicación** realiza una petición puntual de baja precisión (timeout 10 s, sin reutilizar una posición anterior). La captura permanece en memoria hasta confirmar la finalización; **Borrar ubicación**, salir del editor o cambiar de sesión la descarta antes de finalizar. Al finalizar se guardan latitud, longitud, precisión e instante de captura para el coordinador; sin captura se guarda `null` y la finalización continúa normalmente. El borrador no incorpora GPS y el laboratorio sigue siendo manual. El coordinador ve coordenadas y enlace a mapa en el detalle; el técnico no recibe GPS de la API. Migración, permisos y pruebas: [docs/w06-inspection-location.md](docs/w06-inspection-location.md).
+
+En **Sincronización**, **Activar avisos de sincronización** solicita permiso únicamente al pulsarlo. La activación se conserva durante las navegaciones de esta pestaña y se pierde al recargar o cerrar/cambiar sesión; **Desactivar avisos** conserva los avisos dentro de la app. Una sincronización con ACKs persistidos, sin cola ni conflictos pendientes, muestra un mensaje genérico. Fallos, resultados parciales y una cola vacía sin un ACK nuevo no generan ese evento. Repetir la identidad del último ACK no duplica la presentación, incluso si previamente se utilizó fallback.
+
+Son notificaciones locales producidas mientras la app ejecuta la sincronización. No hay suscripción Push remota, VAPID, servidor ni garantía de nuevos avisos con la app cerrada. El adaptador prefiere el service worker activo; el constructor de Notification es un fallback para plataformas que lo admiten. En móvil se recomienda el service worker ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API/Using_the_Notifications_API)); iOS/iPadOS 16.4 incorporan soporte para apps añadidas a la pantalla de inicio y requieren interacción directa para solicitar permiso ([WebKit](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)). La disponibilidad depende del navegador, instalación y permiso; siempre queda el aviso accesible dentro de la app.
+
+Exports inyectables, evento interno y criterios de pruebas para Julian: [baseline W06](docs/w06-baseline.md#integración-implementada-en-70). Ejecutar con Node 22.22.3: `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, los tres checks públicos y `make verify`, de forma secuencial. El gate aún exige `docs/capabilities.md` y las dos suites auxiliares de #71/#72; no se omiten. No hay script/binario de lint independiente ni se añade ESLint. La revisión en hardware/navegador real y la validación humana siguen pendientes.
+
+### Revisión y archivo de coordinación
+
+Coordinación puede aprobar/rechazar una inspección finalizada autorizada, archivar, consultar Histórico, desarchivar y eliminar lógicamente con confirmación del folio exacto. Estas acciones requieren conexión y no cambian el flujo técnico ni el seguimiento de hallazgos. Aplicar primero `20261010010000_coordination_lifecycle.sql` después de las migraciones W06 existentes; no se ejecutó en Supabase remoto. Contratos, permisos, rollback, pruebas y recorrido manual: [flujo de coordinación](docs/coordinator-lifecycle.md). Pruebas SQL/RLS/concurrencia en PostgreSQL local desechable: `bash scripts/test-coordination-sql.sh`.
+
+**Nota sobre eliminar lógicamente:** la inspección desaparece de Activas, Histórico y métricas, pero sus datos, hallazgos y fotografías se conservan. Se registra quién la eliminó y cuándo; los permisos bloquean su consulta y modificación normales. Archivar permite consultar la inspección en Histórico y desarchivarla; eliminar lógicamente no ofrece restauración desde la interfaz. Una recuperación futura requeriría mantenimiento controlado por un administrador de base de datos autorizado. Consulta los [detalles y límites de la eliminación lógica](docs/coordinator-lifecycle.md#qué-significa-eliminar-lógicamente).

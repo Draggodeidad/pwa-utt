@@ -260,6 +260,7 @@ const backend = createServer(async (req, res) => {
     const active = url.searchParams.get("active");
     return send(res, 200, active === "eq.true" ? rows.filter((lab) => lab.active) : rows);
   }
+  if (url.pathname === "/rest/v1/inspection_locations") return send(res, 200, []);
   if (url.pathname === "/rest/v1/inspections") {
     queryInspections.actor = account.id;
     return send(res, 200, queryInspections(url));

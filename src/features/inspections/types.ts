@@ -1,5 +1,14 @@
+import type { InspectionCoordination } from "./coordination";
 import type { Finding, FindingPriority, FindingStatus } from "../findings/types";
 import type { LocalEntityMetadata, RemoteEntity, SyncStatus, Uuid } from "../../types/entity";
+
+/** Snapshot captured voluntarily; exposed only in coordinator detail responses. */
+export type InspectionLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  capturedAt: string;
+};
 
 export type InspectionWorkflowStatus = "draft" | "completed";
 export type InspectionResult = "without_findings" | "requires_attention";
@@ -106,7 +115,7 @@ export type InspectionListDto = {
 };
 
 /** Temporary UI-compatible list shape. New data enters through InspectionListDto. */
-export type InspectionListItem = Pick<InspectionListDto, "id" | "location" | "date" | "summary" | "syncStatus" | "inspector" | "laboratoryCode" | "workflowStatus" | "findingCount" | "pendingFindingCount" | "result">;
+export type InspectionListItem = { folio?: string; coordination?: InspectionCoordination } & Pick<InspectionListDto, "id" | "location" | "date" | "summary" | "syncStatus" | "inspector" | "laboratoryCode" | "workflowStatus" | "findingCount" | "pendingFindingCount" | "result">;
 
 export type InspectionEditorDto = {
   id: string;
@@ -129,6 +138,7 @@ export type InspectionEditorDto = {
 export type InspectionEditorValues = Omit<InspectionEditorDto, "folioNumber" | "laboratoryId" | "inspectionDate" | "inspectorId" | "workflowStatus" | "version"> & { version: number | null };
 
 export type InspectionDetailDto = {
+  capturedLocation?: InspectionLocation | null;
   id: string;
   folio: string;
   folioNumber: number;
@@ -150,7 +160,7 @@ export type InspectionDetailDto = {
 };
 
 /** Temporary UI-compatible detail shape. New data enters through InspectionDetailDto. */
-export type InspectionDetail = Pick<InspectionDetailDto, "id" | "folio" | "location" | "date" | "technician" | "workflowStatus" | "result" | "syncStatus" | "scope" | "findings" | "version"> & Partial<Pick<InspectionDetailDto, "folioNumber" | "laboratoryId" | "laboratoryCode" | "inspectionDate">>;
+export type InspectionDetail = { coordination?: InspectionCoordination } & Pick<InspectionDetailDto, "id" | "folio" | "location" | "date" | "technician" | "workflowStatus" | "result" | "syncStatus" | "scope" | "findings" | "version"> & Partial<Pick<InspectionDetailDto, "folioNumber" | "laboratoryId" | "laboratoryCode" | "inspectionDate" | "capturedLocation">>;
 
 export type LaboratoryProfile = {
   code: string;

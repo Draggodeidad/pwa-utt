@@ -6,7 +6,7 @@
 
 Build **Laboratorio Inspect**, a Progressive Web App (PWA) for maintenance inspections in university laboratories. It replaces notebooks and spreadsheets, supports technicians working with intermittent connectivity, and gives laboratory coordination a view to prioritize and follow up findings.
 
-The repository is currently a **Next.js starter with synthetic inspection data**. The authentication screen is a client-side visual mock only; real authentication, backend API, database, IndexedDB persistence, service worker, manifest, installation, offline operation, synchronization, notifications, and deployment are **not implemented yet**. Treat their documented behavior as target architecture, not existing functionality.
+The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v3, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 camera/photo persistence is implemented in #69; #70 adds voluntary in-memory geolocation and session-only local synchronization notifications with accessible fallback. These are not remote Push subscriptions. Photo Storage setup/recovery is documented in docs/w06-photo-storage.md. Independent W06 suites and real-device/Storage validation remain pending; baseline contracts and gates do not establish their behavior. Deployment and private-service validation must be reported separately.
 
 ### Technology stack
 
@@ -17,11 +17,11 @@ The repository is currently a **Next.js starter with synthetic inspection data**
 | Styling | Tailwind CSS `3.4.17`, PostCSS and CSS-variable theme tokens |
 | Icons | Lucide React |
 | Language | TypeScript `5.4.5`, strict mode |
-| Runtime | Node.js `20.19+` compatible; CI uses Node `20.19.6` |
+| Runtime | Node.js `22.x`; W05/W06 CI uses Node `22.22.3` |
 | Package manager | npm `10+`; use the committed `package-lock.json` |
-| Database / backend | Not implemented or selected |
-| PWA runtime | Architecture/contracts only; no active service worker or IndexedDB adapter |
-| Testing | Node assertion starter test; no unit/integration framework configured |
+| Database / backend | Supabase Auth/Postgres/RLS and Next.js API routes |
+| PWA runtime | Manifest, service worker, IndexedDB v3 and synchronization adapters |
+| Testing | Node assertion unit/integration suites; no additional test framework |
 
 ### Architectural rules
 
@@ -97,19 +97,19 @@ type FindingPriority = "low" | "medium" | "high";
 type FindingStatus = "pending" | "in_review" | "resolved";
 ```
 
-### PWA and offline target architecture
+### PWA and offline architecture
 
-PWA behavior is planned, not implemented. When implementing it, keep browser details behind `lib/pwa` and feature services/hooks:
+Existing PWA adapters live behind `lib/pwa` and feature services/hooks. Preserve this boundary when extending them:
 
 ```text
 Route/component → feature service or hook → persistence/sync abstraction → IndexedDB, Cache Storage, service worker, API
 ```
 
 - Use local UUIDs for offline-created inspections and findings.
-- Plan stores for `inspections`, `findings`, and `syncQueue`.
+- Preserve the existing `inspection_local`, `finding_local`, `sync_queue`, `catalog_local` and `conflict_local` stores; schema changes must be additive.
 - Queue operations per entity: `create`, `update`, `delete`.
 - Preserve pending drafts on logout and PWA updates.
-- Use the documented initial conflict policy: compare `updatedAt`; detect conflicts and retain information for resolution. Do not silently overwrite divergent records.
+- Preserve version-based conflict detection and authorized remote snapshots for explicit resolution. Do not silently overwrite divergent records.
 - Do not claim offline, PWA install, sync, conflict resolution, API, or authentication is complete until implementation and tests exist.
 
 ## Setup & Essential Commands
@@ -117,7 +117,7 @@ Route/component → feature service or hook → persistence/sync abstraction →
 ### Prerequisites
 
 ```bash
-node --version  # Node.js 20.19+ compatible
+node --version  # Node.js 22.x (CI: 22.22.3)
 npm --version   # npm 10+
 ```
 
@@ -129,13 +129,13 @@ npm --version   # npm 10+
 | Local development | `npm run dev` | Open `http://localhost:3000` |
 | Production build | `npm run build` | Runs Next.js compilation and type validation |
 | Run production server | `npm start` | Run after a successful build |
-| Starter tests | `npm test` | Runs `tests/starter.spec.mjs` |
-| Type check | `npm exec tsc -- --noEmit` | No package script exists; run explicitly |
+| Accumulated tests | `npm test` | Existing suites plus strict W06 runner; fails until both W06 suites arrive |
+| Type check | `npm run typecheck` | TypeScript strict validation |
 | Full project verification | `npm run verify` | Checks structure, test and build; writes `reports/verification.json` |
 | Structure-only check | `bash public-tests/check.sh` | Does not run tests/build or scan secrets |
 | Make shortcuts | `make test`, `make build`, `make verify` | Optional; no Make dependency required |
 
-There is currently **no configured lint script, formatter, database migration command, integration-test suite, API test suite, or environment-variable file**. Do not invent commands or claim these tools exist. Propose them separately and wait for approval before adding dependencies or configuration.
+There is no standalone lint/formatter or npm database migration command. API/integration tests and SQL migrations already exist. Supabase-backed operation requires configuration described by its adapters; synthetic installation/tests/build do not require private services. Do not invent migration commands or add dependencies without authorization.
 
 ## Core Development Guidelines
 
@@ -242,7 +242,7 @@ There is currently **no configured lint script, formatter, database migration co
 | UX sitemap, screens and flows | `docs/sitemap.md`, `docs/screen-inventory.md`, `docs/user-flows.md` | `docs/stitch-prompts/`, `docs/google-stitch-master-prompt.md` |
 | Component reuse and promotion decisions | `docs/component-catalog.md`, `docs/ui-reuse-matrix.md` | `src/components/`, relevant feature `components/` |
 | Existing tests and verification limits | `tests/starter.spec.mjs`, `scripts/verify.mjs` | `public-tests/check.sh`, `Makefile` |
-| Environment variables, API, database or migrations | No implementation exists | Do not assume configuration; request approval before introducing it |
+| Environment variables, API, database or migrations | `src/lib/supabase/config.ts`, `src/lib/supabase/server.ts`, `supabase/migrations/` | Inspect existing configuration; no npm migration command exists |
 
 ## Decision Boundaries Requiring Clarification
 
@@ -252,3 +252,7 @@ Ask before implementing or changing either of these unresolved product rules:
 2. Whether a technician can set the initial finding priority or whether it belongs exclusively to coordination.
 
 When requirements conflict with an accepted ADR, follow the ADR and document the conflict before changing the design.
+
+## W06 integration baseline
+
+Read `docs/w06-baseline.md` for typed ports, photo limits and suite exports. #68 owns only contracts, runner, CI and baseline evidence. #69/#70 own implementation, #71/#72 own capability suites/documentation. Missing or empty suites must fail; do not fabricate their behavior/evidence to turn CI green.

@@ -28,6 +28,7 @@ function mapRpcFailure(code: string | undefined, message: string): { domain: Dom
     case "VERSION_OR_STATE_CONFLICT":
     case "VERSION_CONFLICT": return { domain: "VERSION_CONFLICT", http: 409 };
     case "IDEMPOTENCY_KEY_REUSED": return { domain: "IDEMPOTENCY_KEY_REUSED", http: 409 };
+    case "PHOTOS_PENDING": return { domain: "VALIDATION_ERROR", http: 422 };
     case "FINDING_SET_CONFLICT": return { domain: "FINDING_SET_CONFLICT", http: 409 };
     case "INVALID_INPUT":
     case "INVALID_OPERATION":

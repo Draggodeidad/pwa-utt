@@ -1,3 +1,4 @@
+import type { LocalPhoto } from "../../../features/findings/photo-contracts.ts";
 import { ApiClientError } from "../../api/client.ts";
 import type { ApiClient } from "../../api/client.ts";
 import type { DomainOperation, DomainOperationError, OperationAcknowledgement, SyncQueueItem } from "../../../features/sync/types.ts";
@@ -10,8 +11,11 @@ export type QueueTransport = {
   client: ApiClient;
   /** Must verify the server session, not only the remembered offline identity. */
   verifyOwner(owner: Uuid): Promise<boolean>;
+  sendPhoto?: (item: SyncQueueItem, photo: LocalPhoto | null) => Promise<OperationAcknowledgement>;
   now?: () => number;
   shouldContinue?: () => boolean;
+  /** Optional observer of persisted ACKs. Its errors cannot change transport results. */
+  onAcknowledged?: (operationId: Uuid) => void | Promise<void>;
 };
 
 const MAX_ATTEMPTS = 5;
@@ -43,6 +47,8 @@ export function operationRoute(kind: DomainOperation["kind"], entityId: Uuid): {
     case "finding.update": return { method: "patch", path: finding };
     case "finding.delete": return { method: "delete", path: finding };
     case "finding.followup": return { method: "patch", path: `${finding}/follow-up` };
+    case "photo.upload": return { method: "put", path: `/api/photos/${entityId}` };
+    case "photo.delete": return { method: "delete", path: `/api/photos/${entityId}` };
   }
 }
 
@@ -83,6 +89,17 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
       if (item.status === "error" && !item.nextAttemptAt) continue;
       if (item.nextAttemptAt && Date.parse(item.nextAttemptAt) > now()) continue;
       if (queue.some((other) => other.entityId === item.entityId && other.localOrder < item.localOrder)) continue;
+      if (item.entity === "photo") {
+        const photo = await storage.getPhoto(owner, item.entityId);
+        const findingId = photo?.findingId ?? (item.payload as { findingId?: string }).findingId;
+        const finding = findingId ? await storage.getFinding(owner, findingId) : null;
+        const parent = item.parentEntityId ? await storage.getInspection(owner, item.parentEntityId) : null;
+        if (finding?.baseVersion === null || parent?.baseVersion === null) continue;
+      }
+      if (item.operation === "finding.delete" || item.operation === "inspection.discard") {
+        const photos = await storage.listPhotos(owner, item.parentEntityId ?? item.entityId);
+        if (photos.some(photo => item.operation === "inspection.discard" || photo.findingId === item.entityId)) continue;
+      }
       if (item.entity === "finding") {
         const finding = await storage.getFinding(owner, item.entityId);
         const parentId = finding?.inspectionId ?? item.parentEntityId;
@@ -91,6 +108,8 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
         if (!parent && queue.some((other) => other.entityId === parentId)) continue;
       }
       if (item.operation === "inspection.finalize") {
+        const photos = await storage.listPhotos(owner, item.entityId);
+        if (photos.some(photo => photo.status !== "uploaded" || photo.deletedAt)) continue;
         const findings = await storage.listFindings(owner, item.entityId);
         if (queue.some((other) => other.operationId !== item.operationId && (
           other.entityId === item.entityId || other.parentEntityId === item.entityId || findings.some((finding) => finding.id === other.entityId)
@@ -108,11 +127,14 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
     const sent = await storage.prepareSend(owner, ready.operationId, clientId, token, now());
     if (!sent) continue;
     try {
-      const ack = await sendOperation(transport.client, sent);
+      const ack = sent.entity === "photo"
+        ? await (transport.sendPhoto ? transport.sendPhoto(sent, await storage.getPhoto(owner, sent.entityId)) : Promise.reject(new Error("photo transport unavailable")))
+        : await sendOperation(transport.client, sent);
       if (!await transport.verifyOwner(owner)) return { acknowledged, failed, paused: true };
       await storage.renewLease(owner, token, now(), LEASE_MS);
       await storage.acknowledge(owner, sent, ack, token, now());
       acknowledged++;
+      try { await transport.onAcknowledged?.(sent.operationId); } catch { /* ACK is already durable. */ }
     } catch (error) {
       if (error instanceof LeaseLostError) return { acknowledged, failed, paused: true };
       const conflict = await inspectConflict(transport.client, sent, error);

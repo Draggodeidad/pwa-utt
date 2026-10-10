@@ -10,8 +10,8 @@ import { notFound } from "next/navigation";
 export default async function InspectionDetailPage({ params }: { params: { inspectionId: string } }) {
   const { user } = await requireRole(["technician", "coordinator"]);
   const role = user.role;
-  const detail = await findVisibleInspection(createComponentSupabaseClient(), params.inspectionId);
+  const detail = await findVisibleInspection(createComponentSupabaseClient(), params.inspectionId, role);
   if (!detail) notFound();
 
-  return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}><InspectionDetailWorkspace inspection={detail} owner={user.id} /></AppShell>;
+  return <AppShell activePath="/inspections" navigationSections={navigationSectionsByRole[role]} profile={createProfileForSession(user)}><InspectionDetailWorkspace inspection={detail} owner={user.id} coordinator={role === "coordinator"} /></AppShell>;
 }

@@ -66,6 +66,7 @@ const backend = createServer(async (req, res) => {
   }
   if (url.pathname === "/rest/v1/laboratories") return send(res, 200, filterIds([{ id: laboratoryId, code: "LAB-01", name: "Laboratorio de prueba" }], url, "id"));
   const visibleRows = rows.filter((row) => row.inspector_id === account.id || (account.role === "coordinator" && row.workflow_status === "completed"));
+  if (url.pathname === "/rest/v1/inspection_locations") return send(res, 200, []);
   if (url.pathname === "/rest/v1/inspections") return send(res, 200, filterIds(visibleRows, url, "id"));
   if (url.pathname === "/rest/v1/findings") {
     const visibleFindings = findings.filter((finding) => visibleRows.some((row) => row.id === finding.inspection_id));

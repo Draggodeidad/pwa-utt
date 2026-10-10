@@ -184,7 +184,7 @@ function getInitials(displayName?: string) {
 
 const s = {
   standaloneContent: "mx-auto w-full max-w-7xl px-6 py-10 max-sm:px-4 max-sm:py-5",
-  shell: "min-h-screen bg-background lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]",
+  shell: "min-h-dvh bg-background pt-[env(safe-area-inset-top)] lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]",
   sidebar: "flex min-w-0 flex-col border-b bg-card lg:min-h-screen lg:border-b-0 lg:border-r",
   brandHeader: "flex items-center gap-2 border-b px-5 py-4",
   brandIcon: "grid size-7 place-items-center rounded-sm bg-primary text-primary-foreground",
