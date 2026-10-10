@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { SessionMemory } from "@/components/pwa/session-memory";
+import { SyncNotificationsProvider } from "@/features/sync/components/SyncNotificationsProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -29,9 +30,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es-MX">
       <body>
-        {children}
-        <ServiceWorkerRegistration />
-        <SessionMemory />
+        <SyncNotificationsProvider>
+          {children}
+          <ServiceWorkerRegistration />
+          <SessionMemory />
+        </SyncNotificationsProvider>
       </body>
     </html>
   );

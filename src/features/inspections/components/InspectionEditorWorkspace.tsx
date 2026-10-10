@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
 import { FindingDescription } from "./FindingDescription";
+import { OptionalLocation } from "./OptionalLocation";
 import { useInspectionEditor } from "../hooks/use-inspection-editor";
 import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
 import type { Uuid } from "@/types/entity";
@@ -277,6 +278,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
                   </div>
                 </div>
               </div>
+              <OptionalLocation key={`${owner}:${inspectionId}`} owner={owner} />
               <label className={s.field}>
                 Resumen
                 <Textarea
