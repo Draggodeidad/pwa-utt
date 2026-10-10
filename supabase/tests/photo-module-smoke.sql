@@ -26,6 +26,17 @@ do $$ begin
     raise exception 'SMOKE: absent object marked uploaded';
   exception when raise_exception then if sqlerrm <> 'PHOTO_OBJECT_MISSING' then raise; end if; end;
 end $$;
+-- A fourth reservation is rejected; removing two pending objects releases capacity.
+select public.reserve_finding_photo('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69','88888888-8888-4888-8888-888888888869','image/png',12,repeat('a',64),repeat('b',64));
+select public.reserve_finding_photo('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb69','88888888-8888-4888-8888-888888888869','image/png',12,repeat('a',64),repeat('b',64));
+do $$ begin
+  begin perform public.reserve_finding_photo(gen_random_uuid(),'88888888-8888-4888-8888-888888888869','image/png',12,repeat('a',64),repeat('b',64)); raise exception 'SMOKE: fourth photo accepted'; exception when raise_exception then if sqlerrm <> 'TOO_MANY_PHOTOS' then raise; end if; end;
+end $$;
+select public.delete_finding_photo('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69');
+select public.delete_finding_photo('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69',true);
+select public.delete_finding_photo('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa69',true);
+select public.delete_finding_photo('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb69');
+select public.delete_finding_photo('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb69',true);
 -- The following only simulates Storage metadata to exercise policies/SQL guards.
 insert into storage.objects(bucket_id,name,metadata) values('finding-photos','11111111-1111-4111-8111-111111111169/66666666-6666-4666-8666-666666666669/88888888-8888-4888-8888-888888888869/99999999-9999-4999-8999-999999999969','{"size":12,"mimetype":"image/png"}');
 select public.complete_finding_photo('99999999-9999-4999-8999-999999999969');

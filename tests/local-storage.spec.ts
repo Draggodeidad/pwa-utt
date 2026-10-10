@@ -1,3 +1,4 @@
+const { LOCAL_DB_VERSION } = require("../src/lib/pwa/indexed-db.ts");
 // Local storage spec: exercises the partitioned IndexedDB storage against an
 // in-memory IndexedDB harness (atomic transactions, injectable quota/errors,
 // version incompatibility). No browser or real database is used.
@@ -134,7 +135,7 @@ async function main() {
     // Incompatible open surfaces an explicit error and never deletes data.
     {
       const future = await new Promise((resolve, reject) => {
-        const request = harness.indexedDB.open("incompat", 3);
+        const request = harness.indexedDB.open("incompat", LOCAL_DB_VERSION + 1);
         request.onupgradeneeded = () => {
           const store = request.result.createObjectStore("future", { keyPath: "id" });
           store.put({ id: "keep", value: 1 });
@@ -147,7 +148,7 @@ async function main() {
       await assert.rejects(() => LocalStorage.open("incompat"), /version/i, "apertura incompatible es error explícito");
 
       const check = await new Promise((resolve, reject) => {
-        const request = harness.indexedDB.open("incompat", 3);
+        const request = harness.indexedDB.open("incompat", LOCAL_DB_VERSION + 1);
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
