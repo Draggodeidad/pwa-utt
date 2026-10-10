@@ -9,6 +9,14 @@ export type ConfirmedNotificationEvent = {
   body: string;
 };
 
+/** Internal envelope; consumers must recheck both account and session epoch. */
+export type SyncCompletedNotificationDetail = {
+  owner: string;
+  epoch: string;
+  event: ConfirmedNotificationEvent;
+};
+export const SYNC_COMPLETED_EVENT = "pwa-utt:sync-completed";
+
 export interface NotificationApi {
   permission(): NotificationPermissionState;
   requestPermission(): Promise<NotificationPermissionState>;

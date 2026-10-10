@@ -3,6 +3,8 @@ import { HttpClient } from "../../api/http-client";
 import { LocalStorage } from "../offline-storage";
 import { runQueue } from "./runner";
 import { completeRemoteLogout, isRemoteLogoutPending, isSessionBlocked, isSessionCurrent, sessionEpoch } from "../offline-session";
+import { SYNC_COMPLETED_EVENT } from "../../notifications/contracts";
+import { confirmedSyncCompletion } from "../../notifications/sync-event";
 
 let running = false;
 let requested = false;
@@ -79,17 +81,32 @@ export async function runBrowserQueue(): Promise<void> {
       if (!owner) { scheduleRetry(null); return; }
       const storage = await LocalStorage.open();
       try {
+        let lastAcknowledgedId: string | null = null;
         const outcome = await runQueue(storage, owner, {
           client: new HttpClient(),
           sendPhoto: sendPhotoOperation,
           verifyOwner: async (expected) => isSessionCurrent(epoch, expected) && await verifiedOwner(epoch) === expected,
           shouldContinue: () => !updatePaused,
+          onAcknowledged: operationId => { lastAcknowledgedId = operationId; },
         });
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("pwa-utt:sync-status", { detail: { running: true, outcome } }));
         }
         if (!isSessionCurrent(epoch, owner)) { scheduleRetry(null); return; }
         const pending = await storage.listQueue(owner);
+        if (outcome.acknowledged > 0 && !outcome.failed && !outcome.paused && pending.length === 0) {
+          const conflicts = await storage.listConflicts(owner);
+          // Recheck after asynchronous conflict reads; a new local edit may have queued work.
+          const remaining = await storage.listQueue(owner);
+          const detail = confirmedSyncCompletion({
+            owner, epoch, lastAcknowledgedId, outcome, pendingCount: remaining.length,
+            unresolvedConflicts: conflicts.filter(conflict => !conflict.resolvedAt).length,
+            sessionCurrent: isSessionCurrent(epoch, owner), updatePaused,
+          });
+          if (detail && typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(SYNC_COMPLETED_EVENT, { detail }));
+          }
+        }
         const next = pending.flatMap((item) => item.nextAttemptAt ? [Date.parse(item.nextAttemptAt)] : []);
         const leaseExpiry = await storage.leaseExpiresAt(owner);
         if (leaseExpiry && leaseExpiry > Date.now()) next.push(leaseExpiry);

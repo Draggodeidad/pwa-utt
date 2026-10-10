@@ -14,6 +14,8 @@ export type QueueTransport = {
   sendPhoto?: (item: SyncQueueItem, photo: LocalPhoto | null) => Promise<OperationAcknowledgement>;
   now?: () => number;
   shouldContinue?: () => boolean;
+  /** Optional observer of persisted ACKs. Its errors cannot change transport results. */
+  onAcknowledged?: (operationId: Uuid) => void | Promise<void>;
 };
 
 const MAX_ATTEMPTS = 5;
@@ -132,6 +134,7 @@ export async function runQueue(storage: LocalStorage, owner: Uuid, transport: Qu
       await storage.renewLease(owner, token, now(), LEASE_MS);
       await storage.acknowledge(owner, sent, ack, token, now());
       acknowledged++;
+      try { await transport.onAcknowledged?.(sent.operationId); } catch { /* ACK is already durable. */ }
     } catch (error) {
       if (error instanceof LeaseLostError) return { acknowledged, failed, paused: true };
       const conflict = await inspectConflict(transport.client, sent, error);
