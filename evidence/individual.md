@@ -290,12 +290,12 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 
 ---
 
-## Semana 06 — pruebas de cámara, fotos y recuperación offline (Osbaldo)
+### Osbaldo Alvarez Marinez — Semana 06: pruebas de cámara, fotos y recuperación offline (#72)
 
 - Responsable de la contribución: Osbaldo Alvarez Marinez (`osbaldoXxC`)
 - Issue asociada: [[PWA][W06] Probar cámara, fotos, permisos Storage y recuperación offline #72](https://github.com/Draggodeidad/pwa-utt/issues/72)
-- Rama de trabajo: `feature/w06-camera-tests` (derivada de `feat/w06-baseline-contracts`)
-- Commit SHA propio o revisión trazable: En preparación local (no se inventa un hash autorreferencial antes de crear el commit de entrega).
+- Rama de trabajo: `feat/w06-baseline-contracts` (integrado desde `feature/w06-camera-tests`)
+- Commit SHA propio o revisión trazable: `02099d0d025141a96ddb604285689702415ef843` (`02099d0`) en `feat/w06-baseline-contracts`.
 - Contribución concreta: Diseño e implementación de la suite de pruebas unitarias y de integración `tests/helpers/capabilities-camera.ts`, exportando la función requerida por el runner `runCameraCapabilitiesSuite(): Promise<number>`. Implementé 25 escenarios de prueba deterministas que cubren: ciclo de vida lazy del cliente de cámara, apertura explícita con video trasero (`environment`) sin audio, captura de blob, detención idempotente de pistas (`MediaStreamTrack.stop()`), cancelación vía `AbortSignal`, mapeo riguroso de errores (`denied`, `unsupported`, `insecure-context`, `no-device`, `capture-failed`), validación de blobs (rechazo de 0 bytes, formatos inválidos, límite exacto de 5 MiB y rechazo de 5 MiB + 1 byte), hash SHA-256, sanitización con `sharp` (remoción de EXIF), persistencia IndexedDB v3 tras reapertura, aislamiento estricto por cuenta, rollback atómico ante fallo de cuota, límite de 3 fotos por hallazgo, y rescate de fallos RPC de confirmación con replay idempotente (`replayed: true`). Documenté los resultados y límites en esta sección de `evidence/individual.md`.
 - Decisión técnica que puedo explicar y por qué: Se construyó la suite utilizando exclusivamente APIs deterministas en memoria (harness de IndexedDB de `tests/helpers/indexed-db-harness.ts` y stubs tipados para `mediaDevices` y `MediaStreamTrack`). Esta decisión permite validar el 100% de los contratos de TypeScript, estados de error y máquinas de estado en milisegundos tanto en local como en CI sin depender de hardware óptico físico, emuladores pesados ni servidores externos, garantizando reproducibilidad absoluta.
 - Prueba que ejecuté y resultado real:
@@ -309,4 +309,5 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Cambio que puedo defender o modificar en vivo: Modificar las restricciones de cámara (por ejemplo, cambiar la resolución ideal o facingMode), ajustar la tolerancia de tamaño máximo de archivo o formatos permitidos en la validación, o extender los escenarios de replay e idempotencia ante diferentes códigos de respuesta HTTP de Supabase.
 - Uso declarado de IA (herramienta, propósito, archivos influidos y validación humana): Utilicé Antigravity (asistente de IA de Google) para el análisis de los contratos del baseline W06, la estructuración de los 25 escenarios deterministas en `tests/helpers/capabilities-camera.ts` y la redacción estructurada de esta evidencia. Validé personalmente las aserciones, comprobé que no se modificó código de producción ni el trabajo de mis compañeros, ejecuté la prueba de fallo negativo intencional y contrasté los resultados reales en terminal.
 - Validación personal antes de entrega: `[x]` ejecuté `node --experimental-strip-types tests/helpers/capabilities-camera.ts` (25 PASS, código 0); `[x]` comprobé la detección de regresión con código de salida 1 y su restauración; `[x]` verifiqué que `git diff` limita los cambios a los archivos autorizados sin tocar código de producción; `[x]` puedo explicar y defender en vivo cada uno de los 25 escenarios implementados.
+
 
