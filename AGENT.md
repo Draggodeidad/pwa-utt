@@ -6,7 +6,7 @@
 
 Build **Laboratorio Inspect**, a Progressive Web App (PWA) for maintenance inspections in university laboratories. It replaces notebooks and spreadsheets, supports technicians working with intermittent connectivity, and gives laboratory coordination a view to prioritize and follow up findings.
 
-The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v3, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 camera/photo persistence is implemented in #69; #70 adds voluntary in-memory geolocation and session-only local synchronization notifications with accessible fallback. These are not remote Push subscriptions. Photo Storage setup/recovery is documented in docs/w06-photo-storage.md. Independent W06 suites and real-device/Storage validation remain pending; baseline contracts and gates do not establish their behavior. Deployment and private-service validation must be reported separately.
+The repository contains a Next.js inspection app with Supabase Auth, authorized API routes/RLS, IndexedDB v3, a persistent synchronization queue, explicit conflict resolution, manifest and service worker. Tests use synthetic data and controlled adapters. W06 camera/photo persistence is implemented in #69; #70 adds voluntary geolocation, an optional GPS snapshot persisted only at finalization for authorized coordinators, and session-only local synchronization notifications with accessible fallback. These are not remote Push subscriptions. Photo Storage setup/recovery is documented in docs/w06-photo-storage.md. Independent W06 suites from #71/#72 are integrated (25 camera/photo and 16 geolocation/notification scenarios). Real-device/remote Storage validation remains pending; synthetic tests and baseline gates do not establish platform behavior. Deployment and private-service validation must be reported separately.
 
 ### Technology stack
 
@@ -129,7 +129,7 @@ npm --version   # npm 10+
 | Local development | `npm run dev` | Open `http://localhost:3000` |
 | Production build | `npm run build` | Runs Next.js compilation and type validation |
 | Run production server | `npm start` | Run after a successful build |
-| Accumulated tests | `npm test` | Existing suites plus strict W06 runner; fails until both W06 suites arrive |
+| Accumulated tests | `npm test` | Existing suites plus strict W06 runner and both integrated capability suites |
 | Type check | `npm run typecheck` | TypeScript strict validation |
 | Full project verification | `npm run verify` | Checks structure, test and build; writes `reports/verification.json` |
 | Structure-only check | `bash public-tests/check.sh` | Does not run tests/build or scan secrets |

@@ -28,7 +28,7 @@ const git = args => {
   const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : null;
 };
-const documents = ["docs/requirements.md", "docs/decision-record.md", "docs/rendering-decision.md", "evidence/individual.md", "README.md", "docs/w06-baseline.md"].map(file => ({ file, content: existsSync(resolve(root, file)) ? readFileSync(resolve(root, file), "utf8") : null }));
+const documents = ["docs/requirements.md", "docs/decision-record.md", "docs/rendering-decision.md", "evidence/individual.md", "README.md", "docs/w06-baseline.md", "docs/capabilities.md", "docs/w06-delivery.md"].map(file => ({ file, content: existsSync(resolve(root, file)) ? readFileSync(resolve(root, file), "utf8") : null }));
 const gitStatus = git(["status", "--porcelain"]);
 const result = {
   schemaVersion: 2,
@@ -39,7 +39,7 @@ const result = {
   status: checks.every(c => c.status === "pass") ? "pass" : "fail",
   checks,
   academicReview: { status: "pending", message: "Sin calificación automática. Revisar requisitos, decisión y evidencia por integrante con la rúbrica; existencia no implica calidad.", documents },
-  limits: ["La instalación se verifica mediante npm ci por separado.", "La revisión de credenciales requiere herramientas especializadas adicionales.", "Las pruebas no sustituyen una auditoría completa de accesibilidad ni una instalación manual de la PWA.", "La métrica HTTP no mide hidratación ni tiempo hasta mostrar registros CSR."]
+  limits: ["La instalación se verifica mediante npm ci por separado.", "La revisión de credenciales requiere herramientas especializadas adicionales.", "Las pruebas no sustituyen una auditoría completa de accesibilidad ni una instalación manual de la PWA.", "La métrica HTTP no mide hidratación ni tiempo hasta mostrar registros CSR.", "Las APIs sintéticas W06 no acreditan hardware/permisos del SO, Storage/RLS remoto ni compatibilidad multinavegador.", "La revisión académica y la defensa humana de las evidencias permanecen pendientes; PASS técnico no asigna puntos."]
 };
 mkdirSync(resolve(root, "reports"), { recursive: true });
 writeFileSync(resolve(root, "reports/verification.json"), JSON.stringify(result, null, 2) + "\n");
