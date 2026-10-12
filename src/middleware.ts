@@ -16,6 +16,7 @@ export async function middleware(request: NextRequest) {
   const session = await readSession(auth.client);
   if (!session) return auth.withCookies(NextResponse.redirect(new URL("/login", request.url)));
   const coordinatorRoute = pathname === "/dashboard" || pathname.startsWith("/dashboard/") ||
+    pathname === "/inspections/archive" || pathname.startsWith("/inspections/archive/") ||
     pathname === "/findings" || pathname.startsWith("/findings/");
   const technicianRoute = pathname === "/" ||
     pathname === "/inspections/new" || pathname.startsWith("/inspections/new/") ||
@@ -28,7 +29,7 @@ export async function middleware(request: NextRequest) {
   }
   const academicId = pathname.startsWith("/inspecciones/") ? pathname.slice("/inspecciones/".length) : null;
   const operationalMatch = /^\/inspections\/([^/]+)(?:\/(edit))?\/?$/.exec(pathname);
-  const operationalId = operationalMatch?.[1] === "new" ? null : operationalMatch?.[1];
+  const operationalId = ["new", "archive"].includes(operationalMatch?.[1] ?? "") ? null : operationalMatch?.[1];
   if (academicId || operationalId) {
     try {
       const id = academicId ?? operationalId!;

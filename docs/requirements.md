@@ -775,3 +775,7 @@ Los RF-09 a RF-90 quedan agrupados en:
 13. Perfil y estado del sistema.
 
 Estos requisitos deben utilizarse junto con RF-01 a RF-08 ya documentados en `docs/requirements.md`.
+
+## Extensión autorizada: flujo de coordinación (2026-10-09)
+
+Para inspecciones finalizadas autorizadas: Ver → Aprobar/Rechazar con nota de coordinación → Archivar → Eliminar lógicamente con folio exacto. Rechazo exige motivo; la decisión es final, independiente del flujo técnico y del estado de hallazgos. Histórico permite consultar evidencias y desarchivar sin reabrir el ciclo técnico. Se admite eliminar una rechazada activa; no se concede acceso a borradores. Todas las acciones nuevas requieren conexión, sesión de coordinación activa y control de versión; archivo/eliminación se excluyen del trabajo diario y la eliminación oculta también los datos relacionados mediante permisos de BD. No hay borrado físico ni restauración administrativa en esta fase. Criterios, permisos y pruebas reproducibles: [flujo de coordinación](coordinator-lifecycle.md).

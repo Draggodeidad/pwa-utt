@@ -30,44 +30,59 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InspectionFinalizationDialog } from "./InspectionFinalizationDialog";
+import { FindingDescription } from "./FindingDescription";
+import { OptionalLocation } from "./OptionalLocation";
 import { useInspectionEditor } from "../hooks/use-inspection-editor";
 import type { InspectionEditorValues, InspectionFinding, LaboratoryOption } from "../types";
 import type { Uuid } from "@/types/entity";
+import { FindingPhotos, type PhotoEdits } from "@/features/findings";
 
 type Props = { mode: "create" | "edit"; initialValues: InspectionEditorValues; catalog: readonly LaboratoryOption[]; owner: Uuid };
 const maxSummary = 500;
 
 function FindingDialog({
   finding,
+  owner,
+  inspectionId,
   open,
   onOpenChange,
   onSave,
 }: {
   finding?: InspectionFinding;
+  owner: string;
+  inspectionId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (finding: InspectionFinding) => void;
+  onSave: (finding: InspectionFinding, photos: PhotoEdits) => Promise<boolean>;
 }) {
   const [title, setTitle] = useState(finding?.title ?? "");
   const [description, setDescription] = useState(finding?.description ?? "");
   const [priority, setPriority] = useState<InspectionFinding["priority"]>(
     finding?.priority ?? "medium",
   );
-  const submit = () => {
+  const [findingId] = useState(() => finding?.id ?? crypto.randomUUID());
+  const [photoEdits, setPhotoEdits] = useState<PhotoEdits>({ add: [], remove: [] });
+  const [saving, setSaving] = useState(false);
+  const [photosBusy, setPhotosBusy] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const submit = async () => {
     if (!title.trim() || !description.trim()) return;
-    onSave({
+    if (saving || photosBusy) return;
+    setSaving(true);
+    const saved = await onSave({
       ...finding,
-      id: finding?.id ?? crypto.randomUUID(),
+      id: findingId,
       title: title.trim(),
       description: description.trim(),
       priority,
       status: finding?.status ?? "pending",
-      evidenceCount: finding?.evidenceCount ?? 0,
-    });
-    onOpenChange(false);
+
+    }, photoEdits);
+    setSaving(false); setSaveError(!saved);
+    if (saved) onOpenChange(false);
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={value => { if (!saving) onOpenChange(value); }}>
       <DialogContent className={s.findingDialog}>
         <DialogTitle>
           {finding ? "Editar hallazgo" : "Agregar hallazgo"}
@@ -104,11 +119,13 @@ function FindingDialog({
             <option value="high">Alta</option>
           </select>
         </label>
+        <FindingPhotos owner={owner} inspectionId={inspectionId} findingId={findingId} editable onChange={setPhotoEdits} onBusyChange={setPhotosBusy} />
+        {saveError ? <p role="alert" className={s.field}>No se pudo guardar. Intenta de nuevo; tus fotos siguen en el diálogo.</p> : null}
         <div className={s.dialogActions}>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={submit}>Guardar hallazgo</Button>
+          <Button disabled={saving || photosBusy} onClick={() => void submit()}>Guardar hallazgo</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -120,6 +137,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
   const editor = useInspectionEditor(initialValues, { mode, catalog, owner, technician: initialValues.technician });
   const {
     inspectionId,
+    setCapturedLocation,
     values,
     state,
     errors,
@@ -127,8 +145,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
     mutate,
     validate,
     save,
-    addFinding,
-    updateFinding,
+    saveFindingWithPhotos,
     removeFinding,
     finalizeInspection,
     discard,
@@ -262,6 +279,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
                   </div>
                 </div>
               </div>
+              <OptionalLocation key={`${owner}:${inspectionId}`} owner={owner} onChange={setCapturedLocation} disabled={!editable} />
               <label className={s.field}>
                 Resumen
                 <Textarea
@@ -294,6 +312,7 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
               <Button
                 type="button"
                 variant="outline"
+                className={s.addFindingButton}
                 disabled={!editable}
                 onClick={() => setFindingDialog({ open: true })}
               >
@@ -309,9 +328,9 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
               ) : (
                 values.findings.map((finding) => (
                   <article key={finding.id} className={s.finding}>
-                    <AlertTriangle className={s.findingIcon} />
-                    <div className={s.findingContent}>
+                    <div className={s.findingTopline}>
                       <div className={s.findingBadges}>
+                        <AlertTriangle className={s.findingIcon} aria-hidden="true" />
                         <span className={s.findingBadge}>
                           Prioridad{" "}
                           {finding.priority === "high"
@@ -322,42 +341,34 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
                         </span>
                         <span className={s.findingBadge}>Pendiente</span>
                       </div>
-                      <h3 className={s.findingTitle}>{finding.title}</h3>
-                      <p className={s.findingDescription}>
-                        {finding.description}
-                      </p>
-                      {finding.evidenceCount ? (
-                        <p className={s.evidenceCount}>
-                          {finding.evidenceCount} evidencia adjunta
-                        </p>
+                      {editable ? (
+                        <div className={s.findingActions}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={s.findingAction}
+                            aria-label={`Editar ${finding.title}`}
+                            onClick={() => setFindingDialog({ open: true, finding })}
+                          >
+                            <Edit3 className={s.icon} />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={s.deleteFindingButton}
+                            aria-label={`Eliminar ${finding.title}`}
+                            onClick={() => setDeleteId(finding.id)}
+                          >
+                            <Trash2 className={s.icon} />
+                          </Button>
+                        </div>
                       ) : null}
                     </div>
-                    {editable ? (
-                      <div className={s.findingActions}>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className={s.findingAction}
-                          aria-label={`Editar ${finding.title}`}
-                          onClick={() =>
-                            setFindingDialog({ open: true, finding })
-                          }
-                        >
-                          <Edit3 className={s.icon} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className={s.deleteFindingButton}
-                          aria-label={`Eliminar ${finding.title}`}
-                          onClick={() => setDeleteId(finding.id)}
-                        >
-                          <Trash2 className={s.icon} />
-                        </Button>
-                      </div>
-                    ) : null}
+                    <h3 className={s.findingTitle}>{finding.title}</h3>
+                    <FindingDescription description={finding.description} />
+                    <FindingPhotos owner={owner} inspectionId={inspectionId} findingId={finding.id} />
                   </article>
                 ))
               )}
@@ -390,6 +401,14 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
         <div className={s.actions}>
           <Button
             type="button"
+            className={s.finalizeButton}
+            disabled={!editable || state === "saving"}
+            onClick={requestFinalization}
+          >
+            Finalizar inspección
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             className={s.discardButton}
             disabled={!editable}
@@ -400,32 +419,26 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
           <Button
             type="button"
             variant="outline"
+            className={s.saveButton}
             disabled={!editable || state === "saving"}
             onClick={() => void save()}
           >
             <Save className={s.buttonIcon} />
             Guardar borrador
           </Button>
-          <Button
-            type="button"
-            disabled={!editable || state === "saving"}
-            onClick={requestFinalization}
-          >
-            Finalizar inspección
-          </Button>
         </div>
       </Card>
-      <FindingDialog
+      {findingDialog.open ? <FindingDialog
         key={findingDialog.finding?.id ?? "new"}
         finding={findingDialog.finding}
+        owner={owner}
+        inspectionId={inspectionId}
         open={findingDialog.open}
         onOpenChange={(open) =>
           setFindingDialog((current) => ({ ...current, open }))
         }
-        onSave={(finding) =>
-          findingDialog.finding ? updateFinding(finding) : addFinding(finding)
-        }
-      />
+        onSave={saveFindingWithPhotos}
+      /> : null}
       <AlertDialog
         open={Boolean(deleteId)}
         onOpenChange={(open) => !open && setDeleteId(undefined)}
@@ -472,6 +485,8 @@ export function InspectionEditorWorkspace({ mode, initialValues, catalog, owner 
         </AlertDialogContent>
       </AlertDialog>
       <InspectionFinalizationDialog
+        owner={owner}
+        inspectionId={inspectionId}
         open={confirming}
         folio={values.folio}
         laboratory={laboratory?.name ?? "Sin seleccionar"}
@@ -517,33 +532,34 @@ const s = {
     "flex h-10 items-center gap-2 rounded-sm bg-secondary px-3 font-normal",
   icon: "size-4",
   characterCount: "text-right text-xs text-muted-foreground",
-  findingsHeader: "flex flex-wrap items-center justify-between gap-3",
+  findingsHeader: "flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between",
+  addFindingButton: "min-h-11 w-full whitespace-nowrap sm:w-auto",
   findingsCount: "text-sm text-muted-foreground",
   buttonIcon: "mr-1.5 size-4",
   findingsList: "mt-4 space-y-3",
   emptyFindings:
     "rounded-sm border border-dashed p-6 text-center text-sm text-muted-foreground",
-  finding: "flex gap-3 rounded-sm border p-4",
-  findingIcon: "mt-1 size-4 shrink-0 text-amber-700",
-  findingContent: "min-w-0 flex-1",
-  findingBadges: "flex flex-wrap gap-1.5 text-xs",
+  finding: "flex min-w-0 flex-col gap-3 rounded-sm border p-3 sm:p-4",
+  findingTopline: "flex min-w-0 items-start justify-between gap-2",
+  findingIcon: "size-4 shrink-0 text-amber-700",
+  findingBadges: "flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs",
   findingBadge: "rounded-sm bg-secondary px-1.5 py-0.5",
-  findingTitle: "mt-2 font-semibold",
-  findingDescription: "mt-1 text-sm leading-6 text-secondary-foreground",
-  evidenceCount: "mt-2 text-xs text-muted-foreground",
-  findingActions: "flex",
-  findingAction: "size-8",
-  deleteFindingButton: "size-8 text-destructive hover:text-destructive",
+  findingTitle: "break-words font-semibold",
+  findingActions: "flex shrink-0 items-center gap-1",
+  findingAction: "size-11 min-h-11 min-w-11",
+  deleteFindingButton: "size-11 min-h-11 min-w-11 text-destructive hover:text-destructive",
   laboratoryCard: "p-4 shadow-sm",
   laboratoryTitle: "font-semibold",
   laboratoryName: "mt-2 text-sm",
   laboratoryHint: "mt-4 border-t pt-3 text-xs text-muted-foreground",
   actionBar:
-    "sticky bottom-3 z-10 mt-6 flex flex-col gap-3 border-0 bg-card/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between",
-  actionBarStatus: "flex items-center gap-2 text-sm",
+    "sticky bottom-0 z-20 mt-6 flex flex-col gap-3 border-t bg-card p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-8px_24px_rgba(0,0,0,0.08)] sm:flex-row sm:items-center sm:justify-between sm:p-4",
+  actionBarStatus: "flex items-center gap-2 text-sm leading-5",
   attentionIcon: "size-4 text-amber-700",
   clearIcon: "size-4 text-emerald-700",
-  actions: "flex flex-wrap gap-2",
-  discardButton: "text-destructive hover:text-destructive",
+  actions: "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end",
+  finalizeButton: "order-1 col-span-2 min-h-11 w-full whitespace-nowrap px-2 text-xs sm:order-3 sm:col-span-1 sm:w-auto sm:px-4 sm:text-sm",
+  saveButton: "order-2 min-h-11 w-full whitespace-nowrap px-2 text-xs sm:order-2 sm:w-auto sm:px-4 sm:text-sm",
+  discardButton: "order-3 min-h-11 w-full whitespace-nowrap px-2 text-xs text-destructive hover:text-destructive sm:order-1 sm:w-auto sm:px-4 sm:text-sm",
   destructiveButton: "bg-destructive text-destructive-foreground",
 };

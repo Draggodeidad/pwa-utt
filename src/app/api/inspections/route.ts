@@ -38,7 +38,10 @@ export async function GET(request: NextRequest) {
     const status = statusParam === null ? undefined
       : (statuses as readonly string[]).includes(statusParam) ? statusParam as InspectionWorkflowStatus
       : throwInvalidStatus();
-    const page = await listVisibleInspectionsPage(auth.client, { limit: limit ?? undefined, cursor: cursor ?? undefined, search: search ?? undefined, status });
+    const archive = params.get("view");
+    if (archive !== null && archive !== "active" && archive !== "archive") throw new DomainValidationError([{ path: "view", message: "must be active or archive" }]);
+    if (archive === "archive" && permission.session.user.role !== "coordinator") return auth.withCookies(apiError("FORBIDDEN"));
+    const page = await listVisibleInspectionsPage(auth.client, { limit: limit ?? undefined, cursor: cursor ?? undefined, search: search ?? undefined, status: permission.session.user.role === "coordinator" ? "completed" : status, archived: archive === "archive" });
     return auth.withCookies(privateJson(page));
   } catch (error) {
     if (error instanceof DomainValidationError) {

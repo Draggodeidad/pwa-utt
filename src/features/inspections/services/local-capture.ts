@@ -1,5 +1,6 @@
+import type { PhotoEdits } from "../../findings/photo-contracts.ts";
 import type { LocalStorage, LocalEntityRecord } from "../../../lib/pwa/offline-storage.ts";
-import type { LocalInspection, InspectionEditorValues, InspectionFinding, InspectionListItem, LaboratoryOption, InspectionWorkflowStatus } from "../types.ts";
+import type { InspectionLocation, LocalInspection, InspectionEditorValues, InspectionFinding, InspectionListItem, LaboratoryOption, InspectionWorkflowStatus } from "../types.ts";
 import type { LocalFinding } from "../../findings/types.ts";
 import type { DomainOperationKind, SyncEntityKind, SyncQueueItem } from "../../sync/types.ts";
 import type { SyncStatus, Uuid } from "../../../types/entity.ts";
@@ -11,6 +12,7 @@ export type DraftCapture = {
   inspection: LocalInspection;
   findings: readonly LocalFinding[];
   removedFindings: readonly RemovedFindingRef[];
+  photos?: PhotoEdits;
 };
 
 export type FindingsCapture = {
@@ -20,7 +22,7 @@ export type FindingsCapture = {
   removedFindings: readonly RemovedFindingRef[];
 };
 
-export type FinalizeCapture = DraftCapture & { expectedFindingIds: readonly string[] };
+export type FinalizeCapture = DraftCapture & { expectedFindingIds: readonly string[]; location?: InspectionLocation | null };
 
 export function createIntent(input: {
   owner: Uuid;
@@ -132,7 +134,7 @@ export async function saveDraft(owner: Uuid, storage: LocalStorage, draft: Draft
     ...draft.findings.map((finding) => ({ store: "finding_local" as const, value: finding })),
   ];
   const intents = buildCaptureIntents(draft, await storage.listQueue(owner));
-  await storage.saveCapture(owner, records, intents, draft.removedFindings);
+  await storage.saveCapture(owner, records, intents, draft.removedFindings, draft.photos);
   return intents;
 }
 
@@ -148,7 +150,7 @@ export async function saveFindings(owner: Uuid, storage: LocalStorage, capture: 
 }
 
 /** Appends a finalize intent ordered after the inspection's pending intents. */
-export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, input: { inspectionId: string; baseVersion: number | null; expectedFindingIds: readonly string[] }): Promise<SyncQueueItem> {
+export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, input: { inspectionId: string; baseVersion: number | null; expectedFindingIds: readonly string[]; location?: InspectionLocation | null }): Promise<SyncQueueItem> {
   const queue = await storage.listQueue(owner);
   const findings = await storage.listFindings(owner, input.inspectionId);
   const findingIds = new Set([...findings.map((finding) => finding.id), ...input.expectedFindingIds]);
@@ -158,7 +160,7 @@ export async function enqueueFinalizeIntent(owner: Uuid, storage: LocalStorage, 
     entity: "inspection",
     entityId: input.inspectionId,
     operation: "inspection.finalize",
-    payload: { expectedFindingIds: [...input.expectedFindingIds] },
+    payload: { expectedFindingIds: [...input.expectedFindingIds], location: input.location ?? null },
     baseVersion: input.baseVersion,
     dependsOn: dependencies.map((item) => item.operationId),
     localOrder: nextOrder(queue),
@@ -185,7 +187,7 @@ export async function finalizeDraft(owner: Uuid, storage: LocalStorage, capture:
     entity: "inspection",
     entityId: inspection.id,
     operation: "inspection.finalize",
-    payload: { expectedFindingIds: [...capture.expectedFindingIds] },
+    payload: { expectedFindingIds: [...capture.expectedFindingIds], location: capture.location ?? null },
     baseVersion: inspection.baseVersion,
     dependsOn: [...existingQueue, ...intents].filter((item) =>
       item.entityId === inspection.id || item.parentEntityId === inspection.id || capture.findings.some((finding) => finding.id === item.entityId) || capture.removedFindings.some((finding) => finding.id === item.entityId)
@@ -243,7 +245,7 @@ export async function hasPendingFinalization(owner: Uuid, storage: LocalStorage,
  * Merges an authorized remote refresh into the local list without clobbering
  * pending local edits and without resurrecting discarded tombstones.
  */
-export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote: readonly InspectionListItem[], tombstonedIds: ReadonlySet<string> = new Set()): InspectionListItem[] {
+export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote: readonly InspectionListItem[], tombstonedIds: ReadonlySet<string> = new Set(), authoritative = false): InspectionListItem[] {
   const remoteById = new Map(remote.map((item) => [item.id, item]));
   const result: InspectionListItem[] = [];
   const present = new Set<string>();
@@ -254,7 +256,9 @@ export function mergeRemoteRefresh(local: readonly InspectionListItem[], remote:
       result.push(item);
       continue;
     }
-    result.push(remoteById.get(item.id) ?? item);
+    // A successful complete refresh is authoritative for synced records that
+    // disappeared (archive/delete/permission change). Keep unsynced work above.
+    if (remoteById.has(item.id) || !authoritative) result.push(remoteById.get(item.id) ?? item);
   }
   for (const item of remote) {
     if (present.has(item.id) || tombstonedIds.has(item.id)) continue;

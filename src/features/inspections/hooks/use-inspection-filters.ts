@@ -10,7 +10,7 @@ export type InspectionStatusFilter = "all" | InspectionWorkflowStatus;
 export function filterInspections(inspections: readonly InspectionListItem[], query: string, result: InspectionResultFilter, status: InspectionStatusFilter) {
   const term = query.trim().toLocaleLowerCase("es-MX");
   return inspections.filter((inspection) => {
-    const matchesQuery = !term || [inspection.id, inspection.location, inspection.laboratoryCode, inspection.inspector].some((value) => value.toLocaleLowerCase("es-MX").includes(term));
+    const matchesQuery = !term || [inspection.folio ?? "", inspection.id, inspection.location, inspection.laboratoryCode, inspection.inspector].some((value) => value.toLocaleLowerCase("es-MX").includes(term));
     return matchesQuery && (result === "all" || inspection.result === result) && (status === "all" || inspection.workflowStatus === status);
   });
 }

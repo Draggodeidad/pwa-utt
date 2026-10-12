@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { LocalStorage } from "@/lib/pwa/offline-storage";
 import { FileCheck2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +9,8 @@ import type { InspectionFinding, SyncStatus } from "../types";
 
 type InspectionFinalizationDialogProps = {
   open: boolean;
+  owner: string;
+  inspectionId: string;
   submitting?: boolean;
   error?: boolean;
   folio: string;
@@ -17,16 +21,37 @@ type InspectionFinalizationDialogProps = {
   onConfirm: () => void;
 };
 
-export function InspectionFinalizationDialog({ open, submitting = false, error = false, folio, laboratory, findings, syncStatus, onOpenChange, onConfirm }: InspectionFinalizationDialogProps) {
+export function InspectionFinalizationDialog({ open, owner, inspectionId, submitting = false, error = false, folio, laboratory, findings, syncStatus, onOpenChange, onConfirm }: InspectionFinalizationDialogProps) {
+  const [photosReady, setPhotosReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    let sequence = 0;
+    setPhotosReady(null);
+    const refresh = async () => {
+      const attempt = ++sequence;
+      let storage: LocalStorage | null = null;
+      try {
+        storage = await LocalStorage.open();
+        const [photos, queue] = await Promise.all([storage.listPhotos(owner, inspectionId), storage.listQueue(owner)]);
+        if (active && attempt === sequence) setPhotosReady(!photos.some(photo => photo.status !== "uploaded" || photo.deletedAt) && !queue.some(item => item.entity === "photo" && item.parentEntityId === inspectionId));
+      } catch { if (active && attempt === sequence) setPhotosReady(false); }
+      finally { storage?.close(); }
+    };
+    void refresh();
+    window.addEventListener("pwa-utt:queue-changed", refresh);
+    return () => { active = false; window.removeEventListener("pwa-utt:queue-changed", refresh); };
+  }, [open, owner, inspectionId]);
   const high = findings.filter((finding) => finding.priority === "high").length;
   const medium = findings.filter((finding) => finding.priority === "medium").length;
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className={s.content} onPointerDownOutside={(event) => submitting && event.preventDefault()} onEscapeKeyDown={(event) => submitting && event.preventDefault()}>
     <div className={s.header}><span className={s.headerIcon}><FileCheck2 className={s.icon} aria-hidden="true" /></span><div><p className={s.eyebrow}>Acción de cierre irrevocable</p><DialogTitle className={s.title}>Finalizar inspección</DialogTitle></div></div>
     <DialogDescription className={s.description}>La inspección de {laboratory} quedará cerrada como documento definitivo.</DialogDescription>
-    <dl className={s.summary}><div className={s.summaryRow}><dt className={s.summaryLabel}>Identificador:</dt><dd className={s.folio}>#{folio} ({laboratory})</dd></div><div className={s.summaryRow}><dt className={s.summaryLabel}>Hallazgos levantados:</dt><dd className={s.summaryValue}>{findings.length} ítems ({high} alta prioridad, {medium} media)</dd></div><div className={s.summaryRow}><dt className={s.summaryLabel}>Cola de transmisión:</dt><dd className={s.syncStatus}>{syncStatus === "synced" ? "Sincronizado" : "Pendiente de sincronización"}</dd></div></dl>
+    <dl className={s.summary}><div className={s.summaryRow}><dt className={s.summaryLabel}>Identificador:</dt><dd className={s.folio}>#{folio} ({laboratory})</dd></div><div className={s.summaryRow}><dt className={s.summaryLabel}>Hallazgos levantados:</dt><dd className={s.summaryValue}>{findings.length} ítems ({high} alta prioridad, {medium} media)</dd></div><div className={s.summaryRow}><dt className={s.summaryLabel}>Cola de transmisión:</dt><dd className={s.syncStatus}>{photosReady === null ? "Comprobando evidencia" : syncStatus === "synced" && photosReady ? "Sincronizado" : "Pendiente de sincronización"}</dd></div></dl>
     <p className={s.notice}><Info className={s.noticeIcon} aria-hidden="true" />Una vez finalizada, no se podrá reabrir ni editar. Coordinación podrá actualizar la prioridad y el seguimiento de los hallazgos.</p>
+    {photosReady === false ? <p role="status" className={s.notice}>Hay fotos pendientes. Sincronízalas o quítalas antes de finalizar.</p> : null}
     {error ? <p role="alert" className={s.error}>No fue posible finalizar la inspección. Intenta de nuevo.</p> : null}
-    <div className={s.actions}><Button type="button" variant="outline" className={s.action} disabled={submitting} onClick={() => onOpenChange(false)}>Cancelar</Button><Button type="button" className={s.action} disabled={submitting} onClick={onConfirm}>{submitting ? "Finalizando..." : "Confirmar y finalizar"}</Button></div>
+    <div className={s.actions}><Button type="button" variant="outline" className={s.action} disabled={submitting} onClick={() => onOpenChange(false)}>Cancelar</Button><Button type="button" className={s.action} disabled={submitting || photosReady !== true} onClick={onConfirm}>{submitting ? "Finalizando..." : "Confirmar y finalizar"}</Button></div>
   </DialogContent></Dialog>;
 }
 

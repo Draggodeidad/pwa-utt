@@ -1,0 +1,53 @@
+# Formative feedback, not the instructor's private grading authority.
+name: Week 06 — device capabilities and notifications
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+      - name: Clean reproducible install
+        run: npm ci
+      - name: Check previous public deliveries
+        run: |
+          bash public-tests/check.sh
+          bash public-tests/check-w05.sh
+      - name: Verify accumulated behavior and strict W06 gate
+        run: make verify
+      - name: Upload actual verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w06-baseline-verification
+          if-no-files-found: warn
+          path: |
+            reports/verification.json
+            reports/rendering-metrics.json
+
+  w06-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+      - name: Check required W06 deliverables and suite registration
+        run: bash public-tests/check-w06.sh

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FindingDto, FindingListPage, FindingPriority, FindingStatus } from "@/features/findings";
 import type { InspectionWorkflowStatus } from "@/features/inspections";
-import { DomainValidationError } from "@/types/entity";
+import { DomainValidationError } from "../../types/entity.ts";
 
 type FindingRow = {
   id: string; inspection_id: string; title: string; description: string;
@@ -66,8 +66,8 @@ export async function findVisibleFinding(client: SupabaseClient, id: string): Pr
 export async function listVisibleFindingsPage(client: SupabaseClient, query: FindingListQuery): Promise<FindingListPage> {
   const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
   let builder = client.from("findings")
-    .select("id, inspection_id, title, description, created_by, priority, status, version, created_at, updated_at, resolved_at")
-    .is("deleted_at", null);
+    .select("id, inspection_id, title, description, created_by, priority, status, version, created_at, updated_at, resolved_at, inspections!inner(archived_at, deleted_at)")
+    .is("deleted_at", null).is("inspections.archived_at", null).is("inspections.deleted_at", null);
   if (query.inspectionId) builder = builder.eq("inspection_id", query.inspectionId);
   if (query.priority) builder = builder.eq("priority", query.priority);
   if (query.status) builder = builder.eq("status", query.status);

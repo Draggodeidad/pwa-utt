@@ -14,7 +14,10 @@ export type FinalizeFinding = {
   pendingUpdate?: boolean;
 };
 
+import type { InspectionLocation } from "../types.ts";
+
 export type FinalizeInspectionInput = {
+  location?: InspectionLocation | null;
   inspectionId: string;
   inspectionVersion: number | null;
   inspectionDraft: InspectionDraftInput;
@@ -34,6 +37,7 @@ export type FinalizeInspectionResult = { workflowStatus: "completed"; syncStatus
 export async function finalizeInspection(input: FinalizeInspectionInput): Promise<FinalizeInspectionResult> {
   const { inspectionId, inspectionVersion, inspectionDraft, inspectionDirty, findings, inspectionRepository, findingRepository } = input;
 
+  const location = input.location ? { ...input.location } : null;
   let version = inspectionVersion;
   if (version === null) {
     version = (await inspectionRepository.create(inspectionId, inspectionDraft)).version;
@@ -63,7 +67,7 @@ export async function finalizeInspection(input: FinalizeInspectionInput): Promis
   }
 
   const expectedFindingIds = findings.filter((finding) => !finding.removed).map((finding) => finding.id);
-  await inspectionRepository.finalize(inspectionId, version, expectedFindingIds);
+  await inspectionRepository.finalize(inspectionId, version, expectedFindingIds, location);
 
   return { workflowStatus: "completed", syncStatus: "synced" };
 }

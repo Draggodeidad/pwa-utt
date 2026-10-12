@@ -19,11 +19,16 @@ for (const [id, args] of [["typecheck", ["run", "typecheck"]], ["test", ["test"]
   if (run.stderr) process.stderr.write(run.stderr);
   checks.push({ id, status: run.status === 0 && !run.error ? "pass" : "fail", exitCode: run.status, error: run.error?.message ?? null });
 }
+// Run the strict W06 artifact gate even when behavioral tests failed.
+const w06 = spawnSync("bash", ["public-tests/check-w06.sh"], { cwd: root, encoding: "utf8" });
+if (w06.stdout) process.stdout.write(w06.stdout);
+if (w06.stderr) process.stderr.write(w06.stderr);
+checks.push({ id: "w06-contract", status: w06.status === 0 && !w06.error ? "pass" : "fail", exitCode: w06.status, error: w06.error?.message ?? null });
 const git = args => {
   const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : null;
 };
-const documents = ["docs/requirements.md", "docs/decision-record.md", "docs/rendering-decision.md", "evidence/individual.md", "README.md"].map(file => ({ file, content: existsSync(resolve(root, file)) ? readFileSync(resolve(root, file), "utf8") : null }));
+const documents = ["docs/requirements.md", "docs/decision-record.md", "docs/rendering-decision.md", "evidence/individual.md", "README.md", "docs/w06-baseline.md", "docs/capabilities.md", "docs/w06-delivery.md"].map(file => ({ file, content: existsSync(resolve(root, file)) ? readFileSync(resolve(root, file), "utf8") : null }));
 const gitStatus = git(["status", "--porcelain"]);
 const result = {
   schemaVersion: 2,
@@ -34,7 +39,7 @@ const result = {
   status: checks.every(c => c.status === "pass") ? "pass" : "fail",
   checks,
   academicReview: { status: "pending", message: "Sin calificación automática. Revisar requisitos, decisión y evidencia por integrante con la rúbrica; existencia no implica calidad.", documents },
-  limits: ["La instalación se verifica mediante npm ci por separado.", "La revisión de credenciales requiere herramientas especializadas adicionales.", "Las pruebas no sustituyen una auditoría completa de accesibilidad ni una instalación manual de la PWA.", "La métrica HTTP no mide hidratación ni tiempo hasta mostrar registros CSR."]
+  limits: ["La instalación se verifica mediante npm ci por separado.", "La revisión de credenciales requiere herramientas especializadas adicionales.", "Las pruebas no sustituyen una auditoría completa de accesibilidad ni una instalación manual de la PWA.", "La métrica HTTP no mide hidratación ni tiempo hasta mostrar registros CSR.", "Las APIs sintéticas W06 no acreditan hardware/permisos del SO, Storage/RLS remoto ni compatibilidad multinavegador.", "La revisión académica y la defensa humana de las evidencias permanecen pendientes; PASS técnico no asigna puntos."]
 };
 mkdirSync(resolve(root, "reports"), { recursive: true });
 writeFileSync(resolve(root, "reports/verification.json"), JSON.stringify(result, null, 2) + "\n");

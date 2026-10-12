@@ -1,4 +1,4 @@
-import type { InspectionDetail, InspectionListItem } from "../types";
+import type { InspectionDetail, InspectionListItem, InspectionLocation } from "../types";
 import type { InspectionDraftInput } from "../schemas/inspection.schema";
 import type { OperationAcknowledgement } from "@/features/sync/types";
 
@@ -9,5 +9,5 @@ export interface InspectionRepository {
   create(id: string, draft: InspectionDraftInput): Promise<OperationAcknowledgement>;
   update(id: string, baseVersion: number, draft: InspectionDraftInput): Promise<OperationAcknowledgement>;
   discard(id: string, baseVersion: number): Promise<OperationAcknowledgement>;
-  finalize(id: string, baseVersion: number, expectedFindingIds: readonly string[]): Promise<OperationAcknowledgement>;
+  finalize(id: string, baseVersion: number, expectedFindingIds: readonly string[], location?: InspectionLocation | null): Promise<OperationAcknowledgement>;
 }

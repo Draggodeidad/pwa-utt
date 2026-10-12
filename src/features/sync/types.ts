@@ -1,3 +1,4 @@
+import type { FindingPhoto, PhotoUploadPayload } from "../findings/photo-contracts.ts";
 import { validateFindingCapture, validateFindingFollowup } from "../findings/schemas/finding.schema.ts";
 import type { FindingCaptureInput, FindingFollowupInput } from "../findings/schemas/finding.schema.ts";
 import { validateInspectionDraft, validateInspectionFinalization, validateInspectionUpdate } from "../inspections/schemas/inspection.schema.ts";
@@ -5,7 +6,7 @@ import type { InspectionDraftInput, InspectionFinalizeInput } from "../inspectio
 import { DomainValidationError, expectOnlyKeys, expectPositiveInteger, expectRecord, expectUuid } from "../../types/entity.ts";
 import type { SyncStatus, Uuid } from "../../types/entity.ts";
 
-export type SyncEntityKind = "inspection" | "finding";
+export type SyncEntityKind = "inspection" | "finding" | "photo";
 export type SyncOperation = "create" | "update" | "delete" | "discard" | "finalize" | "followup";
 export type DomainOperationKind =
   | "inspection.create"
@@ -15,7 +16,9 @@ export type DomainOperationKind =
   | "finding.create"
   | "finding.update"
   | "finding.delete"
-  | "finding.followup";
+  | "finding.followup"
+  | "photo.upload"
+  | "photo.delete";
 
 type OperationBase<K extends DomainOperationKind, P> = {
   clientId: Uuid;
@@ -33,7 +36,9 @@ export type DomainOperation =
   | OperationBase<"finding.create", FindingCaptureInput>
   | OperationBase<"finding.update", FindingCaptureInput>
   | OperationBase<"finding.delete", Record<string, never>>
-  | OperationBase<"finding.followup", FindingFollowupInput>;
+  | OperationBase<"finding.followup", FindingFollowupInput>
+  | OperationBase<"photo.upload", PhotoUploadPayload>
+  | OperationBase<"photo.delete", { inspectionId: string; findingId: string }>;
 
 export type OperationAcknowledgement = {
   operationId: Uuid;
@@ -43,6 +48,7 @@ export type OperationAcknowledgement = {
   appliedAt: string;
   replayed: boolean;
   folioNumber?: number;
+  photo?: FindingPhoto;
 };
 
 export type DomainErrorCode =
@@ -131,7 +137,7 @@ export type SyncQueueRecord = {
 
 const operationKinds: readonly DomainOperationKind[] = [
   "inspection.create", "inspection.update", "inspection.discard", "inspection.finalize",
-  "finding.create", "finding.update", "finding.delete", "finding.followup",
+  "finding.create", "finding.update", "finding.delete", "finding.followup", "photo.upload", "photo.delete",
 ];
 
 /** Validates the common JSON body; the Idempotency-Key is validated separately as operationId. */
@@ -142,7 +148,7 @@ export function validateDomainOperation(input: unknown): DomainOperation {
   const entityId = expectUuid(record.entityId, "body.entityId");
   if (typeof record.kind !== "string" || !operationKinds.includes(record.kind as DomainOperationKind)) throw new DomainValidationError([{ path: "body.kind", message: "is invalid" }]);
   const kind = record.kind as DomainOperationKind;
-  const isCreation = kind === "inspection.create" || kind === "finding.create";
+  const isCreation = kind === "inspection.create" || kind === "finding.create" || kind === "photo.upload";
   const baseVersion = isCreation ? null : expectPositiveInteger(record.baseVersion, "body.baseVersion");
   if (isCreation && record.baseVersion !== null && record.baseVersion !== undefined) throw new DomainValidationError([{ path: "body.baseVersion", message: "must be absent for creation" }]);
 
@@ -164,6 +170,21 @@ function validatePayload(kind: DomainOperationKind, payload: unknown) {
     case "finding.update": return validateFindingCapture(payload, "update");
     case "finding.delete": return validateEmptyPayload(payload);
     case "finding.followup": return validateFindingFollowup(payload);
+    case "photo.upload": {
+      const record = expectRecord(payload, "payload");
+      expectOnlyKeys(record, ["inspectionId", "findingId", "sourceHash", "mimeType", "bytes"], "payload");
+      const inspectionId = expectUuid(record.inspectionId, "payload.inspectionId");
+      const findingId = expectUuid(record.findingId, "payload.findingId");
+      if (typeof record.sourceHash !== "string" || !/^[a-f0-9]{64}$/.test(record.sourceHash) || !["image/jpeg", "image/png", "image/webp"].includes(String(record.mimeType))) throw new DomainValidationError([{ path: "payload", message: "invalid photo metadata" }]);
+      const bytes = expectPositiveInteger(record.bytes, "payload.bytes");
+      if (bytes > 5242880) throw new DomainValidationError([{ path: "payload.bytes", message: "photo too large" }]);
+      return { inspectionId, findingId, sourceHash: record.sourceHash, mimeType: record.mimeType, bytes };
+    }
+    case "photo.delete": {
+      const record = expectRecord(payload, "payload");
+      expectOnlyKeys(record, ["inspectionId", "findingId"], "payload");
+      return { inspectionId: expectUuid(record.inspectionId, "payload.inspectionId"), findingId: expectUuid(record.findingId, "payload.findingId") };
+    }
   }
 }
 

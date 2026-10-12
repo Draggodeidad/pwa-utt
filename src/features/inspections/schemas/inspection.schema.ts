@@ -6,7 +6,10 @@ export type InspectionDraftInput = {
   summary?: string;
 };
 
+import type { InspectionLocation } from "../types.ts";
+
 export type InspectionFinalizeInput = {
+  location?: InspectionLocation | null;
   expectedFindingIds: string[];
 };
 
@@ -49,12 +52,13 @@ export function validateInspectionForFinalization(input: unknown): Required<Insp
 
 export function validateInspectionFinalization(input: unknown): InspectionFinalizeInput {
   const record = expectRecord(input, "payload");
-  expectOnlyKeys(record, ["expectedFindingIds"], "payload");
+  expectOnlyKeys(record, ["expectedFindingIds", "location"], "payload");
   if (!Array.isArray(record.expectedFindingIds)) {
     throw new DomainValidationError([{ path: "payload.expectedFindingIds", message: "must be an array" }]);
   }
 
   return {
+    ...("location" in record ? { location: validateInspectionLocation(record.location) } : {}),
     expectedFindingIds: record.expectedFindingIds.map((id, index) => expectUuid(id, `payload.expectedFindingIds[${index}]`)),
   };
 }
@@ -72,4 +76,23 @@ export function isInspectionDraftInput(value: unknown): value is InspectionDraft
   } catch {
     return false;
   }
+}
+
+/** Complete, bounded snapshot; null explicitly means no consented capture. */
+export function validateInspectionLocation(input: unknown): InspectionLocation | null {
+  if (input === null) return null;
+  const record = expectRecord(input, "payload.location");
+  expectOnlyKeys(record, ["latitude", "longitude", "accuracy", "capturedAt"], "payload.location");
+  const number = (key: string, min: number, max: number) => {
+    const value = record[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+      throw new DomainValidationError([{ path: `payload.location.${key}`, message: "must be a finite number in range" }]);
+    }
+    return value;
+  };
+  const capturedAt = expectString(record.capturedAt, "payload.location.capturedAt", { min: 1, max: 24 });
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(capturedAt) || !Number.isFinite(Date.parse(capturedAt)) || new Date(capturedAt).toISOString().slice(0, 19) !== capturedAt.slice(0, 19)) {
+    throw new DomainValidationError([{ path: "payload.location.capturedAt", message: "must be a UTC ISO timestamp" }]);
+  }
+  return { latitude: number("latitude", -90, 90), longitude: number("longitude", -180, 180), accuracy: number("accuracy", 0, Number.MAX_VALUE), capturedAt };
 }
