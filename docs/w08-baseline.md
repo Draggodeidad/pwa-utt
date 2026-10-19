@@ -65,7 +65,9 @@ Los estados describen evidencia encontrada en este SHA, no la calificación fina
 
 - Fecha: 19/10/2026 (`America/Mexico_City`). SHA completo de HEAD: `7fd77027cbc4d0e4e04c5a1d26308593d219bf0e`.
 - Comando exacto: `make verify`.
-- Resultado observado: exitCode `0`; typecheck, suite `npm test`, build/postbuild, métricas de rendering y `bash public-tests/check-w06.sh` pasaron. `reports/verification.json` indica revisión académica pendiente.
+- Caso: verificación técnica acumulativa de la base local W08 antes de añadir este documento.
+- Esperado: exitCode `0` y ejecución satisfactoria de typecheck, pruebas, build/postbuild, métricas de rendering y gate W06.
+- Observado: exitCode `0`; typecheck, suite `npm test`, build/postbuild, métricas de rendering y `bash public-tests/check-w06.sh` pasaron. `reports/verification.json` indica revisión académica pendiente.
 - Entorno y límite: Node `v26.2.0`; no se ejecutó `npm ci`. Por tanto acredita el resultado local de `make verify` en esa instalación, no instalación limpia ni ejecución del workflow W08 en Node 22.22.3. La integración HTTP es simulada y no acredita un navegador real, hardware o servicios privados. El checkout tenía cambios locales ajenos a este baseline al momento de la ejecución.
 
 ## Contratos independientes del equipo
