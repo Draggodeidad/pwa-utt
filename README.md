@@ -165,3 +165,31 @@ Entrega preparada en [PR #74](https://github.com/Draggodeidad/pwa-utt/pull/74), 
 Fijar el SHA completo del head evaluado que aparece en `reports/verification.json` y en la ejecución de [Actions W06](https://github.com/Draggodeidad/pwa-utt/actions/workflows/week-06-w06-device-push.yml); descargar allí `w06-baseline-verification` y contrastar `commitSha`. No es necesario crear un tag. Fecha objetivo: **11/10/2026, America/Mexico_City**; el correo no indica hora y debe confirmarse en Classroom. Esta solicitud no incluye el envío al LMS.
 
 El kit local ya fue inspeccionado y coincide con #68; no equivale a contrato aprobado ni habilita el evaluador privado. Permanecen pendientes cámara/GPS y notificación del SO con hardware real, Storage/RLS remoto, Safari/iPhone y otros navegadores, revisión/defensa humana del owner y hora oficial. Las notificaciones son locales, sin Push/VAPID ni garantía con la app cerrada. No se declara calificación ni cierre total de #73 por el solo PASS técnico.
+
+## E2E del flujo crítico W08
+
+La automatización usa `@playwright/test` fijado en `1.64.1` porque el repositorio no tenía controlador de navegador; este paquete reúne runner, assertions y ciclo de servidor de prueba en una sola dependencia. Se ejecuta con Chromium para verificar el flujo real de login técnico, captura y validación, guardado en IndexedDB, recarga offline con Service Worker, sincronización idempotente, finalización y acceso de coordinación. Incluye la comprobación de que coordinación no ve el borrador.
+
+Instalación reproducible desde checkout limpio (Node 22.x):
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+`npm run test:e2e` reemplaza las variables de Supabase por valores sintéticos durante la build y la prueba, compila la app y levanta Next junto con un backend Supabase sintético en puertos loopback efímeros; no necesita credenciales ni proyectos remotos. El fixture es el mismo que usa `tests/online-inspection-workflow.spec.ts`. Para que CI lo consuma, ejecuta los tres comandos anteriores en ese orden. El mock ejercita el contrato y las reglas de visibilidad modeladas por el test, pero **no acredita RLS remota de Supabase**, hardware físico ni compatibilidad con Firefox, WebKit o Safari. La cobertura E2E intencionalmente se limita al recorrido crítico en Chromium.
+
+## Niveles de prueba e integración continua W08
+
+Las suites originales siguen ejecutándose con `npm test`. Para ejecutar los niveles por separado:
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+```
+
+Unitarias descubre `tests/unit/*.spec.ts` y reutiliza las assertions de dominio existentes. Integración descubre `tests/integration/*.spec.ts` y reutiliza el recorrido de Next HTTP contra el backend sintético. Las entradas se descubren automáticamente, fallan si el nivel está vacío y propagan el código de salida. El contrato completo y los límites están en [docs/test-strategy.md](docs/test-strategy.md).
+
+El workflow [Academic evaluation — W08](.github/workflows/academic-evaluation.yml) mantiene los checks públicos previos, ejecuta las suites unitarias e integración, luego `make verify` y E2E en Node 22.22.3, instala Chromium con Playwright y sube `academic-evaluation.json`, `verification.json` y `rendering-metrics.json` asociados al SHA probado aun si hay fallos. El orden deja la build de producción después de las pruebas HTTP con `next dev`; E2E la reutiliza dentro de Actions. Cuando se ejecuta localmente, `npm run test:e2e` compila antes de iniciar los servidores y el navegador. El reporte es técnico y **no asigna calificación**.
