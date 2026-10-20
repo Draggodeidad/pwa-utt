@@ -94,3 +94,39 @@ La relación de aceptación se conserva así: instalación/build → #75/#77/#84
 - Este baseline no copia el ZIP, no crea carpetas vacías, no implementa suites ni CI, no altera la evidencia personal de compañeros y no cambia producción.
 - La inspección del ZIP está completa; la presencia del material no significa que la entrega W08 esté implementada o calificada.
 - Los comandos `test:unit`, `test:integration` y `test:e2e` siguen siendo propuestas hasta implementarlos y ejecutarlos. La hora límite no consta en Classroom y queda sin determinar.
+
+## Addendum de implementación del owner — #77 (19/10/2026)
+
+Este addendum actualiza el estado de #77 sin reescribir el inventario histórico anterior. La implementación quedó en `feat/w08-academic-evaluation`, commit de código `ec587feb3dff16141ecbed4473130c0e2f8a2d6c`.
+
+### Clasificación y contrato de ejecución
+
+| Nivel | Entrada registrada | Suite ejercitada | Comando | Límite |
+| --- | --- | --- | --- | --- |
+| Unitario | `tests/unit/domain-contracts.spec.ts` | `tests/domain-contracts.spec.ts` | `npm run test:unit` | Dominio/adaptadores en Node; no arranca Next ni navegador. |
+| Integración | `tests/integration/online-workflow.spec.ts` | `tests/online-inspection-workflow.spec.ts` | `npm run test:integration` | Rutas HTTP reales de Next con backend HTTP sintético; sin navegador y sin afirmar RLS remota. |
+| E2E | `tests/e2e/critical-flow.spec.ts` | Flujo offline, recuperación, sincronización y finalización en Chromium | `npm run test:e2e` | Backend/API sintéticos; un navegador Chromium; no acredita servicios remotos ni hardware. |
+
+Los runners de nivel descubren sólo archivos `.spec.ts` hijos directos, en orden alfabético, de `tests/unit/` y `tests/integration/`. Fallan si el directorio no existe, está vacío, una suite falla o el proceso no puede arrancar; propagan el primer `exitCode` fallido. Por ello las rutas reservadas `tests/unit/photo-validation.spec.ts` y `tests/integration/queue-recovery.spec.ts` se incorporarán automáticamente cuando existan, sin hacer depender la infraestructura de sus aportes. Los wrappers conservan las assertions y salida de las suites existentes como procesos Node; no son checks estructurales ni sustituyen el `npm test` acumulativo.
+
+El workflow `.github/workflows/academic-evaluation.yml` fija Node 22.22.3, hace instalación limpia, mantiene checks públicos W02/W05/W06, ejecuta unitarias e integración, luego `make verify` y al final E2E sobre la build de producción recién generada. Instala Chromium mediante Playwright y sólo solicita `contents: read`. Los pasos de comprobación/reportes usan condiciones para intentar publicar los reportes incluso si falla una suite. El artefacto queda nombrado con el SHA de checkout y sólo contiene `academic-evaluation.json`, `verification.json` y `rendering-metrics.json`; no contiene estado de sesión, cookies, secretos, tokens ni trazas del navegador. No usa `pull_request_target` ni credenciales de servicios remotos. El reporte declara evaluación técnica y revisión académica pendiente; no asigna calificación.
+
+La plantilla de estrategia para transcribir o ampliar por nivel está en `docs/test-strategy.md`: propósito, nivel/ruta, caso esperado, comando confirmado, límite/mock y evidencia (SHA, fecha, resultado y URL de Actions cuando exista). No se fija umbral de cobertura. Las suites simuladas no se presentan como pruebas remotas de RLS.
+
+### Comprobaciones locales del commit de código
+
+Entorno: Node `v22.22.3`, npm `10.9.8`; fecha `19/10/2026` (`America/Mexico_City`). Cada resultado siguiente corresponde al código `ec587feb3dff16141ecbed4473130c0e2f8a2d6c`; no es un run histórico W01–W06.
+
+| Comando ejecutado | Resultado observado |
+| --- | --- |
+| `npm ci --no-audit --no-fund` | ExitCode `0`; instalación limpia. |
+| `npx playwright install chromium` | ExitCode `0`; Chromium instalado para Playwright. |
+| `bash public-tests/check.sh` | ExitCode `0`; `PUBLIC_OK`. |
+| `bash public-tests/check-w05.sh` y `bash public-tests/check-w06.sh` | Ambos ExitCode `0`. |
+| `npm run test:unit` | ExitCode `0`; suite de contratos de dominio pasó. |
+| `npm run test:integration` | ExitCode `0`; flujo HTTP de Next pasó con backend sintético. |
+| `make verify` | ExitCode `0`; incluyó typecheck, `npm test`, build/postbuild, métricas de rendering y gate W06. Los reportes indican revisión humana/académica pendiente. |
+| `E2E_SKIP_BUILD=1 npm run test:e2e` | ExitCode `0` después de `make verify`; Chromium pasó 1 flujo crítico (`1 passed`, 36.8 s). La variable sólo evita reconstruir la build ya creada por `make verify`. |
+| Prueba negativa temporal `tests/unit/ci-assertion-probe.spec.ts` con `assert.fail(...)`, ejecutada mediante `npm run test:unit` | El runner imprimió `ci-assertion-probe.spec.ts: exitCode 1` y el comando terminó distinto de cero; la suite real de dominio también se ejecutó. El archivo temporal se eliminó tras la comprobación. |
+
+La instalación y ejecución locales verifican los scripts y el orden de la infraestructura, pero no sustituyen Actions. El run de `academic-evaluation.yml` para el SHA publicado y su artefacto deberán leerse en la pestaña de Actions/PR antes de describir ese run como aprobado. El run W06 histórico del SHA base no acredita W08. Revisión humana de la estrategia y calificación siguen fuera del reporte técnico.
