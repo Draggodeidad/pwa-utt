@@ -11,6 +11,9 @@
     "postbuild": "node scripts/generate-offline-assets.mjs",
     "start": "next start",
     "test": "node tests/starter.spec.mjs && node tests/manifest.spec.ts && node tests/service-worker.spec.ts && node tests/offline.spec.ts && node tests/offline-shell.spec.ts && node tests/rendering.spec.ts && node tests/supabase-config.spec.ts && node tests/domain-contracts.spec.ts && node tests/auth.spec.ts && node tests/inspection-api.spec.ts && node tests/inspection-location.spec.ts && node tests/finding-api.spec.ts && node tests/online-inspection-workflow.spec.ts && node tests/local-storage.spec.ts && node tests/local-capture.spec.ts && node tests/queue-transport.spec.ts && node tests/queue-recovery.spec.ts && node tests/conflict-resolution.spec.ts && node tests/session-isolation.spec.ts && node tests/sync-ui.spec.ts && node tests/coordination-findings.spec.ts && node tests/inspection-coordination.spec.ts && node tests/operational-summaries.spec.ts && node tests/date-format.spec.ts && node tests/safe-pwa-update.spec.ts && node tests/sync.spec.ts && node tests/photo-validation.spec.ts && node tests/photo-local.spec.ts && node tests/photo-remote.spec.ts && node tests/w06-baseline.spec.mjs && node tests/capabilities.spec.ts",
+    "test:unit": "node scripts/run-test-level.mjs unit",
+    "test:integration": "node scripts/run-test-level.mjs integration",
+    "test:e2e": "node tests/e2e/run.cjs",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "measure:rendering": "node scripts/measure-rendering.mjs"
@@ -31,6 +34,7 @@
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@types/node": "^20.14.15",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
