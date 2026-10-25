@@ -45,6 +45,11 @@ jobs:
           bash public-tests/check-w05.sh
           bash public-tests/check-w06.sh
 
+      - name: Lint source, scripts, and tests
+        id: lint
+        if: always() && steps.install.outcome == 'success'
+        run: npm run lint
+
       - name: Run unit suites
         id: unit
         if: always() && steps.install.outcome == 'success'
@@ -74,6 +79,7 @@ jobs:
           W08_BROWSER_OUTCOME: ${{ steps.browser.outcome }}
           W08_PUBLIC_OUTCOME: ${{ steps.public.outcome }}
           W08_PREVIOUS_OUTCOME: ${{ steps.previous.outcome }}
+          W08_LINT_OUTCOME: ${{ steps.lint.outcome }}
           W08_VERIFY_OUTCOME: ${{ steps.verify.outcome }}
           W08_UNIT_OUTCOME: ${{ steps.unit.outcome }}
           W08_INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
