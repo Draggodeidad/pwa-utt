@@ -334,6 +334,11 @@ Nota de integración: la sección anterior describe el aporte original de Osbald
 - Límites: no se modificó Supabase remoto ni se validó Storage/RLS HTTP con cuentas normales; pendientes cámara/GPS físicos, avisos del SO, Safari/iPhone/multinavegador, corrección personal de la evidencia de Julián y revisión/defensa humana final del owner. Sin Push/VAPID ni garantía de app cerrada. Fecha objetivo **11/10/2026 America/Mexico_City**, hora oficial no consta y queda pendiente consultar Classroom. Sin merge, despliegue, tag exigido ni envío LMS; #73 no se cierra por mera existencia/PASS técnico.
 - IA: **Codex** asistió con inspección y revisión de código/historial/kit, comandos, harness sintéticos, revisión visual y redacción de README, baseline, reporte, estado AGENT, metadatos del verificador y esta entrada propia del alcance owner. Propósito: consolidar entrega verificable sin alterar aportes ajenos. La evidencia se contrastó con outputs, assertions y commits reales; la validación humana de Imanol permanece pendiente y no se marca realizada.
 
+## Semana 08
+
+- Grupo y equipo: **9B-E02**
+- Repositorio: [https://github.com/Draggodeidad/pwa-utt](https://github.com/Draggodeidad/pwa-utt)
+
 ## W08 #77 — niveles de pruebas y CI académico (19/10/2026)
 
 - Responsable y contribución propia: Imanol Antonio de la Cruz / Draggodeidad. En `feat/w08-academic-evaluation`, commit de código `ec587feb3dff16141ecbed4473130c0e2f8a2d6c`, añadí los comandos de niveles, wrappers de unitarias e integración que invocan suites reales existentes, descubrimiento de aportes futuros, workflow académico con Chromium y publicación de reportes, documentación de estrategia/README y el reporte técnico W08. El E2E del owner usa un backend sintético y comprueba el flujo crítico en Chromium. No edité declaraciones personales de compañeros ni alteré el comportamiento de producción.
