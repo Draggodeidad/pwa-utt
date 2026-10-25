@@ -190,6 +190,32 @@ npm run test:integration
 npm run test:e2e
 ```
 
-Unitarias descubre `tests/unit/*.spec.ts` y reutiliza las assertions de dominio existentes. Integración descubre `tests/integration/*.spec.ts` y reutiliza el recorrido de Next HTTP contra el backend sintético. Las entradas se descubren automáticamente, fallan si el nivel está vacío y propagan el código de salida. El contrato completo y los límites están en [docs/test-strategy.md](docs/test-strategy.md).
+Unitarias descubre `tests/unit/*.spec.ts`: dominio del owner y fotos de Osbaldo. Integración descubre `tests/integration/*.spec.ts`: HTTP de Next y recuperación de cola. Los wrappers reutilizan las suites canónicas existentes; las fotos ejercitan directamente el módulo real con 14 casos sintéticos. Las entradas se descubren automáticamente, fallan si el nivel está vacío y propagan el código de salida. El contrato completo y los límites están en [docs/test-strategy.md](docs/test-strategy.md).
 
-El workflow [Academic evaluation — W08](.github/workflows/academic-evaluation.yml) mantiene los checks públicos previos, ejecuta las suites unitarias e integración, luego `make verify` y E2E en Node 22.22.3, instala Chromium con Playwright y sube `academic-evaluation.json`, `verification.json` y `rendering-metrics.json` asociados al SHA probado aun si hay fallos. El orden deja la build de producción después de las pruebas HTTP con `next dev`; E2E la reutiliza dentro de Actions. Cuando se ejecuta localmente, `npm run test:e2e` compila antes de iniciar los servidores y el navegador. El reporte es técnico y **no asigna calificación**.
+El workflow [Academic evaluation — W08](.github/workflows/academic-evaluation.yml) mantiene los checks públicos previos, ejecuta lint y las suites unitarias e integración, luego `make verify` y E2E en Node 22.22.3, instala Chromium con Playwright y sube `academic-evaluation.json`, `verification.json` y `rendering-metrics.json` asociados al SHA probado aun si hay fallos. El orden deja la build de producción después de las pruebas HTTP con `next dev`; E2E la reutiliza dentro de Actions. Cuando se ejecuta localmente, `npm run test:e2e` compila antes de iniciar los servidores y el navegador. El reporte es técnico y **no asigna calificación**.
+
+
+## Entrega verificable W08 — consolidación del owner (#84)
+
+La [matriz de aceptación](docs/w08-delivery.md) relaciona requisito, artefacto, validación, estado y límite. [PR #88](https://github.com/Draggodeidad/pwa-utt/pull/88) conserva fotos, recuperación de cola y evidencia de Osbaldo; [PR #89](https://github.com/Draggodeidad/pwa-utt/pull/89) agrega estrategia completa, lint/CI y consolidación de Draggodeidad con asistencia de Codex. El segundo PR está encadenado sobre el primero para evitar duplicar su diff. W08 cuenta con aportes verificables de Draggodeidad y Osbaldo; el owner asume #81 y #83 se retiró como `not_planned`. Se conserva el historial legítimo anterior.
+
+Usar Node **22.22.3** y ejecutar secuencialmente:
+
+```bash
+npm ci --no-audit --no-fund
+npx playwright install chromium
+bash public-tests/check.sh
+bash public-tests/check-w05.sh
+bash public-tests/check-w06.sh
+npm run lint
+npm run test:unit
+npm run test:integration
+make verify
+E2E_SKIP_BUILD=1 npm run test:e2e
+```
+
+`make verify` incluye typecheck, pruebas acumulativas, build/postbuild, métricas y gate W06; debe ir después de integración, que puede sustituir `.next`. ESLint comprueba sintaxis y reglas mínimas de corrección en código/scripts/pruebas, sin reformateos; CI registra `lint` como comprobación obligatoria. La ausencia de lint descrita en la sección histórica W06 corresponde a esa entrega anterior.
+
+La matriz conserva el caso real corregido en W06 y revalidado en W08, la distinción entre Node 22.12.0 local histórico y Node 22.22.3 de CI, y los reportes ligados al SHA evaluado. El SHA final y su run/artefacto se fijan en el PR #89; el reporte debe coincidir con el head publicado. La evidencia del owner declara asistencia de Codex y revisión humana pendiente; no convierte Actions en una ejecución personal de Osbaldo.
+
+Entrega: **25/10/2026, America/Mexico_City, sin hora confirmada**. Quedan pendientes revisión/defensa humana del owner y revisión académica; los tests sintéticos no acreditan hardware, RLS remota ni otros navegadores. Preparar la entrega no implica fusionar PRs, crear tags, desplegar manualmente o enviarla a Classroom.
