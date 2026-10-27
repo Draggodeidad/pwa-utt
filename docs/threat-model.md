@@ -59,6 +59,10 @@ Son **tres archivos propuestos**, aún ausentes en el corte. No añadir otro fra
 
 Los validadores de fotos, coordinación, UUID y payload siguen en sus módulos originales. No fabricar helpers `sanitize`, validadores por regex paralelos ni envolver todos los fallos como éxito. La suite importa fachadas reales y además demuestra sus consumidores HTTP; un módulo sin uso no cumple el kit.
 
+### Adaptador de error de configuración (#93)
+
+Aclaración aditiva antes de implementar: `supabase/config.ts` exporta `SupabaseConfigurationError extends Error`, reexportada por `security/config.ts`. Las firmas existentes no cambian. `supabase/server.ts` ofrece `withSupabaseConfiguration(handler)` para envolver los handlers HTTP y middleware: captura únicamente ese error tipado, responde 503 `Servicio no disponible` con `private, no-store` y no registra el error/entorno. Otros errores conservan su tratamiento. Esto cierra la brecha observada: la creación del cliente ocurre fuera del try en APIs y middleware y hoy produce 500/log de Next. No cambia autorización ni introduce clientes sintéticos.
+
 ### Validación: decisión de frontera y transporte
 
 1. Reducir en las fuentes canónicas [inspection.schema.ts](../src/features/inspections/schemas/inspection.schema.ts) y [finding.schema.ts](../src/features/findings/schemas/finding.schema.ts) los máximos de **summary 3000, description 3000, title 160**, tanto captura/actualización como finalización. No modificar constraints SQL para aceptar más. Conservar el trim y reglas de campos obligatorios existentes. Revisar atributos UI que pudieran ofrecer límites mayores. Borradores locales anteriores fuera de límite requieren corrección explícita; no truncarlos ni descartar cola silenciosamente.
