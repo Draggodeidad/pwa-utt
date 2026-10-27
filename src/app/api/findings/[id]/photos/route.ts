@@ -1,11 +1,11 @@
 import type { NextRequest } from "next/server";
 import { authorizeRequest } from "@/lib/auth/guards";
 import { apiError, privateJson } from "@/lib/auth/http";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 import { expectUuid } from "@/types/entity";
 import { photoFromRow, type PhotoRow } from "@/lib/photos/remote";
 export const dynamic = "force-dynamic";
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export const GET = withSupabaseConfiguration(async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = createRequestSupabaseClient(request);
   const permission = await authorizeRequest(auth.client, ["technician", "coordinator"]);
   if ("error" in permission) return auth.withCookies(apiError(permission.error === 401 ? "UNAUTHENTICATED" : "FORBIDDEN"));
@@ -18,4 +18,4 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     if (result.error) return auth.withCookies(apiError("UNAVAILABLE"));
     return auth.withCookies(privateJson((result.data as PhotoRow[]).map(photoFromRow)));
   } catch { return auth.withCookies(apiError("INVALID_REQUEST")); }
-}
+});

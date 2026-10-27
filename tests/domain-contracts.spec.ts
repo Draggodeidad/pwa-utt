@@ -32,8 +32,8 @@ const ids = {
 assert.deepEqual(validateInspectionDraft({}), {}, "un borrador puede estar incompleto");
 assert.throws(() => validateInspectionDraft({ inspectionDate: "2026-02-30" }), /real calendar date/);
 assert.throws(() => validateInspectionDraft({ laboratoryId: ids.laboratory, extra: true }), /not allowed/);
-assert.throws(() => validateInspectionForFinalization({ laboratoryId: ids.laboratory, inspectionDate: "2026-02-28", summary: "   " }), /between 1 and 4000/);
-assert.throws(() => validateFindingForFinalization({ title: "  " }), /between 1 and 500/);
+assert.throws(() => validateInspectionForFinalization({ laboratoryId: ids.laboratory, inspectionDate: "2026-02-28", summary: "   " }), /between 1 and 3000/);
+assert.throws(() => validateFindingForFinalization({ title: "  " }), /between 1 and 160/);
 console.log("[ok] borradores incompletos y reglas de finalización se distinguen");
 
 const createOperation = validateDomainOperation({

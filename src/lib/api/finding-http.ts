@@ -5,7 +5,7 @@ import { authorizeRequest } from "@/lib/auth/guards";
 import type { RequestSupabaseClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/features/auth";
 import type { DomainOperationKind } from "@/features/sync/types";
-import { validateDomainOperation, validateOperationId } from "@/features/sync";
+import { validateDomainOperation, validateOperationId } from "@/lib/security/validation";
 import { DomainValidationError } from "@/types/entity";
 import { ApplyOperationError, applyFindingOperation } from "@/lib/repositories/operations";
 

@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readSession } from "@/lib/auth/session-store";
 import { hasEditableInspection, hasVisibleInspection } from "@/lib/repositories/inspections";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 
 /** Refresh cookies and redirect early; pages and RLS still enforce domain access. */
-export async function middleware(request: NextRequest) {
+export const middleware = withSupabaseConfiguration(async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (pathname === "/login") return NextResponse.next();
   if (request.cookies.get("pwa-utt-logout-blocked")?.value === "1") {
@@ -44,8 +44,8 @@ export async function middleware(request: NextRequest) {
     }
   }
   return auth.withCookies(NextResponse.next({ request: { headers: request.headers } }));
-}
+});
 
 export const config = {
-  matcher: ["/((?!api(?:/|$)|_next(?:/|$)|offline$|favicon\\.ico$|manifest\\.webmanifest$|sw\\.js$|sw-build\\.js$|offline-assets\\.json$|apple-touch-icon\\.png$|icons/|inspection-assets/|screenshots/).*)"],
+  matcher: ["/((?!api(?:/|$)|_next(?:/|$)|offline$|robots\\.txt$|favicon\\.ico$|manifest\\.webmanifest$|sw\\.js$|sw-build\\.js$|offline-assets\\.json$|apple-touch-icon\\.png$|icons/|inspection-assets/|screenshots/).*)"],
 };

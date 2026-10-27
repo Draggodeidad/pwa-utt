@@ -54,7 +54,7 @@ const port = await freePort();
 const base = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, [resolve(root, "node_modules/next/dist/bin/next"), "start", "--hostname", "127.0.0.1", "--port", String(port)], {
   cwd: root, stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, SUPABASE_URL: `http://127.0.0.1:${backend.address().port}`, SUPABASE_ANON_KEY: "synthetic-anon-key" },
+  env: { ...process.env, SUPABASE_URL: `http://127.0.0.1:${backend.address().port}`, SUPABASE_ANON_KEY: "sb_publishable_synthetic_w09_fixture" },
 });
 let output = "";
 for (const stream of [server.stdout, server.stderr]) stream.on("data", (chunk) => { output = `${output}${chunk}`.slice(-8000); });
