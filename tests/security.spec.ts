@@ -170,10 +170,15 @@ async function main() {
       assert.equal((await login(credentials, { "Content-Type": "application/json-extra" })).status, 422);
       assert.equal((await login("{")).status, 422);
       for (const origin of ["", "https://example.invalid", app.base.replace("http:", "https:"), "http://127.0.0.1:1"]) assert.equal((await login(credentials, { Origin: origin })).status, 403);
-      assert.equal((await login(credentials + " ".repeat(4096 - credentials.length), { "Content-Type": "Application/JSON; charset=utf-8" })).status, 200);
+      const success = await login(credentials + " ".repeat(4096 - credentials.length), { "Content-Type": "Application/JSON; charset=utf-8" });
+      assert.equal(success.status, 200);
+      const cookie = success.headers.getSetCookie().map(value => value.split(";", 1)[0]).join("; ");
+      const privatePage = await app.request("/profile", { headers: { Cookie: cookie } });
+      assert.equal(privatePage.status, 200); headersMatch(privatePage);
+      assert.equal(privatePage.headers.get("cache-control"), "private, no-store");
       assert.equal((await login(credentials + " ".repeat(4097 - credentials.length))).status, 422);
     });
-    await check("W09-R1/R3 archivo reservado #99, público aun con bloqueo local", async () => {
+    await check("W09-R1/R3 robots público aun con bloqueo local", async () => {
       const text = "User-agent: *\nDisallow: /\n";
       assert.equal(readFileSync(join(root, "public/robots.txt"), "utf8"), text);
       for (const headers of [{}, { Cookie: "pwa-utt-logout-blocked=1" }]) {
