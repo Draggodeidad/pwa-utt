@@ -1,4 +1,12 @@
 // Owner minimum W09 contract. #95 can extend the real cases without a new runner.
+const { spawnSync: __spawnSync } = require("node:child_process");
+if (!process.execArgv.includes("--experimental-strip-types")) {
+  const selfRun = __spawnSync(process.execPath, ["--experimental-strip-types", __filename], {
+    stdio: "inherit",
+    env: process.env,
+  });
+  process.exit(selfRun.status ?? 1);
+}
 const assert = require("node:assert/strict");
 const { readFileSync, existsSync, readdirSync } = require("node:fs");
 const { resolve, join } = require("node:path");
@@ -43,9 +51,13 @@ async function startApp(overrides) {
   for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => { output += chunk; });
   async function stop() {
     if (child.exitCode === null) {
-      child.kill("SIGTERM");
-      await Promise.race([once(child, "exit"), wait(3000)]);
-      if (child.exitCode === null) { child.kill("SIGKILL"); await once(child, "exit"); }
+      if (process.platform === "win32") {
+        spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      } else {
+        child.kill("SIGTERM");
+        await Promise.race([once(child, "exit"), wait(3000)]);
+        if (child.exitCode === null) { child.kill("SIGKILL"); await once(child, "exit"); }
+      }
     }
   }
   const request = (path, options = {}) => fetch(base + path, { ...options, redirect: "manual", signal: AbortSignal.timeout(10000) });
@@ -85,6 +97,38 @@ async function main() {
     assert.equal(validateFindingForFinalization({ title: "x".repeat(160), description: "x".repeat(3000) }).title.length, 160);
     assert.throws(() => validateFindingForFinalization({ title: "x".repeat(161) }));
     assert.throws(() => validateFindingForFinalization({ title: "x", description: "x".repeat(3001) }));
+
+    // Ampliación #95: frontera exacta con surrogates Unicode compuestos y bytes nulos
+    const input = value => ({ ...op, kind: "inspection.create", payload: { summary: value } });
+    const emojiSurrogate = "😀"; // 2 code units UTF-16
+    const exactMaxSurrogates = emojiSurrogate.repeat(1500); // exactly 3000 code units
+    assert.equal(exactMaxSurrogates.length, 3000);
+    assert.equal(validateDomainOperation(input(exactMaxSurrogates)).payload.summary, exactMaxSurrogates);
+    const overflowSurrogates = emojiSurrogate.repeat(1501); // 3002 code units
+    assert.throws(() => validateDomainOperation(input(overflowSurrogates)));
+
+    // Ampliación #95: control de caracteres y payload estricto
+    assert.equal(validateDomainOperation(input("test\0injection")).payload.summary, "test\0injection");
+    assert.throws(() => validateInspectionForFinalization({ ...final, unknownField: "malicious" }));
+
+    // Ampliación #95: validación estricta de fotos contra extensiones compuestas y límites de bytes
+    const photoUploadKind = {
+      clientId: uuid,
+      entityId: uuid,
+      kind: "photo.upload",
+      baseVersion: null,
+      payload: {
+        inspectionId: uuid,
+        findingId: uuid,
+        sourceHash: "a".repeat(64),
+        mimeType: "image/jpeg",
+        bytes: 5242880,
+      },
+    };
+    assert.equal(validateDomainOperation(photoUploadKind).payload.bytes, 5242880);
+    assert.throws(() => validateDomainOperation({ ...photoUploadKind, payload: { ...photoUploadKind.payload, bytes: 5242881 } }));
+    assert.throws(() => validateDomainOperation({ ...photoUploadKind, payload: { ...photoUploadKind.payload, mimeType: "image/jpeg.exe" } }));
+    assert.throws(() => validateDomainOperation({ ...photoUploadKind, payload: { ...photoUploadKind.payload, mimeType: "text/html" } }));
   });
   await check("W09-S1 config cerrada, fronteras, formatos y redacción", () => {
     assert.equal(getSupabaseServerConfig({ ...env, SUPABASE_URL: " https://project.example.invalid/ ", SUPABASE_ANON_KEY: ` ${publicKey} ` }).url, env.SUPABASE_URL);
@@ -163,6 +207,59 @@ async function main() {
         assert.equal(response.status, 307); assert.ok(response.headers.get("location").endsWith("/login"));
       }
       assert.equal((await app.request("/api/inspections")).status, 401);
+      assert.equal((await app.request("/api/findings")).status, 401);
+      assert.equal((await app.request("/api/laboratories")).status, 401);
+    });
+
+    await check("W09-A1/A2/A3 matriz de autorización, aislamiento A/B y permisos de rol", async () => {
+      // 1. Lectura y mutación anónima denegada
+      assert.equal((await app.request("/api/inspections")).status, 401);
+      assert.equal((await app.request("/api/findings")).status, 401);
+
+      // 2. Roles: técnico no puede invocar follow-up de coordinación (PATCH /api/findings/:id/follow-up exige coordinator)
+      const techLogin = await app.request("/api/auth/login", { method: "POST", headers: { Origin: app.base, "Content-Type": "application/json" }, body: JSON.stringify({ email: "tech@example.invalid", password: "synthetic-password" }) });
+      assert.equal(techLogin.status, 200);
+      const techCookie = techLogin.headers.getSetCookie().map(v => v.split(";", 1)[0]).join("; ");
+
+      const techFollowup = await app.request("/api/findings/" + uuid + "/follow-up", {
+        method: "PATCH",
+        headers: { Origin: app.base, "Content-Type": "application/json", Cookie: techCookie },
+        body: JSON.stringify({ clientId: uuid, kind: "finding.followup", entityId: uuid, baseVersion: 1, payload: { priority: "high", status: "in_review" } }),
+      });
+      assert.equal(techFollowup.status, 403);
+
+      // 3. Aislamiento de storage local offline entre Técnicos A y B
+      const { createIndexedDbHarness } = require("./helpers/indexed-db-harness.ts");
+      const { LocalStorage } = require("../src/lib/pwa/offline-storage.ts");
+      const session = require("../src/lib/pwa/offline-session.ts");
+      const harness = createIndexedDbHarness();
+      const prevIdb = globalThis.indexedDB;
+      const prevLoc = globalThis.location;
+      const prevDoc = globalThis.document;
+      globalThis.indexedDB = harness.indexedDB;
+      globalThis.location = { protocol: "https:" };
+      globalThis.document = { cookie: "" };
+      try {
+        const userA = "11111111-aaaa-4111-8111-111111111111";
+        const userB = "22222222-bbbb-4222-8222-222222222222";
+        session.establishLocalSession({ userId: userA, displayName: "Técnico A" });
+        const storeA = await LocalStorage.open("security-isolation");
+        assert.deepEqual(await storeA.listInspections(userA), []);
+
+        // Revocar partición de A y cambiar a B
+        session.blockLocalSession();
+        await LocalStorage.revokeLease(userA, session.sessionEpoch(), "security-isolation");
+        session.completeRemoteLogout(session.sessionEpoch());
+        session.establishLocalSession({ userId: userB, displayName: "Técnico B" });
+
+        const storeB = await LocalStorage.open("security-isolation");
+        assert.deepEqual(await storeB.listInspections(userB), []);
+        storeB.close();
+      } finally {
+        globalThis.indexedDB = prevIdb;
+        globalThis.location = prevLoc;
+        globalThis.document = prevDoc;
+      }
     });
     await check("W09-V3 MIME/origen/tamaño con efectos HTTP reales", async () => {
       const credentials = JSON.stringify({ email: "tech@example.invalid", password: "synthetic-password" });
@@ -246,6 +343,33 @@ async function main() {
         assert.equal(await page.evaluate(() => window.__w09Injected), undefined);
         violations.push(...await page.evaluate(() => window.__w09Csp));
         browserStage = "assert-csp";
+        // Ampliación #95: comprobar privacidad de caché y cero credenciales en storage
+        const storageDump = await page.evaluate(() => {
+          const items = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            items.push(k + "=" + localStorage.getItem(k));
+          }
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const k = sessionStorage.key(i);
+            items.push(k + "=" + sessionStorage.getItem(k));
+          }
+          return items.join(" ");
+        });
+        assert.ok(!/password|access_token|refresh_token|synthetic-password/i.test(storageDump));
+
+        const cacheUrls = await page.evaluate(async () => {
+          const urls = [];
+          for (const name of await caches.keys()) {
+            const c = await caches.open(name);
+            for (const req of await c.keys()) urls.push(req.url);
+          }
+          return urls;
+        });
+        for (const u of cacheUrls) {
+          assert.ok(!u.includes("/api/"), "Ninguna respuesta API debe guardarse en Cache Storage");
+        }
+
         assert.deepEqual(violations, []); assert.deepEqual(pageErrors, []);
         await context.close();
       } finally { await browser.close(); }
@@ -259,17 +383,24 @@ async function main() {
       assert.equal(meta.width, 640); assert.equal(meta.height, 360);
       for (const key of ["exif", "xmp", "icc", "iptc"]) assert.equal(meta[key], undefined);
     }
+
+    // Ampliación #95: validación de privacidad de GPS y finalización con location nulo
+    const { validateInspectionLocation, validateInspectionFinalization } = require("../src/features/inspections/schemas/inspection.schema.ts");
+    assert.equal(validateInspectionLocation(null), null);
+    const finalWithoutGps = validateInspectionFinalization({ expectedFindingIds: [uuid], location: null });
+    assert.equal(finalWithoutGps.location, null);
+    assert.deepEqual(finalWithoutGps.expectedFindingIds, [uuid]);
   });
   for (const file of ["auth", "inspection-api", "finding-api", "service-worker", "session-isolation", "photo-validation", "inspection-location", "inspection-coordination"]) {
     await check(`W09 regresión ${file} (backend sintético; no acredita RLS remota)`, () => {
-      const result = spawnSync(process.execPath, [`tests/${file}.spec.ts`], { cwd: root, env: { ...process.env, AUTH_TEST_PRODUCTION: "1" }, encoding: "utf8", timeout: 180000, maxBuffer: 4 * 1024 * 1024 });
+      const result = spawnSync(process.execPath, ["--experimental-strip-types", `tests/${file}.spec.ts`], { cwd: root, env: { ...process.env, AUTH_TEST_PRODUCTION: "1" }, encoding: "utf8", timeout: 180000, maxBuffer: 4 * 1024 * 1024 });
       // Do not forward child diagnostics/payloads into CI artifacts.
       assert.equal(result.status, 0); assert.ok(!result.error);
       assert.ok(!(result.stdout + result.stderr).includes(sentinel));
     });
   }
 }
-main().catch(() => { failed++; console.error("[fail] W09 no pudo completar la suite"); }).finally(() => {
+main().catch((err) => { failed++; console.error("[fail] W09 no pudo completar la suite:", err); }).finally(() => {
   console.log(`W09: ${passed} casos pasaron; ${failed} fallaron. Cobertura owner mínima; #95 amplía la matriz.`);
   process.exitCode = passed > 0 && failed === 0 ? 0 : 1;
 });
