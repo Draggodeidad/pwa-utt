@@ -1,0 +1,103 @@
+name: W09 security and privacy — technical verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout evaluated commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node.js 22.22.3
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+
+      - name: Clean install
+        id: install
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium and system dependencies
+        id: browser
+        if: always() && steps.install.outcome == 'success'
+        run: npx playwright install --with-deps chromium
+
+      - name: Check previous public contracts
+        id: public
+        if: always() && steps.install.outcome == 'success'
+        run: bash public-tests/check.sh
+
+      - name: Check W05 and W06 contracts
+        id: previous
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          bash public-tests/check-w05.sh
+          bash public-tests/check-w06.sh
+
+      - name: Lint source, scripts, and tests
+        id: lint
+        if: always() && steps.install.outcome == 'success'
+        run: npm run lint
+
+      - name: Run unit suites
+        id: unit
+        if: always() && steps.install.outcome == 'success'
+        run: npm run test:unit
+
+      - name: Run integration suites
+        id: integration
+        if: always() && steps.install.outcome == 'success'
+        run: npm run test:integration
+
+      - name: Verify accumulated typecheck, tests, build, metrics, and W06 gate
+        id: verify
+        if: always() && steps.install.outcome == 'success'
+        run: make verify
+
+      - name: Verify W09 against production build
+        id: w09
+        if: always() && steps.install.outcome == 'success' && steps.verify.outcome == 'success' && steps.browser.outcome == 'success'
+        env:
+          NODE_ENV: production
+        run: npm run verify:w09
+
+      - name: Run browser E2E suite
+        id: e2e
+        if: always() && steps.install.outcome == 'success' && steps.browser.outcome == 'success'
+        env:
+          E2E_SKIP_BUILD: "1"
+        run: npm run test:e2e
+
+      - name: Write SHA-bound technical report
+        if: always()
+        env:
+          W09_INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          W09_BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          W09_PUBLIC_OUTCOME: ${{ steps.public.outcome }}
+          W09_PREVIOUS_OUTCOME: ${{ steps.previous.outcome }}
+          W09_LINT_OUTCOME: ${{ steps.lint.outcome }}
+          W09_VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          W09_UNIT_OUTCOME: ${{ steps.unit.outcome }}
+          W09_INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
+          W09_E2E_OUTCOME: ${{ steps.e2e.outcome }}
+        run: node scripts/verify-w09.mjs --finalize-ci
+
+      - name: Upload verification reports for evaluated SHA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w09-security-privacy-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          # Explicit allowlist: no browser traces, screenshots, env or payloads.
+          path: evaluation-result.json
