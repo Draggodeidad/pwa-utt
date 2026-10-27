@@ -219,3 +219,30 @@ E2E_SKIP_BUILD=1 npm run test:e2e
 La matriz conserva el caso real corregido en W06 y revalidado en W08, la distinción entre Node 22.12.0 local histórico y Node 22.22.3 de CI, y los reportes ligados al SHA evaluado. El SHA final y su run/artefacto se fijan en el PR #89; el reporte debe coincidir con el head publicado. La evidencia del owner declara asistencia de Codex y revisión humana pendiente; no convierte Actions en una ejecución personal de Osbaldo.
 
 Entrega: **25/10/2026, America/Mexico_City, sin hora confirmada**. Quedan pendientes revisión/defensa humana del owner y revisión académica; los tests sintéticos no acreditan hardware, RLS remota ni otros navegadores. Preparar la entrega no implica fusionar PRs, crear tags, desplegar manualmente o enviarla a Classroom.
+
+## W09 — seguridad y privacidad aplicada
+
+La implementación consume el [contrato #92](docs/threat-model.md), [inventario de privacidad](docs/privacy-data-inventory.md) y [baseline del ZIP revisado](docs/w09-baseline.md). Decisiones, mapeo de amenazas, procedencia de reemplazos sintéticos, evidencia y límites en [controles W09](docs/w09-controls.md).
+
+Setup del servidor: sólo `SUPABASE_URL` y `SUPABASE_ANON_KEY`, placeholders en `.env.example`; no usar `NEXT_PUBLIC_*`, `service_role` ni `sb_secret_*`. Config lazy sin fallback: URL HTTPS canónica (HTTP únicamente localhost/127.0.0.1/[::1]), clave publishable o JWT anon no funcional en fixtures. La validación de formato/claim no verifica firma. Config inválida responde 503 genérico sin publicar valores.
+
+Con Node 22.22.3 y Chromium instalado:
+
+```bash
+npm ci --no-audit --no-fund
+npx playwright install --with-deps chromium
+npm run lint
+npm run test:unit
+npm run test:integration
+make verify
+npm run verify:w09
+E2E_SKIP_BUILD=1 npm run test:e2e
+```
+
+`npm run test:security` ejecuta el mínimo owner sobre la build productiva previa; #95 lo amplía. `bash public-tests/check-w09.sh` verifica contenido/consumidores/registro; no sustituye pruebas ni escáner de secretos. `verify:w09` siempre genera `evaluation-result.json` ignorado, con SHA, árbol limpio/sucio, runtime, fecha, runUrl, checks y códigos reales (sin calificación). Workflow oficial W09 con Node fijo, permisos read y upload aun ante fallo; se preservan W08 y gates anteriores. Consultar el reporte de cada SHA: ningún PASS histórico acredita W09.
+
+CSP permite sólo orígenes propios, previews data/blob y las excepciones inline necesarias para Next 14/Flight y estilos Radix; producción no permite unsafe-eval. El riesgo XSS por unsafe-inline permanece. Supabase se usa en servidor; no se añade al CSP del navegador. HTTPS/HSTS del hosting y RLS/Storage remoto requieren verificación separada.
+
+`robots.txt` sólo solicita no rastrear: no es autorización. Ante la falta del PR de #99, el owner lo implementa por instrucción expresa del usuario, con asistencia de Codex y autoría real; no se atribuye a Julián. El matcher libera sólo `/robots.txt`; sesión/API/RLS siguen aplicando a recursos privados. El gate falla si falta o cambia la política.
+
+La intención histórica de datos sintéticos no acreditaba la procedencia de tres activos públicos: W09 los reemplaza por diagramas reproducibles sin fotografías fuente. No elimina copias previas/historial/CDN/cachés. IndexedDB conserva datos por cuenta sin cifrado ni TTL; logout bloquea acceso, no borra todo. Originales de fotos offline pueden retener EXIF; la recodificación limpia subidas al servidor. GPS es voluntario; Maps recibe coordenadas al abrir el enlace. El borrado de inspecciones es lógico y no hay purga física/retención automática. Ver límites de privacidad y auditoría de dependencias en el reporte de controles.

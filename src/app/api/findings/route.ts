@@ -3,7 +3,7 @@ import { apiError, privateJson, toFieldErrors } from "@/lib/auth/http";
 import { authorizeRequest } from "@/lib/auth/guards";
 import { DomainValidationError } from "@/types/entity";
 import { FindingReadError, isFindingId, listVisibleFindingsPage, parseFindingCursor } from "@/lib/repositories/findings";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 import type { FindingPriority, FindingStatus } from "@/features/findings";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ function throwInvalid(path: string, message: string): never {
   throw new DomainValidationError([{ path, message }]);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withSupabaseConfiguration(async function GET(request: NextRequest) {
   const auth = createRequestSupabaseClient(request);
   const permission = await authorizeRequest(auth.client, ["technician", "coordinator"]);
   if ("error" in permission) return auth.withCookies(apiError(permission.error === 401 ? "UNAUTHENTICATED" : "FORBIDDEN"));
@@ -61,4 +61,4 @@ export async function GET(request: NextRequest) {
     if (error instanceof FindingReadError) return auth.withCookies(apiError("UNAVAILABLE"));
     throw error;
   }
-}
+});

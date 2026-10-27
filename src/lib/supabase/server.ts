@@ -1,7 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerConfig } from "./config";
+import { getSupabaseServerConfig, SupabaseConfigurationError } from "@/lib/security/config";
+import { apiError } from "@/lib/auth/http";
 
 type CookieWrite = { name: string; value: string; options: CookieOptions };
 
@@ -61,4 +62,15 @@ export function createComponentSupabaseClient() {
       },
     },
   });
+}
+
+/** Translate only configuration failures at HTTP boundaries; never log values. */
+export function withSupabaseConfiguration<Args extends unknown[]>(handler: (...args: Args) => Promise<NextResponse>) {
+  return async (...args: Args): Promise<NextResponse> => {
+    try { return await handler(...args); }
+    catch (error) {
+      if (error instanceof SupabaseConfigurationError) return apiError("UNAVAILABLE");
+      throw error;
+    }
+  };
 }

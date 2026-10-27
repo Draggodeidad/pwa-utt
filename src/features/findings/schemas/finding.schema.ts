@@ -31,8 +31,8 @@ export function validateFindingCapture(input: unknown, mode: "create" | "update"
 
   const result: FindingCaptureInput = {};
   if (mode === "create") result.inspectionId = expectUuid(record.inspectionId, "payload.inspectionId");
-  if ("title" in record) result.title = expectString(record.title, "payload.title", { max: 500 });
-  if ("description" in record) result.description = expectString(record.description, "payload.description", { max: 4_000 });
+  if ("title" in record) result.title = expectString(record.title, "payload.title", { max: 160 });
+  if ("description" in record) result.description = expectString(record.description, "payload.description", { max: 3_000 });
   if ("priority" in record) result.priority = expectEnum(record.priority, "payload.priority", priorityValues);
   return result;
 }
@@ -40,8 +40,8 @@ export function validateFindingCapture(input: unknown, mode: "create" | "update"
 /** Only non-deleted findings being finalized require a non-blank title. */
 export function validateFindingForFinalization(input: FindingCaptureInput) {
   return {
-    title: expectString(input.title, "payload.title", { min: 1, max: 500, trim: true }),
-    description: input.description === undefined ? undefined : expectString(input.description, "payload.description", { max: 4_000 }),
+    title: expectString(input.title, "payload.title", { min: 1, max: 160, trim: true }),
+    description: input.description === undefined ? undefined : expectString(input.description, "payload.description", { max: 3_000 }),
     priority: input.priority ?? "medium",
   };
 }

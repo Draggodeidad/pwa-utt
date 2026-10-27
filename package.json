@@ -17,7 +17,9 @@
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "measure:rendering": "node scripts/measure-rendering.mjs",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "test:security": "node tests/security.spec.ts",
+    "verify:w09": "node scripts/verify-w09.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

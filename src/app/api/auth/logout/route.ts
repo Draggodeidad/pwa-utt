@@ -1,10 +1,10 @@
 import { type NextRequest } from "next/server";
 import { apiError, hasValidMutationOrigin, noStoreNoContent } from "@/lib/auth/http";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: NextRequest) {
+export const POST = withSupabaseConfiguration(async function POST(request: NextRequest) {
   if (!hasValidMutationOrigin(request)) return apiError("FORBIDDEN");
   const locallyBlocked = request.cookies.get("pwa-utt-logout-blocked")?.value === "1";
   const auth = createRequestSupabaseClient(request);
@@ -15,4 +15,4 @@ export async function POST(request: NextRequest) {
   // An offline logout may finish after a new login in another tab. Its response
   // must not overwrite that newer session's cookies; the local gate stays shut.
   return locallyBlocked ? noStoreNoContent() : auth.withCookies(noStoreNoContent());
-}
+});
