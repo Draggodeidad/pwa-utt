@@ -236,6 +236,8 @@ async function main() {
         await context.setOffline(true);
         await page.goto(app.base + "/inspections"); await page.reload();
         await expect(page.getByRole("heading", { name: "Inspecciones locales" })).toBeVisible();
+        await page.getByRole("link", { name: /Laboratorio E2E/ }).click();
+        await expect(page.getByText(inert, { exact: true })).toBeVisible();
         assert.equal(await page.evaluate(() => window.__w09Injected), undefined);
         violations.push(...await page.evaluate(() => window.__w09Csp));
         browserStage = "assert-csp";
