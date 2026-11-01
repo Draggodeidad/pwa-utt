@@ -102,7 +102,7 @@ async function main() {
     // Owner correction: NUL rejection is covered by domain-contracts and HTTP below.
     assert.throws(() => validateInspectionForFinalization({ ...final, unknownField: "malicious" }));
 
-    // Ampliación #95: validación estricta de fotos contra extensiones compuestas y límites de bytes
+    // Ampliación #95: validación de MIME del descriptor de fotos y límites de bytes
     const photoUploadKind = {
       clientId: uuid,
       entityId: uuid,
