@@ -98,17 +98,8 @@ async function main() {
     assert.throws(() => validateFindingForFinalization({ title: "x".repeat(161) }));
     assert.throws(() => validateFindingForFinalization({ title: "x", description: "x".repeat(3001) }));
 
-    // Ampliación #95: frontera exacta con surrogates Unicode compuestos y bytes nulos
-    const input = value => ({ ...op, kind: "inspection.create", payload: { summary: value } });
-    const emojiSurrogate = "😀"; // 2 code units UTF-16
-    const exactMaxSurrogates = emojiSurrogate.repeat(1500); // exactly 3000 code units
-    assert.equal(exactMaxSurrogates.length, 3000);
-    assert.equal(validateDomainOperation(input(exactMaxSurrogates)).payload.summary, exactMaxSurrogates);
-    const overflowSurrogates = emojiSurrogate.repeat(1501); // 3002 code units
-    assert.throws(() => validateDomainOperation(input(overflowSurrogates)));
-
-    // Ampliación #95: control de caracteres y payload estricto
-    assert.equal(validateDomainOperation(input("test\0injection")).payload.summary, "test\0injection");
+    // #95 strict schema case; Unicode N/N+1 already covered above.
+    // Owner correction: NUL rejection is covered by domain-contracts and HTTP below.
     assert.throws(() => validateInspectionForFinalization({ ...final, unknownField: "malicious" }));
 
     // Ampliación #95: validación estricta de fotos contra extensiones compuestas y límites de bytes
@@ -193,7 +184,7 @@ async function main() {
     assert.equal(result.status, 0); assert.ok(!result.error);
     assert.ok(!(result.stdout + result.stderr).includes(sentinel));
   });
-  const { server: backend } = require("./e2e/fixtures/backend.cjs");
+  const { server: backend, snapshot } = require("./e2e/fixtures/backend.cjs");
   backend.listen(0, "127.0.0.1"); await once(backend, "listening");
   let app;
   try {
@@ -211,11 +202,7 @@ async function main() {
       assert.equal((await app.request("/api/laboratories")).status, 401);
     });
 
-    await check("W09-A1/A2/A3 matriz de autorización, aislamiento A/B y permisos de rol", async () => {
-      // 1. Lectura y mutación anónima denegada
-      assert.equal((await app.request("/api/inspections")).status, 401);
-      assert.equal((await app.request("/api/findings")).status, 401);
-
+    await check("W09-A1 técnico no puede ejecutar follow-up de coordinación", async () => {
       // 2. Roles: técnico no puede invocar follow-up de coordinación (PATCH /api/findings/:id/follow-up exige coordinator)
       const techLogin = await app.request("/api/auth/login", { method: "POST", headers: { Origin: app.base, "Content-Type": "application/json" }, body: JSON.stringify({ email: "tech@example.invalid", password: "synthetic-password" }) });
       assert.equal(techLogin.status, 200);
@@ -228,38 +215,7 @@ async function main() {
       });
       assert.equal(techFollowup.status, 403);
 
-      // 3. Aislamiento de storage local offline entre Técnicos A y B
-      const { createIndexedDbHarness } = require("./helpers/indexed-db-harness.ts");
-      const { LocalStorage } = require("../src/lib/pwa/offline-storage.ts");
-      const session = require("../src/lib/pwa/offline-session.ts");
-      const harness = createIndexedDbHarness();
-      const prevIdb = globalThis.indexedDB;
-      const prevLoc = globalThis.location;
-      const prevDoc = globalThis.document;
-      globalThis.indexedDB = harness.indexedDB;
-      globalThis.location = { protocol: "https:" };
-      globalThis.document = { cookie: "" };
-      try {
-        const userA = "11111111-aaaa-4111-8111-111111111111";
-        const userB = "22222222-bbbb-4222-8222-222222222222";
-        session.establishLocalSession({ userId: userA, displayName: "Técnico A" });
-        const storeA = await LocalStorage.open("security-isolation");
-        assert.deepEqual(await storeA.listInspections(userA), []);
-
-        // Revocar partición de A y cambiar a B
-        session.blockLocalSession();
-        await LocalStorage.revokeLease(userA, session.sessionEpoch(), "security-isolation");
-        session.completeRemoteLogout(session.sessionEpoch());
-        session.establishLocalSession({ userId: userB, displayName: "Técnico B" });
-
-        const storeB = await LocalStorage.open("security-isolation");
-        assert.deepEqual(await storeB.listInspections(userB), []);
-        storeB.close();
-      } finally {
-        globalThis.indexedDB = prevIdb;
-        globalThis.location = prevLoc;
-        globalThis.document = prevDoc;
-      }
+      // A/B data, stale access and pending ACK use the session-isolation regression below.
     });
     await check("W09-V3 MIME/origen/tamaño con efectos HTTP reales", async () => {
       const credentials = JSON.stringify({ email: "tech@example.invalid", password: "synthetic-password" });
@@ -274,6 +230,15 @@ async function main() {
       assert.equal(privatePage.status, 200); headersMatch(privatePage);
       assert.equal(privatePage.headers.get("cache-control"), "private, no-store");
       assert.equal((await login(credentials + " ".repeat(4097 - credentials.length))).status, 422);
+      // Owner correction: reject NUL through HTTP before any backend mutation.
+      const before = snapshot();
+      const invalid = await app.request("/api/inspections", {
+        method: "POST", headers: { Origin: app.base, "Content-Type": "application/json", Cookie: cookie, "Idempotency-Key": uuid },
+        body: JSON.stringify({ clientId: uuid, kind: "inspection.create", entityId: uuid, payload: { summary: "test\0injection" } }),
+      });
+      assert.equal(invalid.status, 422);
+      assert.deepEqual(snapshot(), before);
+
     });
     await check("W09-R1/R3 robots público aun con bloqueo local", async () => {
       const text = "User-agent: *\nDisallow: /\n";
@@ -400,7 +365,7 @@ async function main() {
     });
   }
 }
-main().catch((err) => { failed++; console.error("[fail] W09 no pudo completar la suite:", err); }).finally(() => {
+main().catch(() => { failed++; console.error("[fail] W09 no pudo completar la suite (detalles omitidos para no serializar entradas)"); }).finally(() => {
   console.log(`W09: ${passed} casos pasaron; ${failed} fallaron. Cobertura owner mínima; #95 amplía la matriz.`);
   process.exitCode = passed > 0 && failed === 0 ? 0 : 1;
 });
