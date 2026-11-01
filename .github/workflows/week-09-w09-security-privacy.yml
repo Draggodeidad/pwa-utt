@@ -91,7 +91,11 @@ jobs:
           W09_UNIT_OUTCOME: ${{ steps.unit.outcome }}
           W09_INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
           W09_E2E_OUTCOME: ${{ steps.e2e.outcome }}
-        run: node scripts/verify-w09.mjs --finalize-ci
+        run: |
+          # Paths/status only: explain workingTreeClean without dumping file contents.
+          git status --short
+          git diff --numstat
+          node scripts/verify-w09.mjs --finalize-ci
 
       - name: Upload verification reports for evaluated SHA
         if: always()

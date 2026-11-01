@@ -232,11 +232,12 @@ async function main() {
       assert.equal((await login(credentials + " ".repeat(4097 - credentials.length))).status, 422);
       // Owner correction: reject NUL through HTTP before any backend mutation.
       const before = snapshot();
-      const invalid = await app.request("/api/inspections", {
-        method: "POST", headers: { Origin: app.base, "Content-Type": "application/json", Cookie: cookie, "Idempotency-Key": uuid },
+      const invalid = await app.request("/api/inspections/" + uuid, {
+        method: "PUT", headers: { Origin: app.base, "Content-Type": "application/json", Cookie: cookie, "Idempotency-Key": uuid },
         body: JSON.stringify({ clientId: uuid, kind: "inspection.create", entityId: uuid, payload: { summary: "test\0injection" } }),
       });
       assert.equal(invalid.status, 422);
+      assert.match((await invalid.json()).error, /must not contain NUL/);
       assert.deepEqual(snapshot(), before);
 
     });
