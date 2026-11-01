@@ -32,6 +32,23 @@ try {
   for (const value of [JSON.stringify(saved), result.stdout, result.stderr]) assert.ok(!value.includes(sentinel));
   subprocesses(0, 0);
   result = run(); assert.equal(result.status, 0); assert.equal(report().status, "pass");
+  // Owner correction for #104: exercise the real suite's outer rejection path.
+  // Inject only an early synthetic throw in the disposable copy, never in production.
+  const suite = readFileSync(join(root, "tests/security.spec.ts"), "utf8");
+  const entry = "async function main() {";
+  assert.equal(suite.split(entry).length, 2);
+  writeFileSync(join(fixture, "tests/security.spec.ts"), suite.replace(entry, `${entry}\n  throw new Error(${JSON.stringify(sentinel)});`));
+  const crashed = spawnSync(process.execPath, ["--experimental-strip-types", "tests/security.spec.ts"], { cwd: fixture, encoding: "utf8", timeout: 20000 });
+  assert.equal(crashed.status, 1);
+  assert.match(crashed.stderr, /\[fail\] W09 no pudo completar la suite/);
+  assert.match(crashed.stdout, /0 casos pasaron; 1 fallaron/);
+  result = run();
+  assert.equal(result.status, 1);
+  saved = report();
+  assert.equal(saved.checks.find(c => c.id === "security").exitCode, 1);
+  for (const output of [crashed.stdout, crashed.stderr, result.stdout, result.stderr, JSON.stringify(saved)]) assert.ok(!output.includes(sentinel));
+  subprocesses(0, 0);
+  result = run(); assert.equal(result.status, 0);
   const outcomes = Object.fromEntries(["INSTALL", "BROWSER", "PUBLIC", "PREVIOUS", "LINT", "UNIT", "INTEGRATION", "VERIFY", "E2E"].map(id => [`W09_${id}_OUTCOME`, "success"]));
   result = run(["--finalize-ci"], { ...outcomes, W09_LINT_OUTCOME: "failure" });
   assert.equal(result.status, 1); saved = report();
