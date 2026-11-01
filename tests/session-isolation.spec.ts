@@ -21,7 +21,15 @@ function memoryStorage() {
     removeItem: (key) => { values.delete(key); }, entries: () => [...values.entries()] };
 }
 async function main() {
-  const previous = { indexedDB: globalThis.indexedDB, localStorage: globalThis.localStorage, window: globalThis.window, document: globalThis.document, location: globalThis.location };
+  const globals = ["indexedDB", "localStorage", "window", "document", "location"];
+  const previous = Object.fromEntries(globals.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const connections = [];
+  let release, inFlight;
+  const open = async () => {
+    const store = await LocalStorage.open("isolation");
+    connections.push(store);
+    return store;
+  };
   const fakeStorage = memoryStorage();
   const harness = createIndexedDbHarness();
   globalThis.indexedDB = harness.indexedDB;
@@ -31,19 +39,24 @@ async function main() {
   globalThis.document = { cookie: "" };
   try {
     session.establishLocalSession({ userId: A, displayName: "A" });
+    assert.equal(session.readLocalSession().userId, A);
     const firstEpoch = session.sessionEpoch();
-    const stale = await LocalStorage.open("isolation");
-    const peer = await LocalStorage.open("isolation");
+    const stale = await open();
+    const peer = await open();
     await saveDraft(A, stale, { owner: A, inspection: draft(), findings: [], removedFindings: [] });
+    const own = await stale.listInspections(A);
+    assert.equal(own.length, 1);
+    assert.equal(own[0].id, ID);
+    assert.equal(own[0].summary, "A pendiente");
     const queued = await stale.listQueue(A);
     assert.equal(queued.length, 1);
-    let release;
     let sending = false;
     const pendingAck = new Promise((resolve) => { release = resolve; });
     const transport = { verifyOwner: async (owner) => session.isSessionCurrent(firstEpoch, owner),
       client: { put: async () => { sending = true; return pendingAck; } } };
-    const inFlight = runQueue(stale, A, transport);
-    while (!sending) await new Promise((resolve) => setTimeout(resolve, 0));
+    inFlight = runQueue(stale, A, transport);
+    for (let attempt = 0; !sending && attempt < 200; attempt++) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(sending, true, "A must have a request in flight before logout");
     assert.equal(session.blockLocalSession(), A);
     await LocalStorage.revokeLease(A, session.sessionEpoch(), "isolation");
     assert.equal(session.readLocalSession(), null);
@@ -57,20 +70,25 @@ async function main() {
     assert.equal(session.isSessionBlocked(), true);
     assert.equal(session.isRemoteLogoutPending(), false);
     session.establishLocalSession({ userId: B, displayName: "B" });
-    const bStore = await LocalStorage.open("isolation");
+    assert.equal(session.readLocalSession().userId, B);
+    const bStore = await open();
     assert.deepEqual(await bStore.listInspections(B), []);
     assert.deepEqual(await bStore.listQueue(B), []);
+    assert.equal(await bStore.getInspection(B, ID), null);
+    await assert.rejects(() => bStore.listInspections(A), PartitionRequiredError);
     assert.equal(session.isSessionCurrent(firstEpoch, A), false);
     await assert.rejects(() => bStore.listQueue(A), PartitionRequiredError);
     release({ operationId: queued[0].operationId, entityId: ID,
       entityType: "inspection", version: 1, appliedAt: time, folioNumber: 10 });
     assert.equal((await inFlight).paused, true);
     await assert.rejects(() => stale.listQueue(A), PartitionRequiredError);
-    bStore.close();
     session.establishLocalSession({ userId: A, displayName: "A again" });
-    const restored = await LocalStorage.open("isolation");
+    const restored = await open();
     assert.equal((await restored.listInspections(A)).length, 1);
-    assert.equal((await restored.listQueue(A)).length, 1);
+    const preserved = await restored.listQueue(A);
+    assert.equal(preserved.length, 1);
+    assert.equal(preserved[0].operationId, queued[0].operationId, "late ACK cannot remove pending work");
+    assert.equal((await restored.listInspections(A))[0].version, 0, "late ACK cannot update A's entity");
     assert.equal(await restored.leaseExpiresAt(A), null);
     assert.equal(session.isSessionCurrent(firstEpoch, A), false, "same account cannot revive stale work");
     await assert.rejects(() => peer.listQueue(A), PartitionRequiredError, "old tab stays fenced after A logs in again");
@@ -80,8 +98,18 @@ async function main() {
     assert.equal(session.isRemoteLogoutPending(), true);
     session.establishLocalSession({ userId: B, displayName: "B again" });
     assert.equal(session.isRemoteLogoutPending(), false, "validated online login supersedes failed remote logout");
-    restored.close(); stale.close(); peer.close();
     console.log("session-isolation.spec.ts: PASS");
-  } finally { Object.assign(globalThis, previous); }
+  } finally {
+    // Release synthetic transport even when an assertion fails before the ACK.
+    if (release) release({ operationId: "cleanup", entityId: ID, entityType: "inspection", version: 1, appliedAt: time });
+    try { if (inFlight) await inFlight; }
+    finally {
+      for (const store of connections) store.close();
+      for (const key of globals) {
+        if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+        else delete globalThis[key];
+      }
+    }
+  }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

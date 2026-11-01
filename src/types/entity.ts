@@ -86,6 +86,11 @@ export function expectString(value: unknown, path: string, options: { min?: numb
     throw new DomainValidationError([{ path, message: "must be a string" }]);
   }
 
+  // PostgreSQL text/jsonb cannot represent NUL; reject before capture/queue/RPC.
+  if (value.includes("\0")) {
+    throw new DomainValidationError([{ path, message: "must not contain NUL" }]);
+  }
+
   const comparable = options.trim ? value.trim() : value;
   if ((options.min !== undefined && comparable.length < options.min) || comparable.length > options.max) {
     throw new DomainValidationError([{ path, message: `must contain between ${options.min ?? 0} and ${options.max} characters` }]);
