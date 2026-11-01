@@ -34,6 +34,15 @@ assert.throws(() => validateInspectionDraft({ inspectionDate: "2026-02-30" }), /
 assert.throws(() => validateInspectionDraft({ laboratoryId: ids.laboratory, extra: true }), /not allowed/);
 assert.throws(() => validateInspectionForFinalization({ laboratoryId: ids.laboratory, inspectionDate: "2026-02-28", summary: "   " }), /between 1 and 3000/);
 assert.throws(() => validateFindingForFinalization({ title: "  " }), /between 1 and 160/);
+// Owner correction for PR #104: NUL is invalid in PostgreSQL text/jsonb.
+for (const [kind, field] of [["inspection.create", "summary"], ["finding.create", "title"], ["finding.create", "description"]]) {
+  const input = { clientId: ids.client, entityId: ids.inspection, kind,
+    payload: { ...(kind === "finding.create" ? { inspectionId: ids.inspection } : {}), [field]: "test\0injection" } };
+  assert.throws(() => validateDomainOperation(input), /must not contain NUL/);
+}
+assert.throws(() => validateInspectionForFinalization({ laboratoryId: ids.laboratory, inspectionDate: "2026-02-28", summary: "test\0injection" }), /must not contain NUL/);
+assert.throws(() => validateFindingForFinalization({ title: "test\0injection" }), /must not contain NUL/);
+assert.throws(() => validateFindingForFinalization({ title: "valid", description: "test\0injection" }), /must not contain NUL/);
 console.log("[ok] borradores incompletos y reglas de finalización se distinguen");
 
 const createOperation = validateDomainOperation({
