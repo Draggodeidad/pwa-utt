@@ -21,5 +21,6 @@ reports/rendering-metrics.json
 public/offline-assets.json
 public/sw-build.js
 
-# W09 generated technical report (no source evidence)
-/evaluation-result.json
+
+*.zip
+
