@@ -7,7 +7,7 @@ const {
 
 const valid = {
   [SUPABASE_URL_ENV]: "https://project-ref.supabase.co",
-  [SUPABASE_ANON_KEY_ENV]: "eyJhbGciOiJIUzI1NiJ9.anon-key",
+  [SUPABASE_ANON_KEY_ENV]: "sb_publishable_synthetic_w09_fixture",
 };
 
 {
@@ -38,7 +38,7 @@ const valid = {
       }),
     (err) =>
       err instanceof Error &&
-      err.message.includes(`${SUPABASE_URL_ENV} debe ser una URL http(s)`),
+      err.message.includes(`${SUPABASE_URL_ENV} debe ser una URL HTTPS canónica`),
     "Una URL no http(s) debe fallar con mensaje claro"
   );
   console.log("[ok] URL inválida falla con mensaje claro");
@@ -56,10 +56,10 @@ const valid = {
 {
   const config = getSupabaseServerConfig({
     [SUPABASE_URL_ENV]: "  https://project-ref.supabase.co  ",
-    [SUPABASE_ANON_KEY_ENV]: "  key  ",
+    [SUPABASE_ANON_KEY_ENV]: "  sb_publishable_fixture  ",
   });
   assert.equal(config.url, "https://project-ref.supabase.co");
-  assert.equal(config.anonKey, "key");
+  assert.equal(config.anonKey, "sb_publishable_fixture");
   console.log("[ok] valores con espacios se normalizan");
 }
 

@@ -42,7 +42,7 @@ export function toFieldErrors(error: { issues: readonly { path: string; message:
 /** Reject cross-origin and oversized JSON before parsing a cookie-authenticated mutation. */
 export async function readJsonMutation(request: NextRequest, maxLength = 4096): Promise<{ body: unknown; error?: never } | { body?: never; error: NextResponse }> {
   if (!hasValidMutationOrigin(request)) return { error: apiError("FORBIDDEN") };
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return { error: apiError("INVALID_REQUEST") };
+  if ((request.headers.get("content-type") ?? "").split(";", 1)[0].trim().toLowerCase() !== "application/json") return { error: apiError("INVALID_REQUEST") };
   if (Number(request.headers.get("content-length") ?? 0) > maxLength) return { error: apiError("INVALID_REQUEST") };
   try {
     const bodyText = await request.text();

@@ -308,7 +308,7 @@ async function main() {
   const base = `http://127.0.0.1:${appPort}`;
   const child = spawn(process.execPath, [resolve(root, "node_modules/next/dist/bin/next"), production ? "start" : "dev", "--hostname", "127.0.0.1", "--port", String(appPort)], {
     cwd: root, stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, SUPABASE_URL: supabaseUrl, SUPABASE_ANON_KEY: "synthetic-anon-key" },
+    env: { ...process.env, SUPABASE_URL: supabaseUrl, SUPABASE_ANON_KEY: "sb_publishable_synthetic_w09_fixture" },
   });
   let output = "";
   child.stdout.on("data", (chunk) => { output = `${output}${chunk}`.slice(-2000); });

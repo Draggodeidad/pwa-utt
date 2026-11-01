@@ -14,7 +14,7 @@ export type InspectionFinalizeInput = {
 };
 
 const draftKeys = ["laboratoryId", "inspectionDate", "summary"] as const;
-const summaryLimit = 4_000;
+const summaryLimit = 3_000;
 
 /** Drafts are structurally valid even when all finalization fields are absent. */
 export function validateInspectionDraft(input: unknown): InspectionDraftInput {

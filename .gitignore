@@ -20,3 +20,7 @@ reports/rendering-metrics.json
 /docs/tasks/
 public/offline-assets.json
 public/sw-build.js
+
+
+*.zip
+

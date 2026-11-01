@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { authorizeRequest } from "@/lib/auth/guards";
 import { apiError, privateJson, readJsonMutation, toFieldErrors, type ApiErrorCode } from "@/lib/auth/http";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 import { isInspectionId } from "@/lib/repositories/inspections";
 import { coordinateInspection, CoordinationError } from "@/lib/repositories/coordination";
 import { validateCoordinationRequest } from "@/features/inspections/coordination";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const statusCode: Record<number, ApiErrorCode> = { 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 422: "INVALID_REQUEST", 503: "UNAVAILABLE" };
 
 /** Online-only endpoint, deliberately separate from the IndexedDB operation queue. */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export const POST = withSupabaseConfiguration(async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const auth = createRequestSupabaseClient(request);
   const permission = await authorizeRequest(auth.client, ["coordinator"]);
   if ("error" in permission) return auth.withCookies(apiError(permission.error === 401 ? "UNAUTHENTICATED" : "FORBIDDEN"));
@@ -28,4 +28,4 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (error instanceof CoordinationError) return auth.withCookies(apiError(statusCode[error.status], { code: error.code, message: error.message }));
     throw error;
   }
-}
+});

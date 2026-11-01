@@ -3,7 +3,7 @@ import { apiError, privateJson, toFieldErrors } from "@/lib/auth/http";
 import { authorizeRequest } from "@/lib/auth/guards";
 import { DomainValidationError } from "@/types/entity";
 import { InspectionReadError, listVisibleInspectionsPage, parseInspectionCursor } from "@/lib/repositories/inspections";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 import type { InspectionWorkflowStatus } from "@/features/inspections";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ function readPositiveInt(value: string | null, path: string): number | null {
   return parsed;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withSupabaseConfiguration(async function GET(request: NextRequest) {
   const auth = createRequestSupabaseClient(request);
   const permission = await authorizeRequest(auth.client, ["technician", "coordinator"]);
   if ("error" in permission) return auth.withCookies(apiError(permission.error === 401 ? "UNAUTHENTICATED" : "FORBIDDEN"));
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     if (error instanceof InspectionReadError) return auth.withCookies(apiError("UNAVAILABLE"));
     throw error;
   }
-}
+});
 
 function throwInvalidStatus(): never {
   throw new DomainValidationError([{ path: "status", message: "must be draft or completed" }]);
