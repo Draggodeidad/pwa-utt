@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { apiError, privateJson, readJsonMutation } from "@/lib/auth/http";
 import { readSession } from "@/lib/auth/session-store";
-import { createRequestSupabaseClient } from "@/lib/supabase/server";
+import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ function isCredentials(value: unknown): value is { email: string; password: stri
     typeof body.password === "string" && body.password.length > 0 && body.password.length <= 1024;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withSupabaseConfiguration(async function POST(request: NextRequest) {
   const parsed = await readJsonMutation(request);
   if (parsed.error) return parsed.error;
   const body = parsed.body;
@@ -38,4 +38,4 @@ export async function POST(request: NextRequest) {
     return auth.withCookies(apiError("AUTH_DENIED"));
   }
   return auth.withCookies(privateJson(session));
-}
+});

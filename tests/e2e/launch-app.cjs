@@ -21,7 +21,7 @@ async function main() {
     env: {
       ...process.env,
       SUPABASE_URL: `http://127.0.0.1:${backendPort}`,
-      SUPABASE_ANON_KEY: "synthetic-e2e-anon-key",
+      SUPABASE_ANON_KEY: "sb_publishable_synthetic_w09_fixture",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   });
