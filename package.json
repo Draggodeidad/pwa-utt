@@ -19,7 +19,10 @@
     "measure:rendering": "node scripts/measure-rendering.mjs",
     "lint": "eslint . --max-warnings=0",
     "test:security": "node tests/security.spec.ts",
-    "verify:w09": "node scripts/verify-w09.mjs"
+    "verify:w09": "node scripts/verify-w09.mjs",
+    "test:smoke": "node tests/smoke.spec.ts",
+    "test:w10-gates": "node tests/verify-w10.spec.mjs",
+    "verify:w10": "node scripts/verify-w10.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

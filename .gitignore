@@ -24,5 +24,7 @@ public/sw-build.js
 
 *.zip
 
-# W09 generated technical report (no source evidence)
+# W09/W10 generated technical reports (no source evidence)
 /evaluation-result.json
+/evaluation-result.json.tmp
+/reports/w10/

@@ -1,4 +1,4 @@
-name: Academic evaluation — W08
+name: Academic evaluation — W08 + W10
 
 on:
   push:
@@ -9,6 +9,9 @@ permissions:
   contents: read
 
 jobs:
+  w10:
+    uses: ./.github/workflows/week-10-w10-release-rollback.yml
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 35

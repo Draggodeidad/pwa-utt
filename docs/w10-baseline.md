@@ -195,6 +195,12 @@ Matriz mínima para la suite propuesta:
 
 ### Reporte por SHA
 
+Actualización consumidora #109: [evaluación W10](w10-evaluation.md) precisa el
+runner, las dos rutas CI y la salida estructurada
+`test-results/w10/smoke-result.json` que debe producir #111 con SHA/BUILD_ID,
+S1–S4 y exit code negativo observado. Ausencia o caso omitido bloquea PASS;
+este contrato no completa la suite ni la evidencia personal.
+
 #109 generará `evaluation-result.json` con `assignmentId: w10-release-rollback`,
 `schemaVersion` local declarado, `commitSha`, `workingTreeClean`, `generatedAt`,
 `runtime` (Node/npm), `runUrl` o null, `status`, `checks[]` (id, comando, estado,

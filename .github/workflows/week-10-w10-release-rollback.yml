@@ -1,0 +1,46 @@
+name: W10 release and rollback — technical gates
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout evaluated head (not synthetic merge)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node.js 22.22.3 and bundled npm 10.9.8
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+
+      - name: Clean install, accumulated gates, build and W10 smoke
+        run: node scripts/verify-w10.mjs --with-browser-deps
+
+      - name: Finalize SHA-bound report even after failure
+        if: always()
+        run: node scripts/verify-w10.mjs --report-only --with-browser-deps
+
+      - name: Upload W10 evidence for evaluated SHA even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w10-release-rollback-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: error
+          # Explicit JSON allowlist; no env, payloads, traces or screenshots.
+          path: |
+            evaluation-result.json
+            reports/verification.json
+            reports/rendering-metrics.json
+            reports/w10/w09-evaluation-result.json
+            reports/w10/http.json
+            reports/w10/smoke.json
