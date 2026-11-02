@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { readSession } from "@/lib/auth/session-store";
 import { hasEditableInspection, hasVisibleInspection } from "@/lib/repositories/inspections";
 import { createRequestSupabaseClient, withSupabaseConfiguration } from "@/lib/supabase/server";
+import { SupabaseUnavailableError, withSupabaseDeadline } from "@/lib/supabase/deadline";
 
 /** Refresh cookies and redirect early; pages and RLS still enforce domain access. */
 export const middleware = withSupabaseConfiguration(async function middleware(request: NextRequest) {
@@ -12,7 +13,24 @@ export const middleware = withSupabaseConfiguration(async function middleware(re
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
-  const auth = createRequestSupabaseClient(request);
+  let auth: ReturnType<typeof createRequestSupabaseClient> | undefined;
+  try {
+    return await withSupabaseDeadline(async boundedFetch => {
+      auth = createRequestSupabaseClient(request, { fetch: boundedFetch });
+      return authorizePage(request, auth);
+    });
+  } catch (error) {
+    if (!(error instanceof SupabaseUnavailableError)) throw error;
+    const response = new NextResponse("Servicio temporalmente no disponible. Inténtalo de nuevo.", {
+      status: 503,
+      headers: { "Cache-Control": "private, no-store", "Retry-After": "5" },
+    });
+    return auth ? auth.withCookies(response) : response;
+  }
+});
+
+async function authorizePage(request: NextRequest, auth: ReturnType<typeof createRequestSupabaseClient>) {
+  const pathname = request.nextUrl.pathname;
   const session = await readSession(auth.client);
   if (!session) return auth.withCookies(NextResponse.redirect(new URL("/login", request.url)));
   const coordinatorRoute = pathname === "/dashboard" || pathname.startsWith("/dashboard/") ||
@@ -44,7 +62,7 @@ export const middleware = withSupabaseConfiguration(async function middleware(re
     }
   }
   return auth.withCookies(NextResponse.next({ request: { headers: request.headers } }));
-});
+}
 
 export const config = {
   matcher: ["/((?!api(?:/|$)|_next(?:/|$)|offline$|robots\\.txt$|favicon\\.ico$|manifest\\.webmanifest$|sw\\.js$|sw-build\\.js$|offline-assets\\.json$|apple-touch-icon\\.png$|icons/|inspection-assets/|screenshots/).*)"],
