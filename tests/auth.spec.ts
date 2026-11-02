@@ -179,7 +179,8 @@ async function main() {
       assert.equal(unavailable.headers.getSetCookie().length, 0, `${fault} preserves the session cookie`);
       assert.ok(Date.now() - startedAt < 11000, `${fault} stays below Vercel's 25s limit`);
       assert.match(await unavailable.text(), /temporalmente no disponible/);
-      assert.equal((await request("/login")).status, 200, "login stays reachable during an outage");
+      const loginPage = await fetch(`${base}/login`, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+      assert.equal(loginPage.status, 200, "login stays reachable during an outage");
       middlewareFault = "";
     }
     middlewareFault = "refreshed-profile-hang";
