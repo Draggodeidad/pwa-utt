@@ -143,7 +143,43 @@ fallido no recupera artefactos antiguos: se limpian antes de ejecutar.
 
 ## Evidencia observada
 
-Los resultados de ejecución y SHA se registrarán después de validar los commits
-funcionales de esta issue. Hasta entonces son pendientes, incluidas Actions,
-S1–S4 y revisión personal. Las ejecuciones de Codex se identificarán como tales;
-no sustituyen `evidence/individual.md`, la defensa del owner ni la entrega LMS.
+Ejecución local real de **Codex**, 02/11/2026, America/Mexico_City, sobre
+[`d9d520dad2568ba02dc98a2ca61ba2b859927430`](https://github.com/Draggodeidad/pwa-utt/commit/d9d520dad2568ba02dc98a2ca61ba2b859927430),
+con Node v22.22.3/npm 10.9.8. Este SHA contiene los commits funcionales de #109;
+el commit posterior sólo registra resultados documentales. No se atribuyen
+estas ejecuciones a Draggodeidad ni a Osbaldo como evidencia personal/defensa.
+
+| Comando / gate observado | Resultado real |
+| --- | --- |
+| `npm run verify:w10` | **exit 1**, `assignmentId: w10-release-rollback`, `status: fail`; 14 gates pass y dos fail. Ninguna omisión se convirtió en pass. |
+| `npm ci --no-audit --no-fund` | exit 0; instalación limpia con lockfile, sin auditoría. |
+| `npx --no-install playwright install chromium` | exit 0; host Fedora usa fallback de Playwright; las bibliotecas del SO estaban disponibles. CI Ubuntu usa además `--with-deps`. |
+| Checks públicos previos, lint, unit/integration | exit 0 cada uno; tres entradas unitarias, dos de integración. |
+| `npm run test:w10-gates` | exit 0; gate real con cada entregable ausente y smoke vacío, SHA/BUILD_ID/run/intento incorrectos, omisiones, falso exit 0 sin resumen, códigos 7/9/13 controlados y teardown. Fixtures HTTP/child exits sintéticos, no evidencia de release. |
+| `make verify` | exit 0; typecheck, 32 entradas de `npm test`, build/postbuild (47 assets), métricas HTTP y W06 pass en su reporte. |
+| `npm run verify:w09` | exit 0; contrato W09 y seguridad productiva pass. Copia conserva assignmentId W09 y SHA de esta ejecución. |
+| `E2E_SKIP_BUILD=1 npm run test:e2e` | exit 0, **1 passed** Chromium; flujo acumulativo sintético. |
+| `bash public-tests/check-w10.sh --documents` | exit 0; presencia documental, sin acreditar contenido personal W10. |
+| `bash public-tests/check-w10.sh --artifacts` | **exit 1**, falta `tests/smoke.spec.ts`. No se creó un placeholder para hacerlo pasar. |
+| `node scripts/run-w10-smoke.mjs` | **exit 1**, misma ausencia de #111; S1–S4 no ejecutados, sin afirmar health/rollback W10. |
+| `npm run test:smoke`, ejecutado también directamente después de build | **exit 1**, `MODULE_NOT_FOUND`; la entrada está registrada pero la suite todavía no existe. |
+| YAML, Bash, enlaces locales y diff | Ambos YAML parsean; `bash -n` y `git diff --check` exit 0, bloques Markdown/enlaces locales válidos. Job W08, workflow W09 y checks previos idénticos byte a byte a la base. |
+
+El reporte W10 conserva **workingTreeCleanAtStart=true** y
+**workingTreeClean=false** al final por `tsconfig.tsbuildinfo` generado. Se
+repusieron únicamente sus bytes originales después de guardar los reportes;
+no se alteró la bandera ni se atribuyen los resultados al SHA documental posterior.
+No se modificó JSX ni `className`; no aplica extracción Tailwind.
+
+Logs y copias locales originales, ignorados en Git:
+`test-results/w10/evaluation-109/` (`verify-w10.log`, `evaluation-result.json`,
+`verification.json`, `rendering-metrics.json`, `w09-evaluation-result.json`,
+`direct-test-smoke.json` y su log). Son evidencia auxiliar local; los runs y
+artefactos remotos del head se consultan en el PR de #109. Al registrar este
+apartado Actions del PR todavía no se había ejecutado; no se declara un PASS CI.
+
+**Pendientes reales:** implementación y ejecución integral S1–S4 (#111),
+evidencia personal W10/revisión/defensa humana (#110/#112/#113), consolidación
+#114 y evaluador privado. CI debe continuar rojo por el smoke faltante hasta
+que exista y cumpla el contrato. No se publicaron releases ni se hicieron merge,
+despliegue, cambios remotos de datos o envío LMS.
