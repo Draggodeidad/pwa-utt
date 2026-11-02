@@ -18,6 +18,7 @@ const accounts = {
 };
 const revoked = new Set();
 let refreshCount = 0;
+let middlewareFault = "";
 
 function token(userId, expiry) {
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
@@ -60,6 +61,8 @@ const backend = createServer(async (req, res) => {
     return send(res, 200, session(account, input.email, input.email === "refresh@example.invalid" ? 1 : 3600));
   }
   if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "refresh_token") {
+    if (middlewareFault === "refresh-hang") return;
+    if (middlewareFault === "refresh-unavailable") return send(res, 503, { msg: "Synthetic outage" });
     const input = await readJson(req);
     const entry = Object.entries(accounts).find(([, account]) => input.refresh_token === `refresh-${account.id}`);
     if (!entry) return send(res, 400, { code: "refresh_token_not_found", msg: "Invalid Refresh Token" });
@@ -67,6 +70,9 @@ const backend = createServer(async (req, res) => {
     return send(res, 200, session(entry[1], entry[0]));
   }
   if (url.pathname === "/auth/v1/user") {
+    if (middlewareFault === "user-hang") return;
+    if (middlewareFault === "user-unavailable") return send(res, 503, { msg: "Synthetic outage" });
+    if (middlewareFault === "user-network") { req.socket.destroy(); return; }
     const entry = accountFromBearer(req);
     return entry ? send(res, 200, authUser(entry.account, entry.email)) : send(res, 401, { msg: "Invalid JWT" });
   }
@@ -76,11 +82,13 @@ const backend = createServer(async (req, res) => {
     res.writeHead(204); res.end(); return;
   }
   if (url.pathname === "/rest/v1/profiles") {
+    if (middlewareFault === "profile-hang" || middlewareFault === "refreshed-profile-hang") return;
     const entry = accountFromBearer(req);
     if (!entry) return send(res, 401, { code: "PGRST301", message: "JWT invalid" });
     return send(res, 200, [{ id: entry.account.id, display_name: entry.account.active ? "Técnica de prueba" : "Cuenta inactiva",
       role: "technician", active: entry.account.active }]);
   }
+  if (url.pathname === "/rest/v1/inspections" && middlewareFault === "inspection-hang") return;
   return send(res, 404, { message: "Not found" });
 });
 
@@ -152,6 +160,37 @@ async function main() {
     const profile = await request("/profile", {}, jar);
     assert.equal(profile.status, 200);
     assert.match(await profile.text(), /Técnica de prueba/);
+    assert.equal((await request("/dashboard", {}, jar)).status, 307, "role redirects remain enforced");
+
+    const authCookieName = [...jar.keys()].find(name => name.startsWith("sb-") && name.endsWith("-auth-token"));
+    assert.ok(authCookieName);
+    const expiredJar = new Map([[authCookieName, "base64-" + Buffer.from(JSON.stringify(
+      session(accounts["tech@example.invalid"], "tech@example.invalid", -60),
+    )).toString("base64url")]]);
+    for (const fault of ["user-unavailable", "user-network", "user-hang", "profile-hang", "inspection-hang", "refresh-hang", "refresh-unavailable"]) {
+      middlewareFault = fault;
+      const startedAt = Date.now();
+      const unavailable = await request(fault === "inspection-hang" ? `/inspections/${technicianId}` : "/",
+        {}, fault.startsWith("refresh-") ? expiredJar : jar);
+      assert.equal(unavailable.status, 503, `${fault} must fail closed without a login redirect`);
+      assert.equal(unavailable.headers.get("cache-control"), "private, no-store");
+      assert.equal(unavailable.headers.get("retry-after"), "5");
+      assert.equal(unavailable.headers.get("location"), null);
+      assert.equal(unavailable.headers.getSetCookie().length, 0, `${fault} preserves the session cookie`);
+      assert.ok(Date.now() - startedAt < 11000, `${fault} stays below Vercel's 25s limit`);
+      assert.match(await unavailable.text(), /temporalmente no disponible/);
+      const loginPage = await fetch(`${base}/login`, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+      assert.equal(loginPage.status, 200, "login stays reachable during an outage");
+      middlewareFault = "";
+    }
+    middlewareFault = "refreshed-profile-hang";
+    const rotatedJar = new Map(expiredJar);
+    const refreshedUnavailable = await request("/", {}, rotatedJar);
+    assert.equal(refreshedUnavailable.status, 503);
+    assert.ok(refreshedUnavailable.headers.getSetCookie().length > 0, "keep rotated tokens when a later profile read times out");
+    middlewareFault = "";
+    assert.equal((await request("/api/session", {}, rotatedJar)).status, 200, "rotated cookies survive the unavailable response");
+    assert.equal((await request("/api/session", {}, jar)).status, 200, "same session works after recovery");
     jar.set("pwa-utt-logout-blocked", "1");
     assert.equal((await request("/api/session", {}, jar)).status, 401);
     assert.equal((await request("/api/laboratories", {}, jar)).status, 401);
@@ -188,6 +227,7 @@ async function main() {
     await Promise.race([once(child, "exit"), new Promise((done) => setTimeout(done, 5000))]);
     if (child.exitCode === null) child.kill("SIGKILL");
     backend.close();
+    backend.closeAllConnections();
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

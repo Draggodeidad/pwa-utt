@@ -17,10 +17,11 @@ function cookieOptions(options: CookieOptions, request?: NextRequest): CookieOpt
 }
 
 /** A fresh Supabase client for one Route Handler request. Auth cookie writes are applied to its response. */
-export function createRequestSupabaseClient(request: NextRequest) {
+export function createRequestSupabaseClient(request: NextRequest, options: { fetch?: typeof fetch } = {}) {
   const config = getSupabaseServerConfig();
   const writes: CookieWrite[] = [];
   const client = createServerClient(config.url, config.anonKey, {
+    global: { fetch: options.fetch },
     cookieOptions: cookieOptions({}, request),
     cookies: {
       getAll: () => request.cookies.getAll(),
