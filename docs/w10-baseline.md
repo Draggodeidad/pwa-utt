@@ -5,6 +5,11 @@ Corte revisado: **02/11/2026, America/Mexico_City**, `origin/main` en
 issues #108–#115 mediante contratos documentales. Su alcance es #107; la release,
 el contenedor, la suite smoke y el CI W10 siguen pendientes de sus propias issues.
 
+Actualización consumidora #108: la implementación de contenedor/health/identidad,
+comandos y límites de validación se documenta en [release-process](release-process.md)
+y [runbook](runbook.md). El inventario y los estados «pendiente» de esta baseline
+conservan el corte histórico de #107; no son un inventario del head de #108.
+
 ## Fuente e inventario del ZIP
 
 Fuente de verdad: `PWA-w10-kit-estudiante.zip`, suministrado en el checkout e
