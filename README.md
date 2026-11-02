@@ -8,7 +8,8 @@ Baseline de Semana 10: [kit revisado, comparación, contratos y pendientes #107]
 El [proceso de release local #108](docs/release-process.md) define Docker,
 identidad por SHA, `/api/health` y la comprobación HTTP; el
 [runbook](docs/runbook.md) documenta rollback al mismo digest, compatibilidad y
-preservación del trabajo offline. Smoke completo (#111), CI W10 (#109) y
+preservación del trabajo offline. La [evaluación W10 #109](docs/w10-evaluation.md)
+integra CI, gates y reporte por SHA. Smoke completo (#111) y
 evidencia personal (#110) conservan sus propios pendientes. Los resultados
 acumulativos anteriores no acreditan ese incremento.
 
@@ -59,6 +60,33 @@ El verificador ejecuta, en orden, `npm run typecheck`, `npm test`, `npm run buil
 - `bash public-tests/check.sh`: comprueba los artefactos públicos acumulativos, incluidos los de Semana 04.
 
 El workflow W06 repite instalación limpia, checks acumulativos y `make verify`, y publica ambos reportes en el artefacto `w06-baseline-verification`. Para acreditar el incremento usar el workflow W06 del SHA entregado; las ejecuciones históricas de W01–W05 no lo sustituyen. La evidencia debe asociarse al SHA exacto evaluado.
+
+## Evaluación W10 por SHA (#109)
+
+Con Node **22.22.3/npm 10.9.8**, Make y dependencias de Chromium, ejecutar:
+
+```bash
+npm run verify:w10
+```
+
+El comando hace instalación limpia (`npm ci`), controles públicos previos,
+lint, unit/integration, negativos del gate, `make verify` (incluye build), W09,
+E2E y smoke después de build. Usa configuración sintética y genera
+`evaluation-result.json` con SHA, limpieza del árbol, estados
+`pass`/`fail`/`not-run`, códigos de salida reales, runtime, artefactos y límites.
+Un fallo u omisión impide PASS. El reporte W09 conserva su identidad por separado.
+
+El workflow académico mantiene W08 y llama a
+`.github/workflows/week-10-w10-release-rollback.yml`. Sube el reporte incluso
+con fallo como `w10-release-rollback-<SHA>` del head evaluado. No asigna nota.
+`test:smoke` equivale a `node tests/smoke.spec.ts`; su implementación S1–S4
+pertenece a #111. Si falta, está vacía o no produce casos válidos, W10 falla de
+forma explícita. No basta con el probe HTTP #108 ni con E2E acumulativo.
+
+[Contrato completo, AC-01–04, salida de smoke y evidencia real](docs/w10-evaluation.md).
+La evidencia/defensa personal W10 sigue pendiente de #110/#112/#113; los
+resultados de Codex no se atribuyen a estudiantes. Sin release publicada,
+merge, despliegue ni envío Classroom.
 
 ## Implementación de Semana 02
 
