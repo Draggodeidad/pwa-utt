@@ -4,6 +4,10 @@ Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenim
 
 ## Requisitos del entorno
 
+Baseline de Semana 10: [kit revisado, comparación, contratos y pendientes #107](docs/w10-baseline.md).
+La release, el contenedor, smoke y CI W10 siguen pendientes de sus issues;
+los resultados acumulativos anteriores no acreditan ese incremento.
+
 - Node.js 22.x, como declara `package.json`.
 - npm 10 o posterior.
 - Git; Make es opcional.
