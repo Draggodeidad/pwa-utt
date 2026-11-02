@@ -225,10 +225,64 @@ validación). Esta baseline no rellena `evidence/individual.md`: la evidencia
 personal W10 y la revisión/defensa humana permanecen pendientes de #110/#112/#113.
 Los contratos se publican por PR; #107 permanece abierta durante su revisión.
 
+Los cuerpos de **#107–#115 se actualizaron en GitHub** con fuente/hash, enlace
+versionado al contrato, ajustes específicos y límites de los resultados. Una
+relectura confirmó los nueve cuerpos, títulos y asignaciones conservados y las
+nueve issues abiertas. #114 conserva además su ajuste de reparto posterior al
+apartado del kit. No se cambia responsable, dificultad, puntos ni fase, ni se
+implementa el trabajo de las otras issues.
+
 ## Validación de esta baseline
 
-La inspección del ZIP y los cuatro probes anteriores están completados.
-Typecheck, pruebas acumulativas, instalación/build y evidencia ligada al SHA de
-esta propuesta se registrarán tras ejecutar los comandos. Ningún resultado
-pendiente se considera PASS. No se modifica JSX; la comprobación de Tailwind
-inline no aplica. Sólo se añaden documentación/inventarios y un enlace en README.
+PR de propuesta: [#116](https://github.com/Draggodeidad/pwa-utt/pull/116).
+Primer commit atómico de inventarios/contratos:
+[`2447e57bbe3c936a910bf99684bdfb1caf6b7432`](https://github.com/Draggodeidad/pwa-utt/commit/2447e57bbe3c936a910bf99684bdfb1caf6b7432).
+Los siguientes resultados locales corresponden a ese SHA y a sus fuentes sin
+cambios de lógica, el 02/11/2026 entre 16:04 y 16:06, America/Mexico_City.
+El segundo commit sólo registra estos resultados documentales posteriores.
+
+Se seleccionó explícitamente **Node v22.22.3/npm 10.9.8** porque el shell por
+defecto usa Node 26.2.0. Las ejecuciones heredaron URL/clave pública sintéticas
+de loopback y `NEXT_TELEMETRY_DISABLED=1`, sin consultar servicios privados ni
+publicar valores de entornos personales. El harness E2E reemplaza su propia
+configuración sintética. Son ejecuciones de Codex, no defensa personal del owner.
+
+| Comando / comprobación real | Resultado observado | Alcance |
+| --- | --- | --- |
+| CRC + lectura íntegra + hashes del ZIP | Completado; ocho archivos | No autentica procedencia docente. |
+| Consistencia de inventarios por blob/ZIP | exit 0; 322 blobs y ocho archivos coinciden en bytes/SHA-256 | Snapshot del corte, no del repo futuro. |
+| Markdown/enlaces locales y SVG | exit 0; bloques cerrados, destinos existentes; cinco SVG sin script/referencia externa | No acredita el contenido de enlaces web ni auditoría de activos. |
+| `npm ci --no-audit --no-fund` | exit 0 | Instalación limpia con lockfile; no se ejecutó auditoría de dependencias. |
+| `npx playwright install chromium` | exit 0 | Chromium disponible para la versión instalada de Playwright. |
+| `npm run lint` | exit 0 | Código/scripts/tests existentes. |
+| `bash public-tests/check.sh`, `bash public-tests/check-w05.sh`, `bash public-tests/check-w06.sh` | exit 0 cada uno | Gates acumulativos; distintos de los bytes del check W10 original. |
+| `npm run test:unit` | exit 0 | Dos entradas: dominio/fotos sintéticas. |
+| `npm run test:integration` | exit 0 | Dos entradas: HTTP/cola sintéticos; sin RLS remota. |
+| `make verify` | exit 0; `reports/verification.json` indica `pass` | Typecheck, 31 entradas de `npm test`, build/postbuild (47 assets), métricas HTTP y W06. |
+| `npm run verify:w09` | exit 0; `evaluation-result.json` indica `pass`, assignmentId W09 | Gate W09 y seguridad productiva/sintética; no reporte W10. |
+| `E2E_SKIP_BUILD=1 npm run test:e2e` | exit 0; `1 passed` en Chromium | Flujo acumulativo sobre build previa y backend sintético; no rollback W10. |
+| Cuatro probes del check W10 original | Salidas 0/0/0/1 según tabla anterior | Evidencia del defecto del check, no aceptación W10. |
+| Docker/build de imagen, health nuevo, smoke/recuperación W10, evaluador privado | No ejecutados / pendientes | No existen en este baseline; corresponden a #108/#109/#111 o al instructor. |
+| SQL desechable, servicios desplegados, publicación y defensa humana W10 | No ejecutados / pendientes | Fuera de la validación documental #107. |
+
+Los reportes locales conservan el SHA `2447e57…` y **workingTreeClean=false**:
+typecheck/build modificaron el archivo incremental versionado
+`tsconfig.tsbuildinfo`. Se comprobó la diferencia y se restauraron sus bytes
+originales guardados antes de las pruebas. No se altera el reporte para aparentar
+una ejecución en árbol limpio. El árbol quedó limpio antes de registrar este
+segundo commit documental; el SHA final y sus runs de PR se consultan en #116.
+Las ejecuciones locales anteriores no se atribuyen automáticamente a ese SHA
+posterior ni a una entrega final W10.
+
+Logs y resultados originales: directorio externo de revisión del kit,
+`validation.json`, `validation-*.log`, `public-check-probes.json` y copias
+`baseline-verification.json`, `baseline-rendering-metrics.json`,
+`baseline-evaluation-result.json`. Estos archivos locales son auxiliares; la
+evidencia remota se consulta en los artefactos reales de Actions del PR. Al
+registrar este documento, esos runs seguían en ejecución, sin resultado W10.
+
+Se observaron avisos de deprecación de ESLint, carga de módulos TypeScript y
+variables de color; los comandos terminaron con exit 0. Se conservan como límites
+del entorno y no se cambia el stack para ocultarlos. No se modifica JSX ni
+`className`; la revisión de Tailwind inline no aplica. La calificación, defensa
+humana y evidencia personal W10 permanecen pendientes y no se inventan.
