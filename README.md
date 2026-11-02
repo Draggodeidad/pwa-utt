@@ -5,8 +5,12 @@ Proyecto integrador del equipo **9B-E02** para registrar inspecciones y mantenim
 ## Requisitos del entorno
 
 Baseline de Semana 10: [kit revisado, comparación, contratos y pendientes #107](docs/w10-baseline.md).
-La release, el contenedor, smoke y CI W10 siguen pendientes de sus issues;
-los resultados acumulativos anteriores no acreditan ese incremento.
+El [proceso de release local #108](docs/release-process.md) define Docker,
+identidad por SHA, `/api/health` y la comprobación HTTP; el
+[runbook](docs/runbook.md) documenta rollback al mismo digest, compatibilidad y
+preservación del trabajo offline. Smoke completo (#111), CI W10 (#109) y
+evidencia personal (#110) conservan sus propios pendientes. Los resultados
+acumulativos anteriores no acreditan ese incremento.
 
 - Node.js 22.x, como declara `package.json`.
 - npm 10 o posterior.

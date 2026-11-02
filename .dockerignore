@@ -1,0 +1,17 @@
+# Allow only build inputs; never send .env, Git, kits, reports or local caches.
+*
+!package.json
+!package-lock.json
+!next.config.mjs
+!next-env.d.ts
+!tsconfig.json
+!postcss.config.mjs
+!tailwind.config.ts
+!src/
+!src/**
+!public/
+!public/**
+!scripts/
+!scripts/generate-offline-assets.mjs
+public/offline-assets.json
+public/sw-build.js
